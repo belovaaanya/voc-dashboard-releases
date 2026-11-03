@@ -3,12 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Скачать VOC Dashboard</title>
+<title>VOC Dash B2B — скачать</title>
+<meta name="description" content="Дашборд VOC для B2B в отдельном окне: macOS и Windows.">
 <!--
   Страница скачивания приложения (docs/desktop-app.md, «Страница скачивания»).
   Публикуется в открытом репозитории belovaaanya/voc-dashboard-releases вместе с
   релизами — поэтому самостоятельная: ни стилей, ни кода дашборда в ней нет.
-  Цвета повторяют токены дашборда; тема — системная.
+  Образ — светящийся крупный набор на чёрном: заголовок занимает экран, действие одно —
+  скачать; подсказки тусклые и проявляются, когда к кнопке подводят курсор или фокус.
 -->
 <style>
   @font-face {
@@ -25,115 +27,379 @@
     font-display: swap;
     unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
   }
+
   :root {
     color-scheme: dark;
-    --bg: #0B0B0D;
-    --surface: #111214;
-    --border: rgba(61, 63, 67, 0.5);
-    --text-strong: #FFFFFF;
-    --text: #C3C3C3;
-    --text-muted: rgba(255, 255, 255, 0.4);
-    --on-accent: #0B0B0D;
+    --bg: #050506;
+    --ink: #F4F6FB;
+    --dim: rgba(244, 246, 251, 0.38);
+    --faint: rgba(244, 246, 251, 0.16);
+    --line: rgba(244, 246, 251, 0.14);
+    --cool: 150, 190, 255;
+    --warm: 255, 170, 110;
     --font: "Manrope", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    --gutter: clamp(16px, 4vw, 56px);
+    --ease: cubic-bezier(0.2, 0.7, 0.1, 1);
   }
-  @media (prefers-color-scheme: light) {
-    :root {
-      color-scheme: light;
-      --bg: #F3F4F6;
-      --surface: #FFFFFF;
-      --border: rgba(22, 23, 26, 0.08);
-      --text-strong: #16171A;
-      --text: #454850;
-      --text-muted: rgba(22, 23, 26, 0.63);
-      --on-accent: #FFFFFF;
-    }
-  }
+
   * { box-sizing: border-box; }
-  body { min-height: 100vh; margin: 0; background: var(--bg); color: var(--text); font: 400 14px/1.4 var(--font); }
-  main { display: flex; flex-direction: column; gap: 24px; max-width: 720px; margin: 0 auto; padding: 40px 24px; }
-  h1 { margin: 0; color: var(--text-strong); font: 300 28px/1.1 var(--font); }
-  h2 { margin: 0; color: var(--text-strong); font: 500 12px/1.4 var(--font); }
-  p { margin: 0; }
-  .meta, .note { color: var(--text-muted); font-size: 12px; }
-  .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
-  .primary { display: inline-flex; padding: 12px 20px; border-radius: 999px; background: var(--text-strong); color: var(--on-accent); font: 500 12px/1.4 var(--font); text-decoration: none; }
-  .secondary { color: var(--text); font-size: 12px; }
-  .card { display: flex; flex-direction: column; gap: 12px; padding: 20px; border: 0.5px solid var(--border); border-radius: 20px; background: var(--surface); }
-  .card[hidden] { display: none; }
-  ol { display: flex; flex-direction: column; gap: 8px; margin: 0; padding-inline-start: 20px; font-size: 12px; }
-  a { color: inherit; }
+
+  html { background: var(--bg); }
+
+  body {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-height: 100svh;
+    margin: 0;
+    overflow-x: hidden;
+    color: var(--ink);
+    font: 400 14px/1.45 var(--font);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Свет за заголовком — как луч на референсе: холодное пятно справа, тёплое отражение слева */
+  .light {
+    position: fixed;
+    inset: 0;
+    z-index: -2;
+    pointer-events: none;
+    background:
+      radial-gradient(60vw 40vw at 82% 38%, rgba(var(--cool), 0.22), transparent 70%),
+      radial-gradient(40vw 30vw at 12% 70%, rgba(var(--warm), 0.07), transparent 70%),
+      radial-gradient(90vw 60vw at 50% 120%, rgba(var(--cool), 0.08), transparent 70%);
+  }
+
+  /* Зерно, чтобы градиент не шёл ступеньками и чёрный не был «пластиковым» */
+  .grain {
+    position: fixed;
+    inset: -50%;
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0.07;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  header, footer { padding-inline: var(--gutter); }
+
+  header {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding-top: 24px;
+    color: var(--dim);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  header a { color: inherit; text-decoration: none; }
+  header a:hover { color: var(--ink); }
+
+  main {
+    flex: 1;
+    display: grid;
+    align-content: center;
+    gap: clamp(28px, 5vh, 56px);
+    padding: clamp(24px, 6vh, 72px) var(--gutter);
+  }
+
+  /* ── заголовок ─────────────────────────────────────────────────── */
+
+  h1 {
+    position: relative;
+    margin: 0;
+    font-weight: 200;
+    /* Два ряда помещаются в первый экран вместе с кнопкой: размер — по меньшей из ширины и высоты */
+    font-size: clamp(64px, min(20vw, 30vh), 340px);
+    line-height: 0.84;
+    letter-spacing: -0.055em;
+    text-transform: uppercase;
+  }
+
+  h1 > span { display: block; }
+
+  /* Первая строка светится: белое ядро, тёплая и холодная кромки, как у «ONE» */
+  .glow {
+    color: #fff;
+    text-shadow:
+      -0.012em 0 0 rgba(var(--warm), 0.55),
+      0.012em 0 0 rgba(var(--cool), 0.75),
+      0 0 0.06em rgba(255, 255, 255, 0.9),
+      0 0 0.22em rgba(var(--cool), 0.55),
+      0 0 0.6em rgba(var(--cool), 0.25);
+  }
+
+  /* Дальше свет гаснет: «DASH» серебром, «B2B» почти в темноте — как «MORE» и «WEEK» */
+  .fade {
+    background: linear-gradient(180deg, rgba(244, 246, 251, 0.72), rgba(244, 246, 251, 0.18));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .ghost {
+    background: linear-gradient(180deg, rgba(244, 246, 251, 0.34), rgba(244, 246, 251, 0.06));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Буква в движении — размытая кромка, как «P» и «N» на постере; заливку текста повторяет сама */
+  .blur {
+    display: inline-block;
+    background: inherit;
+    -webkit-background-clip: text;
+    background-clip: text;
+    filter: blur(0.03em);
+  }
+
+  /* Строка «DASH ——— B2B»: тонкая линия связывает слова, как растянутые штрихи «PERCEPTION» */
+  .row {
+    display: flex !important;
+    align-items: center;
+    gap: 0.1em;
+  }
+
+  .row > span { flex: none; }
+
+  .row .rule {
+    flex: 1;
+    height: 0.018em;
+    min-height: 1px;
+    margin-top: 0.04em;
+    background: linear-gradient(90deg, rgba(244, 246, 251, 0.45), rgba(244, 246, 251, 0.08));
+  }
+
+  /* Под заголовком — одна строка: текст слева, действие справа */
+  .below {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px 48px;
+  }
+
+  .lead {
+    max-width: 30em;
+    margin: 0;
+    color: var(--dim);
+    font-size: clamp(14px, 1.2vw, 17px);
+  }
+
+  .lead b { color: var(--ink); font-weight: 500; }
+
+  /* ── действие ──────────────────────────────────────────────────── */
+
+  .cta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 14px 24px;
+  }
+
+  .download {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 14px;
+    padding: 18px 30px 18px 26px;
+    border-radius: 999px;
+    background: #fff;
+    color: #050506;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    text-decoration: none;
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.6),
+      0 0 24px rgba(var(--cool), 0.45),
+      0 0 80px rgba(var(--cool), 0.25);
+    transition: transform 0.4s var(--ease), box-shadow 0.4s var(--ease);
+  }
+
+  .download:hover, .download:focus-visible {
+    transform: translateY(-2px);
+    box-shadow:
+      0 0 0 1px #fff,
+      0 0 32px rgba(var(--cool), 0.7),
+      0 0 120px rgba(var(--cool), 0.4);
+    outline: none;
+  }
+
+  .download svg { width: 18px; height: 18px; flex: none; }
+
+  .download small {
+    padding-left: 14px;
+    border-left: 1px solid rgba(5, 5, 6, 0.18);
+    color: rgba(5, 5, 6, 0.55);
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .other { color: var(--dim); font-size: 13px; text-decoration: none; border-bottom: 1px solid var(--line); padding-bottom: 2px; }
+  .other:hover { color: var(--ink); border-color: var(--dim); }
+
+  /* ── подсказки: тусклые, проявляются при наведении на кнопку ─────── */
+
+  footer {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 24px;
+    padding-top: 24px;
+    padding-bottom: 28px;
+    border-top: 1px solid var(--line);
+    margin-inline: var(--gutter);
+    padding-inline: 0;
+    color: var(--faint);
+    font-size: 12px;
+    transition: color 0.5s var(--ease);
+  }
+
+  body:has(.cta:hover) footer,
+  body:has(.cta :focus-visible) footer,
+  footer:hover { color: var(--dim); }
+
+  footer h2 {
+    margin: 0 0 8px;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  footer p { margin: 0; }
+  footer [hidden] { display: none; }
+  footer .meta { grid-column: 1 / -1; letter-spacing: 0.04em; }
+
+  /* ── появление: буквы выходят из размытия ─────────────────────── */
+
+  @media (prefers-reduced-motion: no-preference) {
+    h1 > span, .lead, .cta { animation: appear 1.1s var(--ease) both; }
+    h1 > span:nth-child(2) { animation-delay: 0.1s; }
+    .lead { animation-delay: 0.3s; }
+    .cta { animation-delay: 0.4s; }
+    .glow { animation: appear 1.1s var(--ease) both, breathe 6s ease-in-out 1.2s infinite; }
+  }
+
+  @keyframes appear {
+    from { opacity: 0; filter: blur(14px); transform: translateY(0.04em); }
+  }
+
+  @keyframes breathe {
+    50% { text-shadow:
+      -0.012em 0 0 rgba(var(--warm), 0.45),
+      0.012em 0 0 rgba(var(--cool), 0.6),
+      0 0 0.05em rgba(255, 255, 255, 0.8),
+      0 0 0.3em rgba(var(--cool), 0.7),
+      0 0 0.8em rgba(var(--cool), 0.3); }
+  }
+
+  @media (max-width: 720px) {
+    footer { grid-template-columns: minmax(0, 1fr); gap: 16px; color: var(--dim); }
+    .download { width: 100%; justify-content: center; }
+    .row .rule { display: none; }
+    /* На телефоне заголовок крупнее, «B2B» уходит третьей строкой */
+    h1 { font-size: 30vw; }
+    .row { flex-wrap: wrap; column-gap: 0; }
+  }
 </style>
 </head>
 <body>
+  <div class="light" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <header>
+    <span>Voice of Customer · B2B</span>
+    <a href="https://github.com/belovaaanya/voc-dashboard-releases/releases">Все версии</a>
+  </header>
+
   <main>
-    <h1>VOC Dashboard для компьютера</h1>
-    <p>Дашборд VOC в отдельном окне: данные загружаются из CSV с компьютера или со страницы Confluence и остаются только на вашем компьютере. Новые версии приложение предлагает само.</p>
+    <h1 aria-label="VOC Dash B2B">
+      <span class="glow" aria-hidden="true">VOC</span>
+      <span class="row" aria-hidden="true"><span class="fade">Dash</span><i class="rule"></i><span class="ghost">B2<span class="blur">B</span></span></span>
+    </h1>
 
-    <div class="actions">
-      <a class="primary" id="primary" href="https://github.com/belovaaanya/voc-dashboard-releases/releases/latest">Скачать</a>
-      <a class="secondary" id="secondary" href="https://github.com/belovaaanya/voc-dashboard-releases/releases/latest">Все версии</a>
+    <div class="below">
+    <p class="lead">Дашборд VOC в отдельном окне. Данные — из CSV или со страницы Confluence, <b>остаются на вашем компьютере</b>. Новые версии приходят сами.</p>
+
+    <div class="cta">
+      <a class="download" id="primary" href="https://github.com/belovaaanya/voc-dashboard-releases/releases/latest">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19.5h14"/></svg>
+        <span id="primary-label">Скачать</span>
+        <small id="primary-meta" hidden></small>
+      </a>
+      <a class="other" id="secondary" href="https://github.com/belovaaanya/voc-dashboard-releases/releases/latest">Для другой системы</a>
     </div>
-    <p class="meta" id="version">Последняя версия — на странице релизов GitHub.</p>
-
-    <section class="card" id="steps-mac" hidden>
-      <h2>Установка на macOS</h2>
-      <ol>
-        <li>Откройте скачанный архив — появится «VOC Dashboard».</li>
-        <li>Перетащите его в папку «Программы»: оттуда приложение сможет обновляться.</li>
-        <li>Первый запуск: правый клик по приложению → «Открыть» → «Открыть». На macOS 15 и новее — «Системные настройки» → «Конфиденциальность и безопасность» → «Всё равно открыть».</li>
-        <li>В приложении: «Обновить данные» → загрузите CSV или укажите страницу Confluence.</li>
-      </ol>
-      <p class="note">Нужен Mac с процессором Apple (M1 и новее).</p>
-    </section>
-
-    <section class="card" id="steps-windows" hidden>
-      <h2>Установка на Windows</h2>
-      <ol>
-        <li>Распакуйте архив и положите «VOC Dashboard.exe» в удобную папку, например «Документы».</li>
-        <li>Первый запуск: если появится окно SmartScreen — «Подробнее» → «Выполнить в любом случае».</li>
-        <li>В приложении: «Обновить данные» → загрузите CSV или укажите страницу Confluence.</li>
-      </ol>
-      <p class="note">Нужны Windows 10 или 11. Если запуск запрещён политикой компьютера, обратитесь в ИТ.</p>
-    </section>
-
-    <p class="meta">Приложение не подписано сертификатом разработчика, поэтому система спрашивает подтверждение при первом запуске. Данные дашборда в приложение не встроены.</p>
+    </div>
   </main>
+
+  <footer>
+    <section id="hint-install">
+      <h2>01 Установка</h2>
+      <p id="install-text">Распакуйте архив. На Mac перетащите приложение в «Программы» — оттуда оно сможет обновляться.</p>
+    </section>
+    <section>
+      <h2>02 Первый запуск</h2>
+      <p id="launch-text">Приложение без подписи разработчика. Mac: правый клик → «Открыть». Windows: «Подробнее» → «Выполнить в любом случае».</p>
+    </section>
+    <section>
+      <h2>03 Данные</h2>
+      <p>«Обновить данные» → CSV с компьютера или ссылка на страницу Confluence. Нужен VPN.</p>
+    </section>
+    <p class="meta" id="version">Mac с процессором Apple (M1 и новее) · Windows 10 и 11</p>
+  </footer>
 
   <script type="module">
     const REPOSITORY = 'belovaaanya/voc-dashboard-releases';
     const RELEASES = `https://github.com/${REPOSITORY}/releases/latest`;
     const TARGETS = {
-      mac: { label: 'Скачать для macOS', other: 'windows', asset: 'VOC-Dashboard-macOS.zip' },
-      windows: { label: 'Скачать для Windows', other: 'mac', asset: 'VOC-Dashboard-Windows.zip' },
+      mac: {
+        name: 'macOS', asset: 'VOC-Dashboard-macOS.zip', other: 'windows',
+        install: 'Откройте архив и перетащите «VOC Dashboard» в «Программы» — оттуда приложение сможет обновляться.',
+        launch: 'Первый раз — правый клик по приложению → «Открыть». На macOS 15 и новее: «Системные настройки» → «Конфиденциальность и безопасность» → «Всё равно открыть».',
+      },
+      windows: {
+        name: 'Windows', asset: 'VOC-Dashboard-Windows.zip', other: 'mac',
+        install: 'Распакуйте архив и положите «VOC Dashboard.exe» в удобную папку, например «Документы».',
+        launch: 'Если появится SmartScreen — «Подробнее» → «Выполнить в любом случае». Запрещено политикой компьютера — обратитесь в ИТ.',
+      },
     };
-    const NAMES = { mac: 'macOS', windows: 'Windows' };
 
-    /* userAgentData — где он есть; иначе строка браузера. Неизвестная ОС — обе ссылки на равных */
+    /* userAgentData — где он есть; иначе строка браузера. Телефон и неизвестная ОС — кнопка для macOS */
     function detect() {
       const platform = (navigator.userAgentData?.platform || navigator.platform || navigator.userAgent || '').toLowerCase();
-      if (platform.includes('mac')) return 'mac';
       if (platform.includes('win')) return 'windows';
+      if (platform.includes('mac')) return 'mac';
       return null;
     }
 
     const os = detect();
-    const primary = document.getElementById('primary');
+    const target = TARGETS[os ?? 'mac'];
+    const other = TARGETS[target.other];
+    document.getElementById('primary').href = `${RELEASES}/download/${target.asset}`;
+    document.getElementById('primary-label').textContent = `Скачать для ${target.name}`;
     const secondary = document.getElementById('secondary');
-    const first = os ?? 'mac';
-    const second = TARGETS[first].other;
-    primary.textContent = os ? TARGETS[first].label : 'Скачать для macOS';
-    primary.href = `${RELEASES}/download/${TARGETS[first].asset}`;
-    secondary.textContent = `Скачать для ${NAMES[second]}`;
-    secondary.href = `${RELEASES}/download/${TARGETS[second].asset}`;
-    for (const id of os ? [`steps-${os}`] : ['steps-mac', 'steps-windows']) document.getElementById(id).hidden = false;
+    secondary.href = `${RELEASES}/download/${other.asset}`;
+    secondary.textContent = `или для ${other.name}`;
+    if (os) {
+      document.getElementById('install-text').textContent = target.install;
+      document.getElementById('launch-text').textContent = target.launch;
+    }
 
+    const megabytes = (bytes) => `${Math.round(bytes / 1048576)} МБ`;
     fetch(`https://api.github.com/repos/${REPOSITORY}/releases/latest`)
       .then((response) => (response.ok ? response.json() : null))
       .then((release) => {
         const version = /^desktop-v(.+)$/.exec(release?.tag_name ?? '')?.[1];
         if (!version) return;
+        const asset = release.assets?.find((item) => item.name === target.asset);
+        const meta = document.getElementById('primary-meta');
+        meta.textContent = asset ? `${version} · ${megabytes(asset.size)}` : version;
+        meta.hidden = false;
         const date = new Date(release.published_at).toLocaleDateString('ru-RU');
-        document.getElementById('version').textContent = `Версия ${version} от ${date}`;
+        document.getElementById('version').textContent =
+          `Версия ${version} от ${date} · Mac с процессором Apple (M1 и новее) · Windows 10 и 11`;
       })
       .catch(() => {});
   </script>
