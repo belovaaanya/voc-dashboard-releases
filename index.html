@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>VOC Dash B2B — скачать</title>
+<title>VOC B2B — скачать</title>
 <meta name="description" content="Дашборд VOC для B2B в отдельном окне: macOS и Windows.">
 <!--
   Страница скачивания приложения (docs/desktop-app.md, «Страница скачивания»).
@@ -120,7 +120,10 @@
   h1 > span { display: block; }
 
   /* Первая строка светится: белое ядро, тёплая и холодная кромки, как у «ONE» */
+  /* «VOC» — плотнее: тонкий «B2B» под ним держит контраст веса, как на постере */
   .glow {
+    font-weight: 600;
+    letter-spacing: -0.045em;
     color: #fff;
     text-shadow:
       -0.012em 0 0 rgba(var(--warm), 0.55),
@@ -130,7 +133,7 @@
       0 0 0.6em rgba(var(--cool), 0.25);
   }
 
-  /* Дальше свет гаснет: «DASH» серебром, «B2B» почти в темноте — как «MORE» и «WEEK» */
+  /* Ниже свет гаснет: «B2B» серебром уходит в темноту — как «MORE» и «WEEK» */
   .fade {
     background: linear-gradient(180deg, rgba(244, 246, 251, 0.72), rgba(244, 246, 251, 0.18));
     -webkit-background-clip: text;
@@ -154,7 +157,7 @@
     filter: blur(0.03em);
   }
 
-  /* Строка «DASH ——— B2B»: тонкая линия связывает слова, как растянутые штрихи «PERCEPTION» */
+  /* Строка «B2B ———»: тонкая линия тянется от слова к краю, как растянутые штрихи «PERCEPTION» */
   .row {
     display: flex !important;
     align-items: center;
@@ -299,9 +302,8 @@
     footer { grid-template-columns: minmax(0, 1fr); gap: 16px; color: var(--dim); }
     .download { width: 100%; justify-content: center; }
     .row .rule { display: none; }
-    /* На телефоне заголовок крупнее, «B2B» уходит третьей строкой */
-    h1 { font-size: 30vw; }
-    .row { flex-wrap: wrap; column-gap: 0; }
+    /* На телефоне заголовок крупнее */
+    h1 { font-size: 34vw; }
   }
 </style>
 </head>
@@ -315,9 +317,9 @@
   </header>
 
   <main>
-    <h1 aria-label="VOC Dash B2B">
+    <h1 aria-label="VOC B2B">
       <span class="glow" aria-hidden="true">VOC</span>
-      <span class="row" aria-hidden="true"><span class="fade">Dash</span><i class="rule"></i><span class="ghost">B2<span class="blur">B</span></span></span>
+      <span class="row" aria-hidden="true"><span class="fade">B2<span class="blur">B</span></span><i class="rule"></i></span>
     </h1>
 
     <div class="below">
