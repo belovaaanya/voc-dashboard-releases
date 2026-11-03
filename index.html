@@ -120,10 +120,7 @@
   h1 > span { display: block; }
 
   /* Первая строка светится: белое ядро, тёплая и холодная кромки, как у «ONE» */
-  /* «VOC» — плотнее: тонкий «B2B» под ним держит контраст веса, как на постере */
   .glow {
-    font-weight: 600;
-    letter-spacing: -0.045em;
     color: #fff;
     text-shadow:
       -0.012em 0 0 rgba(var(--warm), 0.55),
@@ -134,7 +131,11 @@
   }
 
   /* Ниже свет гаснет: «B2B» серебром уходит в темноту — как «MORE» и «WEEK» */
+  /* Заливка текста рисуется только в рамке элемента, а строки стоят теснее высоты букв:
+     запас полями (и такой же отрицательный отступ) не даёт срезать низ букв и размытую кромку */
   .fade {
+    padding: 0.1em 0.12em 0.12em 0.02em;
+    margin: -0.1em -0.12em -0.12em -0.02em;
     background: linear-gradient(180deg, rgba(244, 246, 251, 0.72), rgba(244, 246, 251, 0.18));
     -webkit-background-clip: text;
     background-clip: text;
@@ -151,6 +152,8 @@
   /* Буква в движении — размытая кромка, как «P» и «N» на постере; заливку текста повторяет сама */
   .blur {
     display: inline-block;
+    padding: 0.1em 0.1em 0.12em 0;
+    margin: -0.1em -0.1em -0.12em 0;
     background: inherit;
     -webkit-background-clip: text;
     background-clip: text;
