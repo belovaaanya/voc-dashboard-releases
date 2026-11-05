@@ -266,6 +266,9 @@
   body:has(.cta :focus-visible) footer,
   footer:hover { color: var(--dim); }
 
+  /* После нажатия «Скачать» подсказки нужны всерьёз: без них незаверенное приложение не открыть */
+  body.is-downloading footer { color: rgba(244, 246, 251, 0.78); }
+
   footer h2 {
     margin: 0 0 8px;
     font-size: 11px;
@@ -342,11 +345,11 @@
   <footer>
     <section id="hint-install">
       <h2>01 Установка</h2>
-      <p id="install-text">Распакуйте архив. На Mac перетащите приложение в «Программы» — оттуда оно сможет обновляться.</p>
+      <p id="install-text">Mac: откройте DMG и перетащите «VOC Dashboard» на ярлык «Программы». Windows: распакуйте архив и положите файл в удобную папку.</p>
     </section>
     <section>
       <h2>02 Первый запуск</h2>
-      <p id="launch-text">Приложение без подписи разработчика. Mac: правый клик → «Открыть». Windows: «Подробнее» → «Выполнить в любом случае».</p>
+      <p id="launch-text">Приложение не заверено у Apple и Microsoft, система попросит подтвердить запуск один раз. Mac: «Готово», затем «Конфиденциальность и безопасность» → «Всё равно открыть». Windows: «Подробнее» → «Выполнить в любом случае».</p>
     </section>
     <section>
       <h2>03 Данные</h2>
@@ -360,9 +363,9 @@
     const RELEASES = `https://github.com/${REPOSITORY}/releases/latest`;
     const TARGETS = {
       mac: {
-        name: 'macOS', asset: 'VOC-Dashboard-macOS.zip', other: 'windows',
-        install: 'Откройте архив и перетащите «VOC Dashboard» в «Программы» — оттуда приложение сможет обновляться.',
-        launch: 'Первый раз — правый клик по приложению → «Открыть». На macOS 15 и новее: «Системные настройки» → «Конфиденциальность и безопасность» → «Всё равно открыть».',
+        name: 'macOS', asset: 'VOC-Dashboard-macOS.dmg', other: 'windows',
+        install: 'Откройте DMG и перетащите «VOC Dashboard» на ярлык «Программы» — оттуда приложение сможет обновляться.',
+        launch: 'Откройте приложение. Появится предупреждение: нажмите «Готово», а не «В Корзину». Затем «Системные настройки» → «Конфиденциальность и безопасность» → внизу «Всё равно открыть». Нужно один раз.',
       },
       windows: {
         name: 'Windows', asset: 'VOC-Dashboard-Windows.zip', other: 'mac',
@@ -387,10 +390,18 @@
     const secondary = document.getElementById('secondary');
     secondary.href = `${RELEASES}/download/${other.asset}`;
     secondary.textContent = `или для ${other.name}`;
-    if (os) {
-      document.getElementById('install-text').textContent = target.install;
-      document.getElementById('launch-text').textContent = target.launch;
-    }
+    const showSteps = (steps) => {
+      document.getElementById('install-text').textContent = steps.install;
+      document.getElementById('launch-text').textContent = steps.launch;
+    };
+    if (os) showSteps(target);
+    /* Скачивание начинается в этой же вкладке: шаги — для выбранной системы и уже не тусклые */
+    const onDownload = (steps) => () => {
+      showSteps(steps);
+      document.body.classList.add('is-downloading');
+    };
+    document.getElementById('primary').addEventListener('click', onDownload(target));
+    secondary.addEventListener('click', onDownload(other));
 
     const megabytes = (bytes) => `${Math.round(bytes / 1048576)} МБ`;
     fetch(`https://api.github.com/repos/${REPOSITORY}/releases/latest`)
