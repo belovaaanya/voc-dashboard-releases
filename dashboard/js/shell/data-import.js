@@ -10,8 +10,9 @@
 */
 
 import { element } from '../ui/dom.js';
+import { noticeBar } from '../components/notice-bar.js';
 import { formatBuildTime } from '../core/format.js';
-import { bindPopover } from '../ui/popover.js';
+import { bindPopover, popoverPanel } from '../ui/popover.js';
 import { appState, isLocalHost, postJson, request } from '../io/desktop.js';
 
 export { isLocalHost };
@@ -31,14 +32,7 @@ let notice = null;
 /* Строка над шапкой: появилось новое из Confluence или нужен вход. Узел один, как у обновления приложения */
 function noticeNode() {
   if (notice) return notice;
-  const item = element('div', 'app-update');
-  item.hidden = true;
-  item.setAttribute('role', 'status');
-  const text = element('span', 'app-update__text');
-  const action = element('button', 'app-update__install');
-  action.type = 'button';
-  action.dataset.action = 'data-notice';
-  item.append(text, action);
+  const { item, text, button: action } = noticeBar({ action: 'data-notice' });
   let onAction = null;
   action.addEventListener('click', () => onAction?.());
   notice = {
@@ -149,10 +143,7 @@ export function confluenceStatus(state) {
 }
 
 function importPanel() {
-  const panel = element('div', 'control-popover glass data-import');
-  panel.id = 'data-import-popover';
-  panel.setAttribute('aria-label', 'Обновить данные');
-  panel.append(element('h2', 'control-popover__title', 'Обновить данные'));
+  const panel = popoverPanel({ id: 'data-import-popover', title: 'Обновить данные', className: 'data-import', align: 'end' });
   panel.append(element('p', 'data-import__lead', 'Оценки дополнят загруженные: если код уже есть, верна новая версия. Справочник и план заменятся.'));
   const list = element('ul', 'data-import__sheets');
   list.setAttribute('aria-label', 'Загруженные листы');

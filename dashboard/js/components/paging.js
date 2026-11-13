@@ -3,8 +3,8 @@
 import { element } from '../ui/dom.js';
 
 function pagingButton(className, text, { ariaLabel, controls, section }, onClick) {
-  /* Общий класс — одна высота «Показать ещё» / «Скрыть» во всех блоках (токен высоты контрола) */
-  const button = element('button', `paging-button ${className}`, text);
+  /* Вид — общий класс paging-button (css/components/paging.css); className блока — только адрес для фокуса и тестов */
+  const button = element('button', ['paging-button', className].filter(Boolean).join(' '), text);
   button.type = 'button';
   if (section !== null) button.dataset.section = section;
   if (ariaLabel) button.setAttribute('aria-label', ariaLabel);

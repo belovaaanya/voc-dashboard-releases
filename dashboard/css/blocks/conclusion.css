@@ -28,15 +28,6 @@
   /* J-63: рамка наведения не касается иконки и текста; J-96: рамка выступает в поле карточки, иконка стоит по левому краю заголовка */
   margin-inline: calc(-1 * (var(--space-2) + var(--divider-width)));
   padding: var(--space-1) var(--space-2);
-  border: var(--divider-width) solid transparent;
-  border-radius: var(--radius-control);
-}
-
-.summary-row:hover,
-.summary-row:focus-visible {
-  border-color: var(--color-border-strong);
-  background: var(--row-hover);
-  outline: none;
 }
 
 .summary-row__icon {
@@ -88,12 +79,6 @@
   font: var(--type-text-strong);
 }
 
-.summary-note {
-  margin: 0;
-  color: var(--color-text-secondary);
-  font: var(--type-text);
-}
-
 .summary-insight--llm {
   margin: 0;
 }
@@ -117,37 +102,3 @@
   visibility: hidden;
 }
 
-/* J-14: top layer не обрезается карточкой; заливка общая для всех окон. */
-.summary-tooltip {
-  position: fixed;
-  inset: auto;
-  display: none;
-  width: max-content;
-  max-width: min(440px, calc(100% - 16px));
-  margin: 0;
-  padding: var(--space-3);
-  border-radius: var(--radius-tooltip);
-  color: var(--color-text-secondary);
-  font: var(--type-caption);
-  /* J-196: высота — по содержимому: в grid с `anywhere` Safari считал строки по ширине в один
-     символ и разносил их на всю высоту экрана; столбик и `break-word` этого не дают */
-  overflow-wrap: break-word;
-}
-
-.summary-tooltip:popover-open {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
-.summary-tooltip--portal:not([hidden]) {
-  z-index: 100;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
-.summary-tooltip__title {
-  color: var(--color-text-strong);
-  font: var(--type-caption-strong);
-}

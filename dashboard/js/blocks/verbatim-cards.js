@@ -13,9 +13,10 @@ import { sideToggle } from '../components/side-toggle.js';
 import { pagingButtons } from '../components/paging.js';
 import { scaleTabs } from '../components/scale-tabs.js';
 import { searchField } from '../components/search-field.js';
-import { statusPanel } from '../components/status-panel.js';
-import { hScroll } from '../components/h-scroll.js';
+import { emptyTableRow, statusPanel } from '../components/status-panel.js';
+import { hScroll, rememberScroll } from '../components/h-scroll.js';
 import { emptyValue } from '../components/empty-value.js';
+import { heatCell } from '../components/heat-cell.js';
 import { buildTimeSeries } from '../core/timeseries.js';
 import { equalDaysPeriod } from '../core/period.js';
 import { earliestDate } from '../core/dates.js';
@@ -163,8 +164,9 @@ export const ORDER_LABEL = 'Сначала частые:';
 const ORDER_OPTIONS = { domainProblem: ['Проблематики', 'ФО'], categoryPair: ['Категории', 'Группы'] };
 function orderTabs(block, context) {
   const [value, group] = ORDER_OPTIONS[selectedCut];
-  const control = element('div', 'problem-order');
-  control.append(element('span', 'problem-order__label', ORDER_LABEL), segmented({
+  return segmented({
+    caption: ORDER_LABEL,
+    captionTone: 'secondary',
     label: `Сортировка топа проблем: ${ORDER_LABEL.slice(0, -1).toLowerCase()}`,
     options: [
       { value: 'value', label: value, title: `${grouping().nameTitle ?? grouping().nameHead}: сначала частые, по числу жалоб` },
@@ -175,8 +177,7 @@ function orderTabs(block, context) {
       selectedOrder = next;
       rerenderInPlace(block, context);
     },
-  }));
-  return control;
+  });
 }
 
 /* J-29: ±0,1 п. п. — нейтральный тон, направление и точные доли сохраняются. */
@@ -282,8 +283,8 @@ const stepText = (value, metric) => {
 };
 /* J-142: шаг подсвечен тоном негатива по силе: чем больше жалоб, доли или урона, тем краснее — как карта антидрайверов */
 /*
-  Шаг — пилюля тепловой карты антидрайверов (общие классы heatmap-cell / tone-pill, как в дайджесте): ячейка таблицы
-  без заливки, сила значения — свечением пилюли (--heat-strength), шкала — максимум списка. Похвала — зелёной пилюлей.
+  Шаг — пилюля тепловой карты (heatCell, как в антидрайверах и дайджесте): ячейка таблицы
+  без заливки, сила значения — свечением пилюли, шкала — максимум списка. Похвала — зелёной пилюлей.
   Доля и урон — значение крупно, число жалоб шага под ним тише: частотность видна в любом режиме; в «Частотности»
   значение и есть число жалоб — второй строки нет. Пустой шаг — пилюля без тона с прочерком
 */
@@ -294,9 +295,7 @@ function bucketCell(bucket, positive, gap, heatMax, metric) {
   const withCount = metric !== 'count';
   const cell = element('td', `problem-table__count problem-table__step${withCount ? ' problem-table__step--with-count' : ''}${main === null ? ' problem-table__none' : ''}`);
   const strength = value !== null && heatMax > 0 ? Math.min(1, value / heatMax) : 0;
-  const tone = strength > 0 ? (positive ? ' heatmap-cell--good' : ' heatmap-cell--bad') : '';
-  const pill = element('span', `heatmap-cell tone-pill problem-step-pill${tone}`);
-  if (strength > 0) pill.style.setProperty('--heat-strength', `${Math.round(strength * 100)}%`);
+  const pill = heatCell({ tone: strength > 0 ? (positive ? 'good' : 'bad') : null, strength: strength > 0 ? strength : null, className: 'problem-step-pill' });
   const shown = element('span', 'problem-table__step-main');
   if (main === null) shown.append(emptyValue());
   else shown.append(main);
@@ -336,7 +335,7 @@ export const PATTERN_HEAD = 'Есть ли закономерность?';
 const NO_PATTERN = new Set(['few', 'none']);
 
 function textCell(text, className = 'problem-table__text') {
-  if (text === '—') return valueCell(null, className);
+  if (text === null) return valueCell(null, className);
   const cell = element('td', className);
   const value = element('span', null, text);
   value.title = text;
@@ -395,7 +394,7 @@ function problemRow(item, { columns, selected, onSelect, base }) {
     plain: true, triangle: true, className: arrowless }));
 
   const bySegment = new Map(item.segments.map(({ code, count }) => [segmentKey(code), count]));
-  row.append(head, textCell(item.group ?? '—', 'problem-table__text problem-table__group-name'), total, share);
+  row.append(head, textCell(item.group ?? null, 'problem-table__text problem-table__group-name'), total, share);
   /*
     J-139, J-142: урон за период — в пунктах VOC со знаком минус, как у антидрайверов; доля негатива — в подсказке.
     J-129: при малом числе жалоб доля неустойчива — предупреждение в подсказке, подписи нет (J-136)
@@ -647,7 +646,7 @@ function feedPanel(item, state, label) {
     list.replaceChildren(...item.feed.slice(0, state.feedShown).map((entry) => feedEntry(entry, label)));
     actions.replaceChildren(...pagingButtons({
       shown: state.feedShown, total: item.feed.length, page: FEED_PAGE,
-      moreClass: 'verbatim-detail__more verbatim-feed__more', collapseClass: 'verbatim-detail__more verbatim-feed__collapse',
+      moreClass: 'verbatim-feed__more', collapseClass: 'verbatim-feed__collapse',
       moreLabel: `Показать ещё комментарии: ${nameOf(item)}`, collapseLabel: `Скрыть дополнительные комментарии: ${nameOf(item)}`,
       onMore: () => {
         const firstNew = state.feedShown;
@@ -748,11 +747,7 @@ function problemColumns(context, { cards, complaintCards, buckets, previous, com
 }
 
 function emptyProblemRow(table) {
-  const row = element('tr');
-  const cell = element('td', 'problem-table__empty', 'Нет проблем по поиску');
-  cell.colSpan = table.tHead?.lastElementChild?.cells.length ?? 1;
-  row.append(cell);
-  return row;
+  return emptyTableRow(table.tHead?.lastElementChild?.cells.length ?? 1, 'Нет проблем по поиску', 'problem-table__empty');
 }
 
 /* Выбор проблемы меняет только слот ленты: таблица и фокус остаются */
@@ -771,7 +766,7 @@ function problemTable(context, state, { cards, ordered, columns, base }) {
   columns.resizer = nameResizer(table);
   table.append(tableHead(context, columns), body);
   /* Аудит 13.11: таблица шире видимой — общая прокрутка с затуханием края (hScroll), колонка не режется посреди слова */
-  const scroll = hScroll(table, { className: 'problem-table-scroll', label: 'Таблица топа проблем' });
+  const scroll = hScroll(table, { className: 'problem-table-scroll', label: 'Таблица топа проблем', fade: 'end' });
   const buttons = element('div', 'verbatim-problems__actions');
   const feedSlot = element('div', 'verbatim-problems__feed');
   const showFeed = () => {
@@ -801,7 +796,7 @@ function problemTable(context, state, { cards, ordered, columns, base }) {
     const { unit } = grouping();
     buttons.replaceChildren(...pagingButtons({
       shown: state.shown, total: items().length, page: PROBLEM_PAGE,
-      moreClass: 'verbatim-detail__more verbatim-problems__more', collapseClass: 'verbatim-detail__more verbatim-problems__collapse',
+      moreClass: 'verbatim-problems__more', collapseClass: 'verbatim-problems__collapse',
       moreLabel: `Показать ещё ${unit}`, collapseLabel: `Скрыть дополнительные ${unit}`,
       onMore: () => {
         const firstNew = state.shown;
@@ -837,30 +832,24 @@ function problemSearch(onChange) {
 
 /* J-146, J-148: кнопка ленты — круг в правом верхнем углу раскладки, общий компонент с календарём событий */
 function feedToggle(content, feedSlot) {
-  const apply = () => {
-    content.classList.toggle('verbatim-problems--no-feed', feedHidden);
-    content.classList.toggle('side-toggle-host--collapsed', feedHidden);
-    feedSlot.hidden = feedHidden;
-  };
-  const toggle = sideToggle({
+  return sideToggle({
     label: 'Отзывы',
     controls: FEED_ID,
+    host: content,
+    panel: feedSlot,
+    hostClass: 'verbatim-problems--no-feed',
     isHidden: () => feedHidden,
-    onToggle: () => keepPagePosition(content, () => {
+    onToggle: () => {
       feedHidden = !feedHidden;
-      apply();
-    }),
+    },
+    around: (change) => keepPagePosition(content, change),
   });
-  if (feedHidden) apply();
-  return toggle;
 }
 
 /* J-146: перерисовка не сбрасывает горизонтальную прокрутку; после выбора шага первый шаг — в видимой области */
-function restoreTableScroll(block, scrolledLeft) {
-  const tableScroll = block.element?.querySelector?.('.problem-table-scroll');
-  if (!tableScroll) return;
-  tableScroll.scrollLeft = scrolledLeft;
-  if (!revealSteps) return;
+function restoreTableScroll(restoreScroll) {
+  const tableScroll = restoreScroll();
+  if (!tableScroll || !revealSteps) return;
   revealSteps = false;
   /* Первый шаг — сразу за липкой колонкой названий; если шаги и так видны, прокрутка не меняется */
   const first = tableScroll.querySelector('.problem-table__step--first');
@@ -871,7 +860,7 @@ function restoreTableScroll(block, scrolledLeft) {
 }
 
 export function renderVerbatimCards(block, context) {
-  const scrolledLeft = block.element?.querySelector?.('.problem-table-scroll')?.scrollLeft ?? 0;
+  const restoreScroll = rememberScroll(block.element, '.problem-table-scroll');
   const state = viewState(block, context);
   block.setHead();
   const driver = normalizeDriver(context.state.driver);
@@ -925,5 +914,5 @@ export function renderVerbatimCards(block, context) {
   /* J-147: метки «Сделано с AI» у «Топ проблем» пока нет — по просьбе заказчика; лента отзывов начинается от заголовка */
   head({ controls: [driverChip(context)].filter(Boolean) });
   block.setContent(content);
-  restoreTableScroll(block, scrolledLeft);
+  restoreTableScroll(restoreScroll);
 }

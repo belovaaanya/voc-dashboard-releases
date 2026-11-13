@@ -5,9 +5,12 @@
 
 import { element } from '../ui/dom.js';
 
-/** `value` — узел или текст значения; `change` — узел дельты (`delta()`) или null, тогда пара — одно значение. */
-export function valueDelta(value, change, { className } = {}) {
-  const pair = element('span', ['value-delta', className].filter(Boolean).join(' '));
+/**
+ * `value` — узел или текст значения; `change` — узел дельты (`delta()`) или null, тогда пара — одно значение.
+ * `wrap` — не помещаясь, дельта уходит под число (J-65, J-96): итог дайджеста, плитка счётчика.
+ */
+export function valueDelta(value, change, { className, wrap = false } = {}) {
+  const pair = element('span', ['value-delta', wrap && 'value-delta--wrap', className].filter(Boolean).join(' '));
   pair.append(typeof value === 'string' ? element('span', 'value-delta__value', value) : value);
   if (change) {
     change.classList?.add('value-delta__delta');

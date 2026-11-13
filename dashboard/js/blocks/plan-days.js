@@ -6,6 +6,7 @@
 
 import { EMPTY } from '../shell/block.js';
 import { element } from '../ui/dom.js';
+import { legendMarker } from '../components/legend.js';
 import { formatCount } from '../core/format.js';
 import { ABOVE_PLAN, BELOW_PLAN, IN_PLAN, planDays } from '../core/plan.js';
 import { isWholeMonth } from '../core/conversion.js';
@@ -14,9 +15,9 @@ import { renderConversion } from './conversion.js';
 export const PLAN_DAYS_TITLE = 'Дни относительно плана';
 
 const PARTS = [
-  { status: BELOW_PLAN, caption: 'Ниже плана' },
-  { status: ABOVE_PLAN, caption: 'Выше плана' },
-  { status: IN_PLAN, caption: 'В плане' },
+  { status: BELOW_PLAN, caption: 'Ниже плана', tone: 'negative' },
+  { status: ABOVE_PLAN, caption: 'Выше плана', tone: 'positive' },
+  { status: IN_PLAN, caption: 'В плане', tone: 'plan-in' },
 ];
 const CSS_STOP = (name, at) => `var(--plan-days-${name}) ${at}%`;
 
@@ -45,12 +46,10 @@ function ringNode(days) {
 
 function legendNode(days) {
   const legend = element('ul', 'plan-days__legend');
-  for (const { status, caption } of PARTS) {
+  for (const { status, caption, tone } of PARTS) {
     const item = element('li', 'plan-days__item');
-    const swatch = element('span', `plan-days__swatch plan-days__swatch--${status}`);
-    swatch.setAttribute('aria-hidden', 'true');
     /* J-198: точка → подпись → число: числа одной колонкой справа, вровень по правому краю */
-    item.append(swatch, element('span', 'plan-days__caption', caption), element('span', 'plan-days__count', formatCount(days[status])));
+    item.append(legendMarker(tone, 'dot', { large: true }), element('span', 'plan-days__caption', caption), element('span', 'plan-days__count', formatCount(days[status])));
     legend.append(item);
   }
   return legend;

@@ -10,7 +10,7 @@ import { EMPTY } from '../shell/block.js';
 import { element } from '../ui/dom.js';
 import { formatShare } from '../core/format.js';
 import { deltaOf, summarize } from '../core/metrics.js';
-import { DELTA_SHAPES, GROWTH, figureNode, leadNode } from './metric-card.js';
+import { DELTA_SHAPES, GROWTH, leadNode, pairNode } from './metric-card.js';
 
 const TALLIES = {
   shareLow: { read: (summary) => summary.shareLow, format: formatShare, shape: DELTA_SHAPES.share, growth: GROWTH.bad },
@@ -35,7 +35,7 @@ function render(block, context, spec) {
   const delta = previousSlice.length === 0 ? null : deltaOf(value, spec.read(summarize(previousSlice)));
 
   const layout = element('div', 'metric metric--tally');
-  layout.append(figureNode(spec.format(value), leadNode(delta, { shape: spec.shape, growth: spec.growth })));
+  layout.append(pairNode(spec.format(value), leadNode(delta, { shape: spec.shape, growth: spec.growth }), undefined, { wrap: true }));
 
   block.setContent(layout);
 }

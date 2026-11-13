@@ -1,0 +1,83 @@
+/* Ячейка — pill макета (J-15, Figma 3204:3046); сила подсветки J-13 — радиус градиента: слабая окрашивает лишь край */
+.heatmap-cell {
+  display: inline-grid;
+  vertical-align: middle;
+  width: var(--heatmap-cell-width);
+  min-height: var(--space-8);
+  place-content: center;
+  justify-items: center;
+  border: var(--hairline) solid var(--cell-rim, var(--heat-cell-rim));
+  border-radius: var(--radius-pill);
+  background: var(--heat-cell-surface);
+  color: var(--color-text-strong);
+  font: var(--type-caption);
+  transition: border-color var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard);
+}
+
+.heatmap-cell--bad,
+.heatmap-cell--good {
+  /* Сила 25 % → радиус слабой ячейки макета, 100 % → самой сильной (78 % × 105 % pill) */
+  --pill-rx: calc(267% - 1.89 * var(--heat-strength, 0%));
+  --pill-ry: calc(405% - 3 * var(--heat-strength, 0%));
+  --cell-rim: color-mix(in srgb, var(--tone) var(--tone-rim), transparent);
+  background: var(--tone-pill);
+}
+
+.heatmap-cell--bad {
+  --tone: var(--color-negative);
+}
+
+.heatmap-cell--good {
+  --tone: var(--color-positive);
+}
+
+/* «В плане» использует базовую поверхность и рамку «Без подсветки». */
+
+/* J-13: ниже Q75 знак остаётся в рамке, цветной заливки нет. */
+.heatmap-cell--muted {
+  background: var(--heat-cell-surface);
+}
+
+.heatmap-cell--empty {
+  background: var(--heat-cell-empty);
+  color: var(--color-text-tertiary);
+}
+
+/* Наведение обводит выбираемую ячейку цветом её тона (R-17); пилюля без действия не откликается — она не цель */
+:where(button).heatmap-cell:hover {
+  --cell-ring: var(--color-text-strong);
+  border-color: var(--cell-ring);
+  box-shadow: 0 0 0 var(--hairline) var(--cell-ring), 0 0 var(--space-3) calc(-1 * var(--space-1)) var(--cell-ring);
+}
+
+:where(button).heatmap-cell--bad:hover {
+  --cell-ring: var(--color-negative);
+}
+
+:where(button).heatmap-cell--good:hover {
+  --cell-ring: var(--color-positive);
+}
+
+/* Кольцо фокуса — общее каркаса; на красной и зелёной ячейке — цвета тона, иначе зелёное кольцо на зелёной ячейке не видно */
+.heatmap-cell--bad:focus-visible {
+  outline-color: var(--color-negative-ink);
+}
+
+/* J-69: цвет текста тона — чистый зелёный светлой темы кольцом на белом не виден; в тёмной ink равен тону */
+.heatmap-cell--good:focus-visible {
+  outline-color: var(--color-positive-ink);
+}
+
+/* Выбираемая ячейка — кнопка карты антидрайверов (J-128) */
+button.heatmap-cell {
+  padding: 0;
+  cursor: pointer;
+}
+
+/* Выбранная ячейка — рамкой цвета текста и жирным числом, а не только цветом (D-26) */
+.heatmap-cell[aria-pressed='true'] {
+  --cell-ring: var(--color-text-strong);
+  border-color: var(--cell-ring);
+  box-shadow: 0 0 0 var(--focus-ring) var(--cell-ring);
+  font: var(--type-caption-strong);
+}

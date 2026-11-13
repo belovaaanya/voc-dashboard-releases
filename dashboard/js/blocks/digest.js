@@ -5,6 +5,8 @@
 */
 import { EMPTY } from '../shell/block.js';
 import { emptyValue } from '../components/empty-value.js';
+import { heatCell } from '../components/heat-cell.js';
+import { statusPanel } from '../components/status-panel.js';
 import { segmented } from '../components/segmented.js';
 import { legendItem, legendList } from '../components/legend.js';
 import { sparkline } from '../components/sparkline.js';
@@ -17,7 +19,7 @@ import { MONTHS, formatBucket, monthName, formatCount, formatImpact, formatRatin
 import { roundDelta, roundImpact, roundVoc } from '../core/round.js';
 import { MOBILE_CHANNEL } from '../core/dimensions.js';
 import { MINIMUM_RATINGS } from '../core/sufficiency.js';
-import { DELTA_SHAPES, GROWTH, countGroupNode, countNode, figureNode, leadNode, metaRowNode, planCaptionNode, planDotNode, valueNode } from './metric-card.js';
+import { DELTA_SHAPES, GROWTH, countGroupNode, countNode, leadNode, metaRowNode, planCaptionNode, pairNode, planDotNode, valueNode } from './metric-card.js';
 import { valueDelta } from '../components/value-delta.js';
 
 const monthIndex = (month) => Number(month.slice(5, 7)) - 1;
@@ -73,14 +75,11 @@ function weeklyNode(points, plan) {
 /* J-153: антидрайверы ДКО — доля негатива или урон; живёт до закрытия страницы */
 let dkoMetric = 'share';
 
-/* Пилюля тепловой карты антидрайверов: чем сильнее значение, тем краснее (шкала — максимум своей таблицы) */
 /* Пилюля тепловой карты главной: ниже Q75 таблицы — только рамка, выше — заливка тем сильнее, чем ближе к Q95 */
 function heatPill(text, highlight) {
-  const pill = element('span', highlight.muted ? 'heatmap-cell tone-pill heatmap-cell--bad heatmap-cell--muted digest-pill' : 'heatmap-cell tone-pill heatmap-cell--bad digest-pill');
-  if (!highlight.muted) pill.style.setProperty('--heat-strength', `${Math.round(highlight.strength * 100)}%`);
   /* Нет значения — общий прочерк второстепенного цвета (emptyValue), а не белое тире ячейки */
-  pill.append(text === null ? emptyValue() : element('span', 'heatmap-cell__value', text));
-  return pill;
+  const content = text === null ? emptyValue() : element('span', 'heatmap-cell__value', text);
+  return heatCell({ tone: 'bad', muted: highlight.muted, strength: highlight.muted ? null : highlight.strength, className: 'digest-pill', content });
 }
 
 function monthTable(months, rows) {
@@ -124,8 +123,8 @@ export function renderDigestSummary(block, context) {
   const content = element('div', 'digest-summary');
 
   const main = element('div', 'metric digest-summary__voc');
-  main.append(figureNode(vocText(digest.voc.voc), leadNode(digest.voc.delta, { large: true }), 'metric__value--big'),
-    metaRowNode(element('span', 'metric__meta', `${vocText(digest.voc.raw)} без учёта поправки на кэшбек`), planCaptionNode(digest.voc.plan)));
+  main.append(pairNode(vocText(digest.voc.voc), leadNode(digest.voc.delta, { large: true }), 'metric__value--big', { wrap: true }),
+    metaRowNode(...(digest.voc.raw === null ? [] : [element('span', 'metric__meta', `${vocText(digest.voc.raw)} без учёта поправки на кэшбек`)]), planCaptionNode(digest.voc.plan)));
 
   /* J-176: оценки по месяцам — столбиками справа от числа, как урон стабильности, а не подписью строкой */
   const count = element('div', 'digest-summary__count');
@@ -154,7 +153,7 @@ export const digestSegment = (index) => (block, context) => {
   const content = element('div', 'digest-segment');
   const numbers = element('div', 'metric digest-segment__numbers');
   /* Анатомия карточки сегмента главной: число с дельтой, под ним «N оценок» с дельтой одним узлом (countGroupNode) */
-  numbers.append(figureNode(vocText(segment.voc), leadNode(segment.delta)),
+  numbers.append(pairNode(vocText(segment.voc), leadNode(segment.delta)),
     metaRowNode(countGroupNode(segment.count, segment.count - segment.countDelta)),
     ...(segment.raw !== null && roundVoc(segment.raw) !== roundVoc(segment.voc) ? [metaRowNode(element('span', 'metric__meta', `${vocText(segment.raw)} без поправки`))] : []));
   /* J-152: тезисов у сегментов пока нет — по просьбе заказчика; вывод считается и вернётся с архивом формулировок */
@@ -180,7 +179,9 @@ function spreadNode(spread) {
     stars.append(element('span', 'visually-hidden', `${score} ${plural(score, ['звезда', 'звезды', 'звёзд'])}`));
     name.append(stars);
     const row = element('tr', count ? null : 'digest-spread__row--zero');
-    row.append(name, element('td', null, formatCount(count)), element('td', null, percent(share)));
+    const shareCell = element('td');
+    shareCell.append(share === null || share === undefined ? emptyValue() : percent(share));
+    row.append(name, element('td', null, formatCount(count)), shareCell);
     body.append(row);
   }
   table.append(thead, body);
@@ -482,7 +483,7 @@ function roleLead(value, hasPrevious, options) {
 
 /* Топ-3 проблем роли — таблицей: название, жалоб, дельта; числа — столбцами вправо (J-194) */
 function problemTable(problems) {
-  if (!problems.length) return element('p', 'role-card__none', 'Жалоб с проблемой нет');
+  if (!problems.length) return statusPanel('role-card__none', { title: 'Жалоб с проблемой нет', look: 'quiet' });
   const table = element('table', 'role-card__problems');
   table.append(element('caption', 'visually-hidden', 'Топ-3 проблем роли по числу жалоб'));
   const head = element('tr');
@@ -552,7 +553,7 @@ export const digestRole = (index) => (block, context) => {
   if (!role.count) {
     /* Пустая роль — сразу под портретом: место надписи не зависит от высоты соседней плитки в строке */
     lead.classList.add('role-card__lead--empty');
-    lead.append(element('p', 'role-card__none', 'Нет оценок за месяц'));
+    lead.append(statusPanel('role-card__none', { title: 'Нет оценок за месяц', look: 'quiet' }));
     content.append(lead);
     block.setContent(content);
     return;
@@ -560,7 +561,7 @@ export const digestRole = (index) => (block, context) => {
   /* J-163, J-165: VOC — крупным числом 72 px с дельтой справа; оценки — мелкой строкой под ним */
   const vocFigure = element('div', 'metric');
   const hasPrevious = role.countDelta !== null;
-  vocFigure.append(figureNode(vocText(role.voc), roleLead(role.delta, hasPrevious)),
+  vocFigure.append(pairNode(vocText(role.voc), roleLead(role.delta, hasPrevious)),
     metaRowNode(countNode(role.count), roleLead(role.countDelta, hasPrevious, { shape: DELTA_SHAPES.count, growth: GROWTH.volume })),
     ...(role.raw !== null && roundVoc(role.raw) !== roundVoc(role.voc) ? [metaRowNode(element('span', 'metric__meta', `${vocText(role.raw)} без поправки`))] : []));
   lead.append(vocFigure);

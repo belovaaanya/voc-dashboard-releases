@@ -4,7 +4,7 @@
   по кнопке просит установить. Узел один на страницу, как у «Обновить данные».
 */
 
-import { element } from '../ui/dom.js';
+import { noticeBar } from '../components/notice-bar.js';
 import { isLocalHost, postJson, request } from '../io/desktop.js';
 
 const API_APP = 'api/app';
@@ -21,14 +21,7 @@ export function updateLabel(version) {
 }
 
 function buildControl() {
-  const item = element('div', 'app-update');
-  item.hidden = true;
-  item.setAttribute('role', 'status');
-  const text = element('span', 'app-update__text');
-  const install = element('button', 'app-update__install', 'Обновить');
-  install.type = 'button';
-  install.dataset.action = 'app-update';
-  item.append(text, install);
+  const { item, text, button: install } = noticeBar({ action: 'app-update', label: 'Обновить' });
 
   install.addEventListener('click', async () => {
     install.disabled = true;

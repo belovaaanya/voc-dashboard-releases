@@ -25,14 +25,40 @@ function sliceRows(rows, state, period, dimensions, reference) {
   return slices(rows, key, () => ({ reference, rows: compute() }), (cached) => cached.reference === reference).rows;
 }
 
+/* Строки канала и фильтров без периода — общие для всех периодов: протягивание таймлайна меняет только период */
+const bases = recentCache(4);
+
+function baseRows(rows, state, dimensions, reference) {
+  const compute = () => {
+    const picked = rows.filter((row) => (!state.channel || row.channel === state.channel) && matchesFilters(row, state, dimensions, reference));
+    return { reference, rows: picked, sorted: picked.every((row, index) => !index || picked[index - 1].appeal_date <= row.appeal_date) };
+  };
+  const key = JSON.stringify([state.channel ?? null, dimensions.map(({ key: name }) => [name, state.filters?.[name] ?? []])]);
+  return bases(rows, key, compute, (cached) => cached.reference === reference);
+}
+
+/* Первая строка с датой не раньше `date` (`after` — позже `date`) в отсортированном по дате срезе */
+function boundary(rows, date, after = false) {
+  let low = 0;
+  let high = rows.length;
+  while (low < high) {
+    const middle = (low + high) >> 1;
+    if (after ? rows[middle].appeal_date <= date : rows[middle].appeal_date < date) low = middle + 1;
+    else high = middle;
+  }
+  return low;
+}
+
+/* Порядок строк сохраняется: при дублях кода первая запись побеждает */
 function filterRows(rows, state, period, dimensions, reference) {
-  return rows.filter(
-    (row) =>
-      (!state.channel || row.channel === state.channel) &&
-      row.appeal_date >= period.from &&
-      row.appeal_date <= period.to &&
-      matchesFilters(row, state, dimensions, reference),
-  );
+  /* Измерения не из DIMENSIONS кэш обходят: один проход без отдельных строк канала */
+  if (!dimensions.every(canonical)) {
+    return rows.filter((row) => (!state.channel || row.channel === state.channel) && row.appeal_date >= period.from
+      && row.appeal_date <= period.to && matchesFilters(row, state, dimensions, reference));
+  }
+  const base = baseRows(rows, state, dimensions, reference);
+  if (base.sorted) return base.rows.slice(boundary(base.rows, period.from), boundary(base.rows, period.to, true));
+  return base.rows.filter((row) => row.appeal_date >= period.from && row.appeal_date <= period.to);
 }
 
 function selectedPeriod(overrides, globalPeriod) {

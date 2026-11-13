@@ -18,7 +18,7 @@ const appendStars = (node, text) => {
 };
 
 function distributionRow({ mark, count, share }) {
-  const row = element('div', `distribution-row distribution-row--${mark}`);
+  const row = element('div', `distribution-row hover-row distribution-row--${mark}`);
   const label = ratingLabel(mark, count, share);
   row.setAttribute('tabindex', '0');
   row.setAttribute('role', 'img');

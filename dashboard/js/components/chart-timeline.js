@@ -6,6 +6,7 @@ import { chartDomain, linePaths, plotPoints } from '../core/chart-geometry.js';
 import { earliestDate, latestDate } from '../core/dates.js';
 import { clampWindow, dateAt, dayIndex, localChartPeriod } from '../state/chart-selection.js';
 import { observeStage } from './stage-observer.js';
+import { chartTooltip, showChartTooltip } from './chart-tooltip.js';
 
 const HEIGHT = 64;
 const INSET = 10;
@@ -15,7 +16,11 @@ const SHIFT_STEP = 7;
 const STEP_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'Home', 'End']);
 /* Commit перерисовывает дашборд и с ним таймлайн: ручку, с которой шёл выбор, фокусирует уже новая шкала того же блока */
 const refocusByOwner = new WeakMap();
+/* Жест применяется на каждом кадре: перерисовка блока берёт ту же шкалу — drag, захват указателя и фокус ручки переживают её */
+const liveByOwner = new WeakMap();
 const DEFAULT_OWNER = {};
+const nextFrame = (callback) => (globalThis.requestAnimationFrame ?? ((run) => setTimeout(run, 16)))(callback);
+const cancelFrame = (id) => (globalThis.cancelAnimationFrame ?? clearTimeout)(id);
 
 const sameRange = (a, b) => a.from === b.from && a.to === b.to;
 const focusLost = () => !document.activeElement || document.activeElement === document.body || !document.activeElement.isConnected;
@@ -27,6 +32,10 @@ function emptyTimeline(node, caption) {
 
 /* Обзор всегда берёт историю канала и фильтров, независимо от периода графика. */
 export function chartTimeline(context, { onPreview, owner = DEFAULT_OWNER } = {}) {
+  const live = liveByOwner.get(owner);
+  if (live?.node.isConnected && live.follows(context.period)) return { node: live.node, draw: () => {} };
+  /* Шкалу убрала чужая перерисовка или период сменил не жест (Back): новая шкала начинает с периода расчёта */
+  live?.abandon();
   const node = element('div', 'chart-timeline');
   const toolbar = element('div', 'chart-timeline__toolbar');
   /*
@@ -63,28 +72,47 @@ export function chartTimeline(context, { onPreview, owner = DEFAULT_OWNER } = {}
   const last = dayIndex(bounds.to, bounds.from);
   const stage = element('div', 'chart-timeline__stage');
   /* J-57: дата под курсором при наведении и выбираемый диапазон при перетаскивании — рядом с курсором */
-  const tip = element('div', 'chart-tooltip chart-timeline__tip glass');
-  tip.hidden = true;
-  tip.setAttribute('aria-hidden', 'true');
+  const tip = chartTooltip({ className: 'chart-timeline__tip' });
   node.append(stage);
 
   const committed = clampWindow(context.period, bounds);
   let current = committed;
   let cancelActiveDrag = null;
+  let stopDrag = null;
   let width = 0;
-  /* После commit эта шкала уже заменена: blur её ручки при удалении из DOM не пишет второй раз */
-  let settled = false;
+  /* Жест — от первого шага до отпускания: период применяется не чаще кадра, в истории — одна запись (docs/blocks-dynamics.md) */
+  let gesture = null;
+  let instance = null;
 
+  const applyFrame = () => {
+    gesture.frame = 0;
+    if (sameRange(current, gesture.applied)) return;
+    gesture.applied = current;
+    gesture.moved = true;
+    /* Перерисовка переносит шкалу в новое тело блока: перенос снимает фокус с ручки — возвращаем его */
+    const focused = stage.contains(document.activeElement) ? document.activeElement : null;
+    context.setState(localChartPeriod(context.state, current), { gesture: 'move' });
+    if (focused?.isConnected && document.activeElement !== focused) focused.focus({ preventScroll: true });
+  };
+  const scheduleApply = () => {
+    /* Копия состояния до жеста: возврат к прежнему диапазону восстанавливает выбранный день, дни и детализацию */
+    gesture ??= { base: { ...context.state }, applied: committed, moved: false, frame: 0 };
+    liveByOwner.set(owner, instance);
+    gesture.frame ||= nextFrame(applyFrame);
+  };
   /* Тот же диапазон — не новая запись в истории: commit сбросил бы выбранный день, дни и детализацию */
   const commit = (focusEdge = null) => {
-    if (settled) return;
+    if (!gesture) return;
+    const { base, moved, frame } = gesture;
+    gesture = null;
+    cancelFrame(frame);
+    liveByOwner.delete(owner);
     if (sameRange(current, committed)) {
       onPreview?.({ ...context.period });
-      return;
+      if (!moved) return;
     }
-    settled = true;
     refocusByOwner.set(owner, focusEdge ? { edge: focusEdge, range: current } : null);
-    context.setState(localChartPeriod(context.state, current));
+    context.setState(sameRange(current, committed) ? base : localChartPeriod(context.state, current), { gesture: 'end' });
   };
 
   function paint() {
@@ -112,12 +140,14 @@ export function chartTimeline(context, { onPreview, owner = DEFAULT_OWNER } = {}
         'aria-label': edge === 'from' ? 'Начало периода графика' : 'Конец периода графика', 'aria-valuemin': 0, 'aria-valuemax': last,
       });
       handle.addEventListener('keydown', (event) => stepByKey(event, edge));
-      /* Удержанная стрелка двигает ручку без записи в историю; выбор фиксируется, когда клавишу отпустили или ушли с ручки */
+      /* Удержанная стрелка применяет период на каждом кадре; запись в истории фиксируется, когда клавишу отпустили или ушли с ручки */
       handle.addEventListener('keyup', (event) => {
         if (STEP_KEYS.has(event.key)) commit(edge);
       });
-      /* Chromium шлёт blur и при удалении ручки, пока она ещё в DOM: ручку убрала перерисовка — выбор не пишется */
-      handle.addEventListener('blur', () => queueMicrotask(() => handle.isConnected && commit()));
+      /* Chromium шлёт blur и при удалении ручки, пока она ещё в DOM: ручку убрала или перенесла с фокусом перерисовка — выбор не пишется */
+      handle.addEventListener('blur', () => queueMicrotask(() => {
+        if (handle.isConnected && (document.activeElement !== handle || document.hasFocus?.() === false)) commit();
+      }));
       svg.append(handle);
       return handle;
     });
@@ -143,6 +173,7 @@ export function chartTimeline(context, { onPreview, owner = DEFAULT_OWNER } = {}
       current = { ...current, [edge]: dateAt(bounds.from, Math.max(min, Math.min(max, target))) };
       place();
       onPreview?.({ ...current, preset: 'custom' });
+      scheduleApply();
     }
 
     for (const [date, anchor] of [[bounds.from, 'start'], [bounds.to, 'end']]) {
@@ -154,21 +185,34 @@ export function chartTimeline(context, { onPreview, owner = DEFAULT_OWNER } = {}
 
     const at = (event) => Math.max(0, Math.min(last, Math.round((event.clientX - svg.getBoundingClientRect().left - INSET) / inner * last)));
     const showTip = (event, text) => {
-      tip.textContent = text;
-      tip.hidden = false;
-      tip.style.setProperty('--tooltip-x', `${Math.round(event.clientX - svg.getBoundingClientRect().left)}px`);
-      tip.style.setProperty('--tooltip-y', '0px');
+      showChartTooltip(tip, { content: text, x: Math.round(event.clientX - svg.getBoundingClientRect().left), y: 0 });
     };
     let drag = null;
-    const cancelThisDrag = () => {
+    /* Указатель слушает документ: перерисовка блока на каждом кадре переносит SVG, и захват указателя у узла может пропасть */
+    const follow = (on) => {
+      const method = on ? 'addEventListener' : 'removeEventListener';
+      document[method]('pointermove', move);
+      document[method]('pointerup', release);
+      document[method]('pointercancel', cancel);
+    };
+    const cancelThisDrag = (deferCommit = false) => {
       if (!drag) return false;
+      follow(false);
       current = drag.initial;
       drag = null;
       tip.hidden = true;
       onPreview?.({ ...context.period });
+      /* Из paint: перерисовка дашборда — после неё, а не посреди сборки шкалы */
+      if (deferCommit) queueMicrotask(() => commit());
+      else commit();
       return true;
     };
-    cancelActiveDrag = cancelThisDrag;
+    cancelActiveDrag = () => cancelThisDrag(true);
+    stopDrag = () => {
+      follow(false);
+      drag = null;
+      tip.hidden = true;
+    };
     const dragTo = (event) => {
       const index = at(event);
       const fromIndex = dayIndex(current.from, bounds.from);
@@ -182,44 +226,57 @@ export function chartTimeline(context, { onPreview, owner = DEFAULT_OWNER } = {}
       place();
       onPreview?.({ ...current, preset: 'custom' });
       showTip(event, formatDateRange(current.from, current.to));
+      scheduleApply();
     };
+    const ours = (event) => drag && (event.pointerId === undefined || event.pointerId === drag.pointerId);
+    function move(event) {
+      if (!ours(event)) return;
+      /* Кнопку отпустили за окном браузера: pointerup туда не пришёл */
+      if (event.buttons === 0) release(event);
+      else dragTo(event);
+    }
+    function release(event) {
+      if (!ours(event)) return;
+      dragTo(event);
+      follow(false);
+      drag = null;
+      tip.hidden = true;
+      commit();
+    }
+    function cancel(event) {
+      if (ours(event ?? {}) && cancelThisDrag()) paint();
+    }
 
     svg.addEventListener('pointerdown', (event) => {
       if (event.button !== 0) return;
       event.preventDefault();
-      drag = { edge: event.target.getAttribute('data-edge'), start: at(event), initial: { ...current } };
+      drag = { edge: event.target.getAttribute('data-edge'), start: at(event), initial: { ...current }, pointerId: event.pointerId };
       svg.setPointerCapture(event.pointerId);
+      follow(true);
     });
     svg.addEventListener('pointermove', (event) => {
-      if (drag) dragTo(event);
-      else showTip(event, formatDate(dateAt(bounds.from, at(event))));
+      if (!drag) showTip(event, formatDate(dateAt(bounds.from, at(event))));
     });
     svg.addEventListener('pointerleave', () => {
       if (!drag) tip.hidden = true;
-    });
-    svg.addEventListener('pointerup', (event) => {
-      if (!drag) return;
-      dragTo(event);
-      drag = null;
-      tip.hidden = true;
-      commit();
-    });
-    const cancel = () => {
-      if (cancelThisDrag()) paint();
-    };
-    svg.addEventListener('pointercancel', cancel);
-    svg.addEventListener('lostpointercapture', () => {
-      if (drag) cancel();
     });
     stage.replaceChildren(svg, tip);
     if (focused) svg.querySelector(`[data-edge="${focused}"]`)?.focus();
   }
 
-  return {
+  instance = {
     node,
+    follows: (period) => Boolean(gesture) && sameRange(clampWindow(period, bounds), gesture.applied),
+    abandon: () => {
+      stopDrag?.();
+      if (gesture) cancelFrame(gesture.frame);
+      gesture = null;
+      liveByOwner.delete(owner);
+    },
     draw: () => observeStage(stage, (size) => {
       width = size.width;
       paint();
     }),
   };
+  return instance;
 }

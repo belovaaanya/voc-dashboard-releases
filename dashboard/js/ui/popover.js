@@ -1,7 +1,18 @@
 /* Popover у своего контрола: роль dialog, Escape и клик вне закрывают, открыт всегда один на странице.
    Panel может лежать вне item — тогда Escape и клик внутри panel обрабатываются на нём самом */
 
+import { element } from './dom.js';
+
 let activePopoverClose = null;
+
+/** Окно контрола: стекло, заголовок и имя для диктора; `align: 'end'` — правым краем к контролу. */
+export function popoverPanel({ id, title, label = title, className, align = 'start' }) {
+  const panel = element('div', ['control-popover glass', align === 'end' && 'control-popover--end', className].filter(Boolean).join(' '));
+  panel.id = id;
+  panel.setAttribute('aria-label', label);
+  panel.append(element('h2', 'control-popover__title', title));
+  return panel;
+}
 
 export function bindPopover(item, trigger, panel) {
   trigger.setAttribute('aria-haspopup', 'dialog');

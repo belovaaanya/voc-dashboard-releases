@@ -154,12 +154,6 @@
   gap: var(--space-1);
 }
 
-/* J-156: дельта VOC — справа сверху от числа, объём и его дельта — одной строкой */
-.digest-segment__numbers .metric__figure {
-  flex-wrap: nowrap;
-  align-items: flex-start;
-}
-
 .digest-segment__numbers .metric__caption {
   flex-wrap: nowrap;
 }
@@ -576,11 +570,6 @@
   min-height: calc(var(--space-10) * 3);
 }
 
-.role-card .metric__figure {
-  flex-wrap: nowrap;
-  align-items: flex-start;
-}
-
 /* J-165: VOC роли — 72 px */
 .role-card .metric__value {
   font: var(--type-value-lg);
@@ -656,12 +645,6 @@
 
 .role-card__lead--empty {
   justify-content: flex-start;
-}
-
-.role-card__none {
-  margin: 0;
-  color: var(--color-text-tertiary);
-  font: var(--type-caption);
 }
 
 @media (max-width: 1100px) {

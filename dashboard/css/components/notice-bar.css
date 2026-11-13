@@ -1,0 +1,33 @@
+/* Служебная строка над шапкой (components/notice-bar.js; docs/desktop-app.md, «Обновления») */
+.notice-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
+  border: var(--divider-width) solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  background: var(--control-raised);
+  color: var(--color-text-strong);
+  font: var(--type-caption);
+}
+
+.notice-bar[hidden] {
+  display: none;
+}
+
+.notice-bar__text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.notice-bar__action {
+  flex-shrink: 0;
+  padding: var(--space-1) var(--space-3);
+  border: var(--hairline) solid var(--color-text-strong);
+  border-radius: var(--radius-pill);
+  background: var(--color-text-strong);
+  color: var(--color-on-accent);
+  font: var(--type-caption-strong);
+  cursor: pointer;
+}

@@ -16,6 +16,17 @@
   place-items: center;
 }
 
+/* Крупная точка «Дней плана» (J-198): поле ключа не нужно, колонку задаёт сетка блока */
+.legend-item__marker--large {
+  width: auto;
+  height: auto;
+}
+
+.legend-item__marker--large > .legend-item__dot {
+  width: var(--space-2);
+  height: var(--space-2);
+}
+
 .legend-list {
   display: inline-flex;
   flex-wrap: wrap;

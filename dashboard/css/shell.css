@@ -74,7 +74,7 @@ body::before {
   grid-template-columns: var(--nav-current, var(--nav-width)) minmax(0, 1fr);
   gap: var(--nav-gap);
   align-items: start;
-  /* «Г» из меню и строки действий сужается и расширяется вместе с меню, панель подстраивается — без скачка */
+  /* Меню сужается и расширяется плавно, панель подстраивается — без скачка */
   transition: grid-template-columns var(--motion-base) var(--ease-standard);
 }
 
@@ -96,15 +96,18 @@ body::before {
   display: flex;
   min-width: 0;
   height: calc(100vh - 2 * var(--space-10));
+  /* Липкость ограничена низом .app, а он поднимается под удержанием высоты (page-height.js): поле снимает границу; проверка nav-shift */
+  margin-block-end: -100vh;
   flex-direction: column;
   gap: var(--space-6);
   padding: var(--nav-padding);
-  /* Макет дизайнера 11.11: меню — не карточка, а левая сторона «Г» на фоне страницы вместе со строкой действий над
-     панелью рабочей области; своей поверхности у него нет, выделена только панель с данными */
+  /* Макет дизайнера 11.11: меню — не карточка, а колонка на фоне страницы рядом с панелью рабочей области;
+     своей поверхности у него нет, выделена только панель с данными */
 }
 
 .side-nav__brand {
   display: flex;
+  overflow: clip;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
@@ -139,8 +142,14 @@ body::before {
 
 .side-nav__link {
   width: 100%;
+  overflow: clip;
   padding-block: var(--space-2);
   padding-inline: var(--nav-item-inset) var(--space-3);
+}
+
+/* Текст меню свёрстан под ширину развёрнутого: растущая колонка открывает его краем, без переноса на каждом кадре */
+.side-nav__label {
+  white-space: nowrap;
 }
 
 .side-nav__link:hover {
@@ -209,6 +218,7 @@ body::before {
 
 .side-nav__data {
   display: flex;
+  overflow: clip;
   gap: var(--space-3);
   padding: var(--space-3);
   border: var(--hairline) solid var(--color-card-border);
@@ -224,7 +234,8 @@ body::before {
 
 .side-nav__data-body {
   display: flex;
-  min-width: 0;
+  flex: none;
+  width: calc(var(--nav-width) - 2 * var(--nav-padding) - 2 * var(--space-3) - 2 * var(--hairline));
   flex-direction: column;
   gap: var(--space-1);
 }
@@ -262,7 +273,7 @@ body::before {
 }
 
 /*
-  Рабочая область (макет дизайнера 11.11): над панелью — строка действий, сама панель несёт шапку и страницу.
+  Рабочая область: панель несёт шапку и страницу, её верх — на уровне верха меню (строки действий над ней нет).
   Панель — поверхность, а не стекло: backdrop-filter сделал бы её контейнером для position: fixed, и развёрнутая
   карточка и подсказки встали бы от её края, а не от окна
 */
@@ -270,20 +281,6 @@ body::before {
   display: flex;
   min-width: 0;
   flex-direction: column;
-}
-
-.workspace-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--space-2);
-  min-height: var(--workspace-toolbar-height);
-  margin-block-end: var(--space-4);
-  padding-inline: var(--workspace-pad);
-}
-
-.workspace-toolbar:empty {
-  visibility: hidden;
 }
 
 .workspace > .page {
@@ -656,13 +653,6 @@ body::before {
   overflow: visible;
 }
 
-/* «Показать ещё» / «Скрыть» любого блока — высота контрола карточки, а не поле вокруг подписи: было 34 и 29 в соседних
-   блоках. Тег в селекторе — правило сильнее класса оформления блока (heatmap-more и др.) */
-button.paging-button {
-  height: var(--control-height);
-  padding-block: 0;
-}
-
 /* ── Служебные состояния (D-34) ────────────────────────────────────── */
 
 .state {
@@ -698,9 +688,21 @@ button.paging-button {
   cursor: help;
 }
 
-.state--compact .state__title {
+.state--compact .state__title,
+.state--quiet .state__title {
   color: var(--color-text-tertiary);
   font: var(--type-caption);
+}
+
+.state--quiet .state__title,
+.state--text .state__title {
+  margin: 0;
+}
+
+.state--text .state__title {
+  color: var(--color-text-secondary);
+  font: var(--type-text);
+  text-wrap: wrap;
 }
 
 .state__skeleton {
@@ -823,18 +825,6 @@ button.paging-button {
   height: var(--icon-size);
 }
 
-/* J-45: подпись переключателя каналов — вровень с ним, тише значения */
-.channel-switch {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.channel-switch__label {
-  color: var(--color-text-tertiary);
-  font: var(--type-caption);
-}
-
 .shell-head__meta {
   display: flex;
   flex-wrap: wrap;
@@ -925,18 +915,6 @@ button.paging-button {
   display: inline-flex;
 }
 
-/* Ссылка на срез — первая из действий у правого края строки шапки; загрузка и тема идут за ней вплотную */
-.shell-head__bar > .shell-head__link {
-  flex-shrink: 0;
-  margin-inline-start: auto;
-}
-
-/* Специфичность выше правила `.shell-head__bar > .data-import__item` ниже: иначе свободное место делилось бы пополам */
-.shell-head__bar > .shell-head__link ~ .data-import__item,
-.shell-head__bar > .shell-head__link ~ .theme-toggle {
-  margin-inline-start: 0;
-}
-
 .shell-head__action[hidden] {
   display: none;
 }
@@ -987,40 +965,6 @@ button.paging-button {
   border-color: var(--color-border-strong);
   background: var(--control-raised-hover);
   color: var(--color-text-strong);
-}
-
-/* Новая версия приложения — строка над шапкой (docs/desktop-app.md, «Обновления») */
-.app-update {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  margin-bottom: var(--space-2);
-  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
-  border: var(--divider-width) solid var(--color-control-border);
-  border-radius: var(--radius-control);
-  background: var(--control-raised);
-  color: var(--color-text-strong);
-  font: var(--type-caption);
-}
-
-.app-update[hidden] {
-  display: none;
-}
-
-.app-update__text {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.app-update__install {
-  flex-shrink: 0;
-  padding: var(--space-1) var(--space-3);
-  border: var(--hairline) solid var(--color-text-strong);
-  border-radius: var(--radius-pill);
-  background: var(--color-text-strong);
-  color: var(--color-on-accent);
-  font: var(--type-caption-strong);
-  cursor: pointer;
 }
 
 /* Подвал: обратная связь из приложения */
@@ -1107,10 +1051,8 @@ button.paging-button {
   display: none;
 }
 
-/* Popover раскрывается влево от правого края кнопки, как «Как считается» */
+/* Окно импорта шире; правым краем к кнопке — `align: 'end'` */
 .control-popover.data-import {
-  inset-inline-start: auto;
-  inset-inline-end: 0;
   width: calc(var(--space-10) * 9);
 }
 
@@ -1377,9 +1319,8 @@ button.paging-button {
   transform: rotate(180deg);
 }
 
-/* Настройки расчёта: popover под кнопкой, у правого края — кнопка стоит у края строки шапки */
+/* Настройки расчёта: правым краем к кнопке (`align: 'end'`) — кнопка стоит у края строки шапки */
 .control-popover.shell-head__settings-popover {
-  inset-inline: auto 0;
   width: calc(var(--space-10) * 7);
 }
 

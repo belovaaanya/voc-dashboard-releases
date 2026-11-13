@@ -2,7 +2,7 @@
 
 import { toggleSelectedValue } from '../state/controls.js';
 import { element } from '../ui/dom.js';
-import { bindPopover } from '../ui/popover.js';
+import { bindPopover, popoverPanel } from '../ui/popover.js';
 
 function checkboxList({ optionId, title, options, selected, optionLabel, onToggle }) {
   const list = element('fieldset', 'control-popover__choices');
@@ -34,10 +34,7 @@ export function filterPopover({
   className = '', inline = true, returnFocus = false, onApply, onReset,
 }) {
   let draft = [...selected];
-  const panel = element('div', className ? `control-popover glass ${className}` : 'control-popover glass');
-  panel.id = id;
-  panel.setAttribute('aria-label', `Фильтр: ${title}`);
-  panel.append(element('h2', 'control-popover__title', title));
+  const panel = popoverPanel({ id, title, label: `Фильтр: ${title}`, className });
   panel.append(choices
     ? choices((values) => { draft = values; })
     : checkboxList({ optionId, title, options, selected, optionLabel, onToggle: (value) => { draft = toggleSelectedValue(draft, value); } }));

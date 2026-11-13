@@ -86,6 +86,11 @@
   --tone: var(--color-plan-band);
 }
 
+/* Дни «в плане»: серый тон с прозрачностью рамки, как дуга кольца */
+.tone--plan-in {
+  --tone: var(--plan-days-in-mark);
+}
+
 .delta {
   display: inline-flex;
   align-items: center;
@@ -109,6 +114,11 @@
 
 .delta--plain .delta__arrow {
   color: var(--tone-ink, var(--tone));
+}
+
+/* J-136: без сравнения треугольник невидим, но держит место — доли строк в одну колонку */
+.delta--no-arrow .delta__arrow {
+  visibility: hidden;
 }
 
 .delta--lg .delta__arrow {
@@ -197,6 +207,13 @@
   white-space: nowrap;
 }
 
+/* Вариант `wrap`: не помещаясь, дельта уходит под число */
+.value-delta--wrap {
+  flex-wrap: wrap;
+  row-gap: var(--space-1);
+  white-space: normal;
+}
+
 .value-delta__delta {
   flex: none;
 }
@@ -206,23 +223,32 @@
   color: var(--color-text-tertiary);
 }
 
-/* Горизонтальная прокрутка: затухает край, за которым ещё есть содержимое (h-scroll.js) */
+/* Горизонтальная прокрутка: затухает край, за которым ещё есть содержимое (h-scroll.js); снизу — место полосе */
 .h-scroll {
+  max-width: 100%;
   overflow-x: auto;
   overscroll-behavior-x: contain;
+  padding-block-end: var(--space-2);
 }
 
-.h-scroll[data-fade-start='true'] {
+/* Маска погасила бы кольцо фокуса на затухающем крае: в фокусе её нет */
+.h-scroll[tabindex]:focus-visible {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+/* `--fade-end`: слева закреплённая колонка, маска погасила бы её; `--fade-none`: затухание рисует блок */
+.h-scroll:where([data-fade-start='true']:not(.h-scroll--fade-end, .h-scroll--fade-none)) {
   -webkit-mask-image: var(--h-scroll-mask-start);
   mask-image: var(--h-scroll-mask-start);
 }
 
-.h-scroll[data-fade-end='true'] {
+.h-scroll:where([data-fade-end='true']:not(.h-scroll--fade-none)) {
   -webkit-mask-image: var(--h-scroll-mask-end);
   mask-image: var(--h-scroll-mask-end);
 }
 
-.h-scroll[data-fade-start='true'][data-fade-end='true'] {
+.h-scroll:where([data-fade-start='true']):where([data-fade-end='true']:not(.h-scroll--fade-end, .h-scroll--fade-none)) {
   -webkit-mask-image: var(--h-scroll-mask-both);
   mask-image: var(--h-scroll-mask-both);
 }

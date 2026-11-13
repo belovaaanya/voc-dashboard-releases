@@ -4,6 +4,7 @@ import { driverChip } from '../components/driver-chip.js';
 import { driverRows } from '../state/driver-pick.js';
 import { triggerChoices } from '../components/trigger-choices.js';
 import { tag } from '../components/tag.js';
+import { emptyValue } from '../components/empty-value.js';
 import { element, withFullLabel } from '../ui/dom.js';
 import { copyButton } from '../components/copy-button.js';
 import { detailRows } from '../state/detail-event.js';
@@ -12,7 +13,8 @@ import { icon } from '../ui/icons.js';
 import { filterPopover } from '../components/filter-popover.js';
 import { pagingButtons } from '../components/paging.js';
 import { searchField } from '../components/search-field.js';
-import { stateText } from '../components/status-panel.js';
+import { hScroll } from '../components/h-scroll.js';
+import { emptyTableRow, statusPanel } from '../components/status-panel.js';
 import {
   buildVerbatimRows,
   filterVerbatimRows,
@@ -172,11 +174,12 @@ export function tableRow(item, label, columns = COLUMNS) {
     const tagged = column.key === 'category' && item.category;
     /* Тон тега — у карточки по изменению доли; у строки его нет, поэтому нейтральный */
     if (tagged) cell.append(tag(text, 'neutral'));
+    else if (text === NONE) cell.append(emptyValue());
     else cell.textContent = text;
     if (column.key === 'segment' && item.segment) withFullLabel(cell, label('segment', item.segment));
     if (column.key === 'comment' || column.key === 'expertise') {
       cell.className = `verbatim-table__text verbatim-table__text--${column.key}`;
-      cell.title = text;
+      if (text !== NONE) cell.title = text;
     }
     if (column.key === 'comment') {
       cell.append(copyButton({
@@ -228,8 +231,10 @@ export function renderVerbatimTable(block, context) {
 
   const allRows = buildVerbatimRows(rows, context.verbatim.data, context.reference);
   if (!allRows.length) {
-    block.setContent(stateText('title', detailEvent || driver ? 'По выбранному событию или антидрайверу нет комментариев и экспертизы'
-      : 'В выбранном срезе нет комментариев и экспертизы'));
+    block.setContent(statusPanel('verbatim-detail__none', {
+      title: detailEvent || driver ? 'По выбранному событию или антидрайверу нет комментариев и экспертизы'
+        : 'В выбранном срезе нет комментариев и экспертизы',
+    }));
     return;
   }
   const columns = visibleColumns(allRows, context.state.channel);
@@ -252,8 +257,8 @@ export function renderVerbatimTable(block, context) {
   reset.type = 'button';
   bar.append(status, reset);
   const popovers = element('div', 'verbatim-detail__popovers');
-  const scroll = element('div', 'verbatim-table-scroll');
   const table = element('table', 'verbatim-table');
+  const scroll = hScroll(table, { label: 'Таблица детализации' });
   const body = element('tbody');
   const paging = element('div', 'verbatim-detail__paging');
   let shown = PAGE_SIZE;
@@ -279,21 +284,15 @@ export function renderVerbatimTable(block, context) {
     reset.hidden = !Object.values(tableFilters).some((values) => values.length);
     /* Последняя порция прячет кнопку под фокусом: фокус — на счётчик строк, как у антидрайверов */
     paging.replaceChildren(...pagingButtons({
-      shown, total: found.length, page: PAGE_SIZE, collapsible: false, moreClass: 'verbatim-detail__more',
+      shown, total: found.length, page: PAGE_SIZE, collapsible: false,
       onMore: () => {
         shown += PAGE_SIZE;
         paint();
-        return paging.querySelector('.verbatim-detail__more') ?? status;
+        return paging.querySelector('.paging-button') ?? status;
       },
     }));
     paging.hidden = !paging.children.length;
-    if (!found.length) {
-      const row = element('tr');
-      const cell = element('td', 'verbatim-table__empty', 'Нет строк по поиску и фильтрам');
-      cell.colSpan = columns.length;
-      row.append(cell);
-      body.append(row);
-    }
+    if (!found.length) body.append(emptyTableRow(columns.length, 'Нет строк по поиску и фильтрам', 'verbatim-table__empty'));
   }
 
   reset.addEventListener('click', () => {
@@ -303,7 +302,6 @@ export function renderVerbatimTable(block, context) {
     paint();
     input.focus();
   });
-  scroll.append(table);
   /* Горизонтальная прокрутка уводит заголовок из-под открытого popover — он закрывается */
   scroll.addEventListener('scroll', () => closeAll());
   wrap.append(bar, popovers, scroll, paging);

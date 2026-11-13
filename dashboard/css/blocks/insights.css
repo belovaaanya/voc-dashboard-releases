@@ -95,10 +95,8 @@
   height: var(--icon-size);
 }
 
-/* Календарь — правая колонка: окно раскрывается влево от значка, чтобы не уйти за край страницы */
+/* Календарь — правая колонка: окно шире, правым краем к значку (`align: 'end'`), чтобы не уйти за край страницы */
 .control-popover.insight-help__panel {
-  inset-inline-start: auto;
-  inset-inline-end: 0;
   width: calc(var(--space-10) * 9);
   font: var(--type-caption);
   text-align: start;
@@ -175,20 +173,11 @@
   width: 100%;
   min-height: var(--space-10);
   padding: var(--space-2);
-  border: var(--divider-width) solid transparent;
-  border-radius: var(--radius-control);
   background: transparent;
   color: var(--color-text-secondary);
   font: inherit;
   text-align: start;
   cursor: pointer;
-}
-
-.insight-row:hover,
-.insight-row:focus-visible {
-  border-color: var(--color-border-strong);
-  background: var(--row-hover);
-  outline: none;
 }
 
 /* J-60: выбранным остаётся только событие, переданное в детализацию; дни выбранной даты не обводятся, строку подсвечивает наведение */
@@ -286,31 +275,7 @@
 }
 
 .insight-search-field {
-  display: flex;
   flex: 1 1 calc(var(--space-10) * 3);
-  min-width: 0;
-}
-
-.insight-search {
-  flex: 1 1 auto;
-  min-width: 0;
-  height: var(--control-height);
-  /* Аудит 13.11: поле — как поиск «Топ проблем» */
-  padding: 0 var(--space-4);
-  border: var(--hairline) solid var(--color-control-border);
-  border-radius: var(--radius-pill);
-  background: var(--control-surface);
-  color: var(--color-text-strong);
-  font: var(--type-caption);
-}
-
-.insight-search::placeholder {
-  color: var(--color-text-tertiary);
-}
-
-.insight-search:hover,
-.insight-search:focus-visible {
-  border-color: var(--color-border-strong);
 }
 
 .insight-search__reset {

@@ -8,8 +8,12 @@ export function stateText(kind, text) {
   return element('p', `state__${kind}`, bindShortWords(text));
 }
 
-export function statusPanel(className, { title, detail = null, action = null, extra = [] }) {
-  const panel = element('div', className);
+const LOOKS = { quiet: 'state--quiet', text: 'state--text' };
+
+/** `look`: `quiet` — подпись третьего уровня в малом месте (портрет роли), `text` — строка текста в списке (вывод); оба без отступов абзаца. */
+export function statusPanel(className, { title, detail = null, action = null, extra = [], look = null }) {
+  if (look && !LOOKS[look]) throw new Error(`Нет вида состояния «${look}»`);
+  const panel = element('div', [className, LOOKS[look]].filter(Boolean).join(' '));
   panel.setAttribute('role', 'status');
   panel.append(stateText('title', title));
   if (detail) panel.append(stateText('detail', detail));
@@ -21,4 +25,13 @@ export function statusPanel(className, { title, detail = null, action = null, ex
   }
   panel.append(...extra);
   return panel;
+}
+
+/** Строка «ничего не нашлось» во всю ширину таблицы; отступ и выравнивание задаёт класс блока. */
+export function emptyTableRow(columns, text, className) {
+  const row = element('tr');
+  const cell = element('td', className, text);
+  cell.colSpan = columns;
+  row.append(cell);
+  return row;
 }

@@ -12,6 +12,7 @@
 import { badge } from '../components/badge.js';
 import { delta } from '../components/delta.js';
 import { valueDelta } from '../components/value-delta.js';
+import { EMPTY_MARK, emptyValue } from '../components/empty-value.js';
 import { sparkline } from '../components/sparkline.js';
 import { buildTimeSeries, SCALE_OPTIONS, sparklineScale } from '../core/timeseries.js';
 import { hoverTooltip } from '../components/hover-tooltip.js';
@@ -64,8 +65,12 @@ const PLAN_BADGE = {
   [BELOW_PLAN]: { caption: 'Ниже плана', tone: 'negative' },
 };
 
+/** Нет значения (`null` или прочерк форматтера) — общий `emptyValue` в месте числа. */
 export function valueNode(text, modifier) {
-  return element('span', modifier ? `metric__value ${modifier}` : 'metric__value', text);
+  const empty = text === null || text === undefined || text === EMPTY_MARK;
+  const node = element('span', modifier ? `metric__value ${modifier}` : 'metric__value', empty ? null : text);
+  if (empty) node.append(emptyValue());
+  return node;
 }
 
 /** Направление берётся из знака дельты, а не задаётся отдельно (V-15). */
@@ -85,19 +90,9 @@ export function leadNode(value, { shape = DELTA_SHAPES.voc, growth = GROWTH.good
   return empty;
 }
 
-/** J-65: число и его дельта — одна строка; не помещаясь, дельта переходит под число. */
-export function figureNode(valueText, lead, modifier) {
-  const figure = element('span', 'metric__figure');
-  figure.append(valueNode(valueText, modifier), lead);
-  return figure;
-}
-
-/**
- * Карточки шапки: число и дельта VOC — общий компонент `valueDelta` (аудит 13.11): пара не разрывается,
- * дельта всегда справа в строке числа, а не под ним. Дайджест и роли пока на `figureNode`.
- */
-export function pairNode(valueText, lead, modifier) {
-  return valueDelta(valueNode(valueText, modifier), lead, { className: 'metric__pair' });
+/** Число и дельта карточки — общий `valueDelta`; `wrap` — не помещаясь, дельта уходит под число (J-65). */
+export function pairNode(valueText, lead, modifier, { wrap = false } = {}) {
+  return valueDelta(valueNode(valueText, modifier), lead, { className: 'metric__pair', wrap });
 }
 
 /* Шаг мини-тренда словом — для подсказки: «по дням», «по неделям» */

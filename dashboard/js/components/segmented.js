@@ -25,9 +25,22 @@ export function targetIndex(event, index, count) {
   return STEPS[event.key] ? (index + STEPS[event.key] + count) % count : null;
 }
 
+/*
+  Подпись перед табами («Канал», «Цвет:», «Сначала частые:») — вариант `caption`: подпись и табы переносятся вместе.
+  Имя для screen reader — у tablist (`label`), подпись видна глазу и не озвучивается дважды
+*/
+function withCaption(group, { caption, captionTone, className }) {
+  const field = element('div', ['segmented-field', className].filter(Boolean).join(' '));
+  const text = element('span', `segmented-field__caption${captionTone ? ` segmented-field__caption--${captionTone}` : ''}`, caption);
+  text.setAttribute('aria-hidden', 'true');
+  field.append(text, group);
+  return field;
+}
+
 /* Табы по образцу ARIA APG: в порядке Tab один выбранный таб, стрелки влево и вправо, Home и End сразу выбирают таб */
-export function segmented({ label, options, selected, onSelect, size = 'sm' }) {
-  const group = element('div', size === 'lg' ? 'segmented segmented--lg' : 'segmented');
+/* `className` — у внешнего узла: у подписи с табами (`caption`), иначе у tablist */
+export function segmented({ label, options, selected, onSelect, size = 'sm', caption, captionTone, className }) {
+  const group = element('div', ['segmented', size === 'lg' && 'segmented--lg', !caption && className].filter(Boolean).join(' '));
   group.setAttribute('role', 'tablist');
   group.setAttribute('aria-label', label);
   const focusable = options.some(({ value }) => value === selected) ? selected : options[0]?.value;
@@ -79,5 +92,5 @@ export function segmented({ label, options, selected, onSelect, size = 'sm' }) {
     tabs.push(tab);
     group.append(tab);
   });
-  return group;
+  return caption ? withCaption(group, { caption, captionTone, className }) : group;
 }

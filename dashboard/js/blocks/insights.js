@@ -25,7 +25,7 @@ import {
   workingDaysCaption,
 } from '../core/calendar.js';
 import { signTone } from '../components/delta.js';
-import { chipContent, focusChip } from '../components/focus-chip.js';
+import { focusChip, selectionChip } from '../components/focus-chip.js';
 import { statusDot } from '../components/status-dot.js';
 import { searchField } from '../components/search-field.js';
 import { statusPanel } from '../components/status-panel.js';
@@ -33,7 +33,7 @@ import { emptyValue } from '../components/empty-value.js';
 import { tag } from '../components/tag.js';
 import { element } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
-import { bindPopover } from '../ui/popover.js';
+import { bindPopover, popoverPanel } from '../ui/popover.js';
 import { formatCount, formatDate, formatDayRange, formatDuration, formatEventTime, formatDelta, formatNumber, formatRatings, formatSigned, formatVoc, plural, quoted } from '../core/format.js';
 import { CRITICAL } from '../core/insights.js';
 import { ABOVE_PLAN, BELOW_PLAN, IN_PLAN } from '../core/plan.js';
@@ -270,10 +270,7 @@ function kindsHelp(channel, kinds) {
   trigger.setAttribute('aria-label', 'Что значат типы событий');
   trigger.title = 'Что значат типы событий';
   trigger.append(icon('info', 'insight-help__icon'));
-  const panel = element('div', 'control-popover glass insight-help__panel');
-  panel.id = 'insight-kinds-help';
-  panel.setAttribute('aria-label', 'Типы событий');
-  panel.append(element('h2', 'control-popover__title', 'Типы событий'));
+  const panel = popoverPanel({ id: 'insight-kinds-help', title: 'Типы событий', className: 'insight-help__panel', align: 'end' });
   for (const group of KIND_GROUPS) {
     panel.append(element('h3', 'insight-help__group', group.label));
     const list = element('dl', 'insight-help__list');
@@ -347,7 +344,7 @@ function eventRow(block, context, event, index) {
   const sameEvent = sameDetailEvent(context.state.detailEvent, detailEvent);
   /* J-60: выбранный день сужает ленту, но строки не обводит — нажатой остаётся только строка события из детализации */
   const selected = Boolean(context.state.detailEvent) && sameEvent;
-  const row = element('button', `insight-row insight-row--${event.tone}`);
+  const row = element('button', `insight-row hover-row insight-row--${event.tone}`);
   row.type = 'button';
   if (event.kind === INCIDENT_EVENT) row.style.setProperty('--accident-tone', accidentColor(event.effect, event.duration_seconds));
   /* Клик по серии выбирает её последний день (R-44) */
@@ -507,13 +504,14 @@ function nothingFound(query, onReset) {
 
 function daysChip(context) {
   const days = selectionDays(context.state);
-  const reset = element('button', 'focus-chip');
-  reset.append(...chipContent('Дни', formatCount(days.length)));
-  reset.type = 'button';
-  reset.setAttribute('aria-label', `Сбросить выбранные дни: ${days.map(formatDate).join(', ')}`);
-  reset.title = days.map(formatDate).join(', ');
-  reset.addEventListener('click', () => context.setState({ ...context.state, focus: null, days: [], detailEvent: null }));
-  return reset;
+  const dates = days.map(formatDate).join(', ');
+  return selectionChip({
+    caption: 'Дни',
+    value: formatCount(days.length),
+    label: `Сбросить выбранные дни: ${dates}`,
+    title: dates,
+    onClear: () => context.setState({ ...context.state, focus: null, days: [], detailEvent: null }),
+  });
 }
 
 export function renderInsights(block, context) {

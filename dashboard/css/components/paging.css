@@ -1,0 +1,21 @@
+/* «Показать ещё» / «Скрыть» любого блока (J-182, components/paging.js): высота контрола карточки, вид приподнятого контрола */
+.paging-button {
+  display: inline-flex;
+  align-items: center;
+  height: var(--control-height);
+  padding: 0 var(--space-4);
+  border: var(--hairline) solid var(--color-control-border);
+  border-radius: var(--radius-pill);
+  background: var(--control-raised);
+  box-shadow: var(--control-raised-edge);
+  color: var(--color-text-secondary);
+  font: var(--type-caption-strong);
+  cursor: pointer;
+}
+
+.paging-button:hover,
+.paging-button:focus-visible {
+  border-color: var(--color-border-strong);
+  background: var(--control-raised-hover);
+  color: var(--color-text-strong);
+}

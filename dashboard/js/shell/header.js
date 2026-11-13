@@ -12,13 +12,12 @@ import { CHANNEL_DIMENSION } from '../core/dimensions.js';
 import { element, withFullLabel, withOverflowTitle } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { periodPicker } from '../components/period-picker.js';
-import { copyButton } from '../components/copy-button.js';
 import { dataImportControl, dataNoticeControl } from './data-import.js';
 import { appUpdateControl } from './app-update.js';
 import { segmented } from '../components/segmented.js';
 import { triggerChoices } from '../components/trigger-choices.js';
 import { filterPopover } from '../components/filter-popover.js';
-import { bindPopover } from '../ui/popover.js';
+import { bindPopover, popoverPanel } from '../ui/popover.js';
 
 /* J-26: дирекции скрыты в шапке; полный набор измерений расчётов сохраняется. */
 const HEADER_DIMENSIONS = ['segment', 'role', 'product', 'trigger', 'os'];
@@ -30,17 +29,14 @@ let moreOpen = false;
 
 /* J-45: подпись «Канал» видна, а не только в имени переключателя — сразу понятно, что выбран канал и что его можно сменить */
 export function renderChannels(channels, state, label, onChange) {
-  const wrap = element('div', 'channel-switch');
-  const caption = element('span', 'channel-switch__label', 'Канал');
-  caption.setAttribute('aria-hidden', 'true');
-  wrap.append(caption, segmented({
+  return segmented({
     label: 'Канал',
+    caption: 'Канал',
     options: channels.map((channel) => ({ value: channel, label: channel, title: label(CHANNEL_DIMENSION, channel) })),
     selected: state.channel,
     onSelect: onChange,
     size: 'lg',
-  }));
-  return wrap;
+  });
 }
 
 /*
@@ -206,34 +202,11 @@ function settingsControl(state, onCashbackChange) {
   trigger.setAttribute('aria-label', 'Настройки расчёта');
   trigger.title = 'Настройки расчёта';
   trigger.append(icon('settings', 'shell-head__icon'));
-  const panel = element('div', 'control-popover glass shell-head__settings-popover');
-  panel.id = 'settings-popover';
-  panel.setAttribute('aria-label', 'Настройки расчёта');
-  panel.append(element('h2', 'control-popover__title', 'Настройки расчёта'), cashbackSwitch(state, onCashbackChange),
+  const panel = popoverPanel({ id: 'settings-popover', title: 'Настройки расчёта', className: 'shell-head__settings-popover', align: 'end' });
+  panel.append(cashbackSwitch(state, onCashbackChange),
     element('p', 'shell-head__settings-note', 'Выключите, чтобы считать VOC без оценок по операциям с кэшбеком.'));
   item.append(trigger, panel);
   bindPopover(item, trigger, panel);
-  return item;
-}
-
-/*
-  J-44: ссылка на срез — текущий адрес: канал, период, фильтры и выбор уже живут в URL (url-state.js).
-  Срез — вся страница, поэтому кнопка — в строке управления шапки справа, вида кнопки «Обновить данные»;
-  под фильтрами у карточек метрик она читалась ссылкой на эти карточки. J-203: квадратная иконка 40×40 —
-  с подписью она отнимала место у фильтров АБМ; действие — в доступном имени и подсказке
-*/
-export function copyLinkControl(copy) {
-  const item = copyButton({
-    label: 'Скопировать ссылку на срез',
-    iconName: 'link',
-    iconClass: 'shell-head__icon',
-    className: 'shell-head__button shell-head__button--icon',
-    text: () => location.href,
-    ...(copy ? { copy } : {}),
-  });
-  item.classList.add('shell-head__action', 'shell-head__link');
-  const button = item.querySelector('.shell-head__button');
-  button.dataset.action = 'copy-link';
   return item;
 }
 
@@ -271,7 +244,6 @@ export function renderHeader(host, context) {
     onCashbackChange,
     onFiltersReset,
     slim = false,
-    toolbar = null,
   } = context;
 
   const head = element('header', 'shell-head');
@@ -294,11 +266,6 @@ export function renderHeader(host, context) {
     const osFilter = renderFilters(dimensions, state, label, onFilterChange, reference, onFiltersReset, { keys: ['os'], more: [] });
     if (osFilter) bar.append(osFilter);
   }
-  /* Ссылка на срез — про всю страницу, как переключатели над данными. С макетом дизайнера 11.11 — в строке действий
-     над панелью, без неё (тесты, пустое приложение) — справа в строке шапки. На странице ролей её нет (J-168) */
-  const link = slim ? null : copyLinkControl();
-  if (toolbar) toolbar.replaceChildren(...(link ? [link] : []));
-  else if (link) bar.append(link);
   /* Настройки расчёта: «С кэшбеком» — не фильтр среза, а правило подсчёта; на странице ролей не действует (J-168) */
   if (!slim) bar.append(settingsControl(state, onCashbackChange));
   /* J-75: загрузка CSV — только в десктопном приложении, справа в строке шапки перед темой:

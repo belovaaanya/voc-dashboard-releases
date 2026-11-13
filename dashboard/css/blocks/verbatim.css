@@ -204,33 +204,7 @@
 }
 
 .verbatim-search {
-  display: block;
   width: min(394px, 40%);
-}
-
-/* Поле и «Показать ещё» — в оформлении контролов шапки (Figma 3030:3301) */
-.verbatim-search__input {
-  display: block;
-  width: 100%;
-  /* J-195: высота — как у табов рядом; токен вводит «Общее», до него — то же значение */
-  height: var(--control-height, 29px);
-  padding: 0 var(--space-4);
-  border: var(--hairline) solid var(--color-control-border);
-  border-radius: var(--radius-pill);
-  background: var(--control-surface);
-  box-shadow: var(--shadow-inset);
-  color: var(--color-text-strong);
-  font: var(--type-caption);
-}
-
-.verbatim-search__input::placeholder {
-  color: var(--color-text-tertiary);
-}
-
-.verbatim-search__input:hover,
-.verbatim-search__input:focus-visible {
-  border-color: var(--color-border-strong);
-  outline: none;
 }
 
 .verbatim-detail {
@@ -250,10 +224,6 @@
   margin: 0;
   color: var(--color-text-tertiary);
   font: var(--type-caption);
-}
-
-.verbatim-table-scroll {
-  overflow-x: auto;
 }
 
 .verbatim-table {
@@ -392,25 +362,6 @@
   color: var(--color-text-strong);
 }
 
-.verbatim-detail__more {
-  align-self: center;
-  padding: var(--space-2) var(--space-4);
-  border: var(--hairline) solid var(--color-control-border);
-  border-radius: var(--radius-pill);
-  background: var(--control-raised);
-  box-shadow: var(--control-raised-edge);
-  color: var(--color-text-secondary);
-  font: var(--type-caption-strong);
-  cursor: pointer;
-}
-
-.verbatim-detail__more:hover,
-.verbatim-detail__more:focus-visible {
-  border-color: var(--color-border-strong);
-  background: var(--control-raised-hover);
-  color: var(--color-text-strong);
-}
-
 .verbatim-problems__actions,
 .verbatim-detail__paging {
   display: flex;
@@ -441,26 +392,6 @@
 }
 
 /* ── J-114: таблица проблем — строка на проблему, колонки разрезов и шагов периода ── */
-
-.problem-table-scroll {
-  max-width: 100%;
-  overflow-x: auto;
-  padding-block-end: var(--space-2);
-}
-
-/*
-  Левый край не затухает: там закреплённая колонка названий, маска погасила бы её. Продолжение слева видно по самой
-  колонке, справа — затуханием края hScroll
-*/
-.problem-table-scroll[data-fade-start='true'] {
-  -webkit-mask-image: none;
-  mask-image: none;
-}
-
-.problem-table-scroll[data-fade-start='true'][data-fade-end='true'] {
-  -webkit-mask-image: var(--h-scroll-mask-end);
-  mask-image: var(--h-scroll-mask-end);
-}
 
 .problem-table {
   width: max-content;
@@ -654,11 +585,6 @@
   font: var(--type-caption);
 }
 
-/* J-136: без сравнения треугольник невидим, но держит место — доли строк в одну колонку */
-.delta--no-arrow .delta__arrow {
-  visibility: hidden;
-}
-
 /* J-136: поиск, разрез, числа, шаг и кнопка ленты — одной строкой над таблицей; кнопка ленты — справа */
 .problem-toolbar {
   display: flex;
@@ -671,19 +597,6 @@
   /* J-195: поиск не растягивается на свободное место — по размеру соседних контролов */
   flex: 0 1 calc(var(--problem-search-width) * 0.75);
   min-width: calc(var(--problem-search-width) / 2);
-}
-
-/* Подпись сортировки слева от переключателя: «Сначала частые: Проблематики / ФО» */
-.problem-order {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.problem-order__label {
-  color: var(--color-text-secondary);
-  font: var(--type-caption);
-  white-space: nowrap;
 }
 
 /* J-130: поиск по проблематике — над таблицей топа, не шире колонки названия */
@@ -722,7 +635,7 @@
 }
 
 /*
-  Шаг — пилюля тепловой карты (heatmap-cell / tone-pill антидрайверов), а не заливка всей ячейки: ячейка без фона,
+  Шаг — пилюля тепловой карты (heatCell), а не заливка всей ячейки: ячейка без фона,
   между пилюлями 2 px — поля ячеек, как в карте; пилюля во всю ширину колонки шага
 */
 .problem-table .problem-table__step {

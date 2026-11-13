@@ -5,6 +5,7 @@ import { element } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { formatCount, formatDateRange, formatImpact, formatVoc } from '../core/format.js';
 import { closeHoverTooltip, hoverTooltip } from '../components/hover-tooltip.js';
+import { statusPanel } from '../components/status-panel.js';
 import { roundImpact } from '../core/round.js';
 import { conclusionFactors, conclusionKey, isConclusion } from '../core/conclusion-payload.js';
 import { buildConclusionPayload, llm } from '../io/llm-conclusion.js';
@@ -49,7 +50,7 @@ function factorLines(factor, context) {
 function summaryRow(group, context) {
   const { direction, tone, items } = group;
   const caption = direction === ABOVE ? 'Драйвер' : 'Антидрайвер';
-  const row = element('div', `summary-row tone--${tone}`);
+  const row = element('div', `summary-row hover-row tone--${tone}`);
   row.setAttribute('tabindex', '0');
   row.setAttribute('role', 'group');
   row.setAttribute('aria-label', caption);
@@ -69,8 +70,10 @@ function renderComputed(block, context, { llmNote = false } = {}) {
   const list = element('div', 'summary-list');
   for (const group of conclusion.groups) list.append(summaryRow(group, context));
   if (!conclusion.groups.length) {
-    list.append(element('p', 'summary-note', conclusion.delta === null
-      ? 'Нет данных предыдущего периода' : 'Нет факторов изменения VOC'));
+    list.append(statusPanel('summary-note', {
+      title: conclusion.delta === null ? 'Нет данных предыдущего периода' : 'Нет факторов изменения VOC',
+      look: 'text',
+    }));
   }
   /* Источник — в шапке, а не строкой тела: вывод помещается без прокрутки (J-07) */
   block.setHead({ ai: false, note: llmNote ? sourceNote() : undefined });
@@ -90,7 +93,7 @@ function sourceNote() {
 
 /* Строки LLM: антидрайвер — вниз и негатив, драйвер — вверх и позитив (Figma 3204:2849) */
 function llmRow({ caption, direction, tone, factor, evidence, context }) {
-  const row = element('div', `summary-row tone--${tone}`);
+  const row = element('div', `summary-row hover-row tone--${tone}`);
   row.setAttribute('tabindex', '0');
   row.setAttribute('role', 'group');
   row.setAttribute('aria-label', caption);
@@ -121,7 +124,7 @@ function skeleton() {
   const list = element('div', 'summary-list summary-list--skeleton');
   list.setAttribute('aria-hidden', 'true');
   for (const direction of [BELOW, ABOVE]) {
-    const row = element('div', 'summary-row');
+    const row = element('div', 'summary-row hover-row');
     const copy = element('div', 'summary-row__text');
     copy.append(element('div', 'state__skeleton'));
     row.append(directionIcon(direction === ABOVE ? 'trend-up' : 'trend-down'), copy);

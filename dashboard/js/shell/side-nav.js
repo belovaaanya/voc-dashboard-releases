@@ -12,7 +12,8 @@ import { element } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { SOURCE_FIXTURE } from '../io/loader.js';
 import { methodologyItems } from '../core/methodology.js';
-import { bindPopover } from '../ui/popover.js';
+import { bindPopover, popoverPanel } from '../ui/popover.js';
+import { copyButton } from '../components/copy-button.js';
 
 export const NAV_KEY = 'voc.nav';
 const COLLAPSED = 'collapsed';
@@ -125,10 +126,7 @@ function methodControl() {
   trigger.dataset.action = 'methodology';
   trigger.dataset.navTitle = 'Как считаются данные';
   trigger.append(icon('book', 'side-nav__icon'), navLabel('Как считаются данные'));
-  const panel = element('div', 'control-popover glass method-popover');
-  panel.id = 'method-popover';
-  panel.setAttribute('aria-label', 'Как считается');
-  panel.append(element('h2', 'control-popover__title', 'Как считается'));
+  const panel = popoverPanel({ id: 'method-popover', title: 'Как считается', className: 'method-popover' });
   const list = element('dl', 'method-popover__list');
   for (const [term, text] of methodologyItems()) {
     list.append(element('dt', 'method-popover__term', term), element('dd', 'method-popover__text', bindShortWords(text)));
@@ -136,6 +134,26 @@ function methodControl() {
   panel.append(list);
   item.append(trigger, panel);
   bindPopover(item, trigger, panel);
+  return item;
+}
+
+/* J-44: ссылка на срез — текущий адрес со срезом; пункт меню на каждой странице, подпись — начало доступного имени */
+export function copyLinkControl(copy) {
+  const label = 'Скопировать ссылку на срез';
+  const item = copyButton({
+    label,
+    caption: 'Скопировать ссылку',
+    captionClass: 'side-nav__label',
+    iconName: 'link',
+    iconClass: 'side-nav__icon',
+    className: 'side-nav__link',
+    text: () => location.href,
+    ...(copy ? { copy } : {}),
+  });
+  item.classList.add('side-nav__copy');
+  const button = item.querySelector('.side-nav__link');
+  button.dataset.action = 'copy-link';
+  button.dataset.navTitle = label;
   return item;
 }
 
@@ -181,7 +199,7 @@ export function renderSideNav(host, context) {
   }
 
   const foot = element('div', 'side-nav__foot');
-  if (context) foot.append(dataPanel(context), methodControl());
+  if (context) foot.append(dataPanel(context), copyLinkControl(), methodControl());
   foot.append(toggleButton(host));
   host.replaceChildren(brand, list, foot);
   syncTitles(host);

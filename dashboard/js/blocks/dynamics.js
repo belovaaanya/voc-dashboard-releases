@@ -1,4 +1,5 @@
 import { chartTimeline } from '../components/chart-timeline.js';
+import { chartTooltip, showChartTooltip } from '../components/chart-tooltip.js';
 import { observeStage } from '../components/stage-observer.js';
 import { dateRange, selectionDays, toggleDays } from '../state/chart-selection.js';
 import { areaPaths, chartDomain, planZoneStops, countAxis, curveSamples, damageAxis, gapPaths, hitColumns, labelOrder, linePaths, placeLabels, plotPoints, xLabelIndices } from '../core/chart-geometry.js';
@@ -275,16 +276,11 @@ function tooltipLines(bucket, damageMode) {
 }
 
 function showTooltip(tooltip, bucket, point, plot, selected = false, damageMode = false) {
-  tooltip.replaceChildren(
-    ...tooltipLines(bucket, damageMode),
-    element('span', 'chart-tooltip__hint', selected ? SELECTED_POINT_HINT : POINT_HINT),
-  );
-  tooltip.style.setProperty('--tooltip-x', `${plot.x + point.x}px`);
-  tooltip.style.setProperty('--tooltip-y', `${plot.y + plot.height}px`);
-  tooltip.classList.remove('chart-tooltip--left');
-  tooltip.hidden = false;
-  const stage = tooltip.parentElement.getBoundingClientRect();
-  tooltip.classList.toggle('chart-tooltip--left', tooltip.getBoundingClientRect().right > stage.right);
+  showChartTooltip(tooltip, {
+    content: [...tooltipLines(bucket, damageMode), element('span', 'chart-tooltip__hint', selected ? SELECTED_POINT_HINT : POINT_HINT)],
+    x: plot.x + point.x,
+    y: plot.y + plot.height,
+  });
 }
 
 function pointTone(value, plan) {
@@ -595,10 +591,11 @@ function renderChart(block, context, scale, plan) {
   const chart = element('div', modeOf(context) === MODE_DAMAGE ? 'chart chart--damage' : 'chart');
   chart.append(chartLegend(context, model));
   const stage = element('div', 'chart-stage');
-  const tooltip = element('div', 'chart-tooltip glass');
-  tooltip.hidden = true;
+  /* Урон с пятёрками и подсказку клика знает только подсказка: диктор читает её, а не одно имя точки */
+  const tooltip = chartTooltip({ spoken: true });
   stage.append(tooltip);
   if (context.slice.length) chart.append(stage);
+  /* Строка пояснения с полями абзаца, без role=status: перерисовка графика не объявляет её заново */
   else chart.append(stateText('detail', 'Нет оценок за выбранный период графика. Выберите другой период на таймлайне.'));
   /* Протягивание таймлайна показывает даты в выборе периода — в шапке группы, если период общий (J-40) */
   const timeline = chartTimeline(context, { owner: block, onPreview: (range) => (context.previewPeriod ?? block.previewPeriod)?.(range) });

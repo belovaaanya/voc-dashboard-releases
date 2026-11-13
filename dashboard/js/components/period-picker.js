@@ -4,7 +4,7 @@ import { PERIOD_PRESETS, periodForPreset, presetLabel, presetName, validateCusto
 import { element } from '../ui/dom.js';
 import { formatDateRange } from '../core/format.js';
 import { icon } from '../ui/icons.js';
-import { bindPopover } from '../ui/popover.js';
+import { bindPopover, popoverPanel } from '../ui/popover.js';
 
 function dateField(name, labelText, value) {
   const label = element('label', 'control-popover__field');
@@ -95,10 +95,7 @@ function customRangeForm(period, { choose, onReset, close }) {
 export function periodPicker({ id, period, manifestPeriod, onChange, onReset = null, scope = null, itemClass, triggerClass, iconClass, align = 'start', onPreviewReady }) {
   const item = element('div', itemClass);
   const { trigger, show } = periodTrigger(period, scope, triggerClass, iconClass);
-  const panel = element('div', align === 'end' ? 'control-popover glass control-popover--period control-popover--end' : 'control-popover glass control-popover--period');
-  panel.id = id;
-  panel.setAttribute('aria-label', scope ? `Выбор периода блока «${scope}»` : 'Выбор периода');
-  panel.append(element('h2', 'control-popover__title', 'Период'));
+  const panel = popoverPanel({ id, title: 'Период', label: scope ? `Выбор периода блока «${scope}»` : 'Выбор периода', className: 'control-popover--period', align });
 
   let close;
   const choose = (next) => {

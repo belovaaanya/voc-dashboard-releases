@@ -4,17 +4,6 @@
   flex: 1 1 auto;
 }
 
-.chart-toggle {
-  border: 0;
-  color: var(--color-text-secondary);
-  font: inherit;
-  cursor: pointer;
-}
-
-.chart-toggle:hover {
-  color: var(--color-text-strong);
-}
-
 .chart {
   display: flex;
   flex: 1 1 auto;
@@ -31,30 +20,6 @@
   min-height: var(--space-5);
   color: var(--color-text-tertiary);
   font: var(--type-caption);
-}
-
-.chart-toggle {
-  display: inline-flex;
-  align-items: center;
-  /* Ревью 13.11: одной высоты с остальными контролами страницы (J-192) */
-  height: var(--control-height);
-  margin-inline-end: auto;
-  padding: 0 var(--space-2);
-  border: var(--divider-width) solid var(--color-control-border);
-  border-radius: var(--radius-pill);
-  background: var(--control-raised);
-  box-shadow: var(--control-raised-edge);
-  font: var(--type-caption);
-  white-space: nowrap;
-}
-
-.chart-toggle:hover {
-  background: var(--control-raised-hover);
-}
-
-.chart-toggle[aria-pressed='true'] {
-  border-color: var(--color-border-strong);
-  color: var(--color-text-secondary);
 }
 
 .chart-stage {
@@ -282,49 +247,5 @@
   pointer-events: none;
 }
 
-.chart-tooltip {
-  position: absolute;
-  z-index: 2;
-  inset-inline-start: calc(var(--tooltip-x) + var(--space-2));
-  inset-block-start: calc(var(--tooltip-y) - var(--space-2));
-  transform: translateY(-100%);
-  max-width: var(--chart-tooltip-max);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-tooltip);
-  color: var(--color-text-secondary);
-  font: var(--type-caption);
-  width: max-content;
-  pointer-events: none;
-}
-
-/* J-47: значение и подсказка действия — двумя строками, подсказка тише */
-.chart-tooltip__value,
-.chart-tooltip__hint {
-  display: block;
-}
-
-.chart-tooltip__hint {
-  color: var(--color-text-tertiary);
-}
-
-.chart-tooltip--left {
-  inset-inline-start: calc(var(--tooltip-x) - var(--space-2));
-  transform: translate(-100%, -100%);
-}
-
-.chart-svg, .chart-timeline__svg { touch-action: none; user-select: none; }
+.chart-svg { touch-action: none; user-select: none; }
 .chart-day-brush { fill: var(--row-selected); stroke: var(--color-border-strong); pointer-events: none; }
-.chart-timeline { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
-.chart-timeline__toolbar { display: flex; align-items: center; gap: var(--space-2); justify-content: space-between; }
-.chart-timeline__caption { color: var(--color-text-tertiary); font: var(--type-caption); }
-/* Место под кнопку есть всегда: без своего окна она невидима и недоступна, полоса не прыгает */
-.chart-timeline__reset[data-idle] { visibility: hidden; }
-.chart-timeline__stage { position: relative; height: 64px; min-width: 0; }
-/* J-57: подсказка дат шкалы — над шкалой у курсора, одной строкой */
-.chart-timeline__tip { white-space: nowrap; }
-.chart-timeline__tip[hidden] { display: none; }
-.chart-timeline__svg { display: block; cursor: crosshair; }
-.chart-timeline__preview { fill: none; stroke: var(--color-text-tertiary); stroke-width: 1; pointer-events: none; }
-.chart-timeline__window { fill: var(--row-selected); stroke: var(--color-border-strong); cursor: grab; }
-.chart-timeline__handle { fill: var(--color-text-secondary); cursor: ew-resize; }
-.chart-timeline__handle:focus-visible { outline: none; stroke: var(--color-text-strong); stroke-width: 2; }

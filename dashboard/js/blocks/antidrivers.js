@@ -21,6 +21,7 @@ import {
 import { normalizeDriver } from '../state/driver-pick.js';
 import { legendItem, legendList } from '../components/legend.js';
 import { hoverTooltip } from '../components/hover-tooltip.js';
+import { chartTooltip, showChartTooltip } from '../components/chart-tooltip.js';
 import { icon } from '../ui/icons.js';
 import { DIMENSIONS, OS_ANDROID, OS_IOS, osName } from '../core/dimensions.js';
 import { element, withOverflowTitle } from '../ui/dom.js';
@@ -32,8 +33,9 @@ import { planFor } from '../core/plan.js';
 import { roundDelta, roundImpact, roundShare } from '../core/round.js';
 import { segmented } from '../components/segmented.js';
 import { pagingButtons } from '../components/paging.js';
-import { hScroll, scrollEdges } from '../components/h-scroll.js';
+import { hScroll, rememberScroll } from '../components/h-scroll.js';
 import { emptyValue } from '../components/empty-value.js';
+import { heatCell } from '../components/heat-cell.js';
 import { periodScaleMemory, scaleTabs } from '../components/scale-tabs.js';
 import { statusPanel } from '../components/status-panel.js';
 import { recommendedScale, SCALE_OPTIONS } from '../core/timeseries.js';
@@ -130,7 +132,7 @@ function applyTitleWidth(view, resizer, width, frameWidth) {
 }
 
 /* Ручка — separator с клавишами: стрелки меняют ширину, Home и двойной клик возвращают ширину по названиям, End — наибольшую */
-function titleResizer(view, frame, onResize) {
+function titleResizer(view, frame) {
   const resizer = element('div', 'heatmap-resizer');
   resizer.setAttribute('role', 'separator');
   resizer.setAttribute('aria-orientation', 'vertical');
@@ -155,7 +157,6 @@ function titleResizer(view, frame, onResize) {
   const set = (width) => {
     titleWidth = width === null ? null : clampTitleWidth(width, frameWidth());
     fit();
-    onResize();
   };
   resizer.addEventListener('pointerdown', (event) => {
     if (event.button !== 0) return;
@@ -198,16 +199,6 @@ function titleResizer(view, frame, onResize) {
   resizer.fit = fit;
   fit();
   return resizer;
-}
-
-/*
-  J-68: «справа есть ещё колонки» — правый край плиток затухает; у конца прокрутки обрыва нет. Края — общим правилом
-  `hScroll` (`scrollEdges`); пересчёт и при смене ширины колонки названий: тогда меняется таблица, а не сама прокрутка
-*/
-export function markOverflow(scroll) {
-  const { start, end } = scrollEdges(scroll);
-  scroll.dataset.fadeStart = String(start);
-  scroll.dataset.fadeEnd = String(end);
 }
 
 /* Подсветка не сбрасывает раскрытие; новый срез или разрез начинается с десяти строк (J-11, J-202: порция 20 из J-193 отменена). */
@@ -290,15 +281,13 @@ function highlightCaption(mode, highlight, cell) {
 }
 
 function showTooltip(tooltip, view, cell, lines) {
-  tooltip.replaceChildren(...lines.map((line, index) => element('span', index ? 'heatmap-tooltip__line' : 'heatmap-tooltip__title', line)));
-  tooltip.hidden = false;
   const box = cell.getBoundingClientRect();
   const frame = view.getBoundingClientRect();
-  /* Подсказка над центром ячейки, но не шире карты: у крайних колонок прижимается к краю */
-  const half = tooltip.offsetWidth / 2;
-  const center = box.left - frame.left + box.width / 2;
-  tooltip.style.setProperty('--tooltip-x', `${Math.min(Math.max(center, half), frame.width - half)}px`);
-  tooltip.style.setProperty('--tooltip-y', `${box.top - frame.top}px`);
+  showChartTooltip(tooltip, {
+    content: lines.map((line, index) => element('span', index ? 'chart-tooltip__line' : 'chart-tooltip__title', line)),
+    x: box.left - frame.left + box.width / 2,
+    y: box.top - frame.top,
+  });
 }
 
 const counted = (count, forms) => `${formatCount(count)} ${plural(count, forms)}`;
@@ -326,12 +315,11 @@ const samePick = (left, right) => JSON.stringify(normalizeDriver(left)) === JSON
 */
 function togglePick(context, pick, node) {
   const card = node.closest?.('.card') ?? null;
-  const scrollLeft = card?.querySelector('.heatmap-scroll')?.scrollLeft ?? 0;
+  const restoreScroll = rememberScroll(card, '.heatmap-scroll');
   const { pickKey, pickColumn } = node.dataset;
   const current = normalizeDriver(context.state.driver);
   context.setState({ ...context.state, driver: current && samePick(current, pick) ? null : pick });
-  const scroll = card?.querySelector('.heatmap-scroll');
-  if (scroll) scroll.scrollLeft = scrollLeft;
+  restoreScroll();
   const selector = pickColumn === undefined ? '.heatmap__row-pick' : '.heatmap-cell';
   [...(card?.querySelectorAll(selector) ?? [])]
     .find((candidate) => candidate.dataset.pickKey === pickKey && candidate.dataset.pickColumn === pickColumn)
@@ -343,14 +331,10 @@ function heatmapCell(context, heatmap, row, column, cell, highlight, tooltip, vi
   const interval = formatInterval(column);
   const facts = elementCellFacts(highlightOf(context), cell, highlight);
   const tone = isBlankCell(heatmap, cell) ? 'empty' : highlight.tone;
-  const node = element('button', tone ? `heatmap-cell tone-pill heatmap-cell--${tone}` : 'heatmap-cell tone-pill');
-  node.type = 'button';
-  if (highlight.muted) node.classList.add('heatmap-cell--muted');
-  if (highlight.tone) node.style.setProperty('--heat-strength', `${Math.round(highlight.strength * 100)}%`);
   /* Интервал без оценок — общий прочерк «нет значения» (emptyValue); имя ячейки для screen reader — у кнопки */
   const value = element('span', 'heatmap-cell__value', cell.voc === null ? null : facts.value);
   if (cell.voc === null) value.append(emptyValue());
-  node.append(value);
+  const node = heatCell({ clickable: true, tone, muted: highlight.muted, strength: highlight.tone ? highlight.strength : null, content: value });
   const pick = pickOf(row.key, column);
   const picked = samePick(context.state.driver, pick);
   node.setAttribute('aria-pressed', String(picked));
@@ -444,8 +428,10 @@ function heatmapToolbar(context, columnPlans, columns, rerender, cutTabs, lead) 
     toolbar.append(...[cutTabs, ...lead, legend].filter(Boolean));
     return toolbar;
   }
-  const highlightTabs = segmented({
+  /* J-193: режимы — не сортировка, а цвет карты; подпись «Цвет:» говорит это прямо, порядок строк — частотность (J-11) */
+  const highlight = segmented({
     label: 'Подсветка тепловой карты',
+    caption: 'Цвет:',
     options: highlightModes(selectedAntidriverDimension).map((value) => ({ value, ...HIGHLIGHT_OPTIONS[value] })),
     selected: selectedHeatmapHighlight,
     onSelect: (value) => {
@@ -453,9 +439,6 @@ function heatmapToolbar(context, columnPlans, columns, rerender, cutTabs, lead) 
       rerender();
     },
   });
-  /* J-193: режимы — не сортировка, а цвет карты; подпись «Цвет:» говорит это прямо, порядок строк — частотность (J-11) */
-  const highlight = element('div', 'heatmap-mode');
-  highlight.append(element('span', 'heatmap-mode__label', 'Цвет:'), highlightTabs);
   /* J-117 + J-112: разрез, у разреза «Версии» — переключатель ОС, затем режим подсветки; гранулярность — в шапке блока */
   toolbar.append(...[cutTabs, ...lead, highlight].filter(Boolean));
   if (legend) toolbar.append(legend);
@@ -516,12 +499,11 @@ function heatmapBody(context, { heatmap, calibration }, columnPlans, overlay) {
   return body;
 }
 
-/* Прокрутка — общий `hScroll` (`scroll-area`, края по `scrollEdges`); затухание — наложением, см. antidrivers.css */
+/* J-68: прокрутка — общий `hScroll`; края следят за шириной таблицы сам `hScroll`, затухание — наложением (antidrivers.css) */
 function heatmapScroll(table, tooltip) {
-  const scroll = hScroll(table, { className: 'heatmap-scroll' });
+  const scroll = hScroll(table, { className: 'heatmap-scroll', fade: 'none' });
   /* Фокус на скрытой колонке прокручивает карту к ней: подсказка переезжает к ячейке, а гаснет только без фокуса */
   scroll.addEventListener('scroll', () => {
-    markOverflow(scroll);
     const focused = scroll.contains(document.activeElement) ? document.activeElement : null;
     if (focused?.classList.contains('heatmap-cell')) focused.dispatchEvent(new Event('focus'));
     else tooltip.hidden = true;
@@ -534,10 +516,7 @@ function heatmapScroll(table, tooltip) {
   размера. Наблюдатель отключается, когда перерисовка унесла карту со страницы
 */
 function fitAfterPaint(scroll, resizer) {
-  const refit = () => {
-    resizer.fit();
-    markOverflow(scroll);
-  };
+  const refit = () => resizer.fit();
   globalThis.requestAnimationFrame?.(refit);
   if (globalThis.ResizeObserver) {
     const observer = new ResizeObserver(() => (scroll.isConnected ? refit() : observer.disconnect()));
@@ -554,14 +533,12 @@ function heatmapView(context, shown, rerender, cutTabs, lead) {
   );
   view.append(heatmapToolbar(context, columnPlans, columns, rerender, cutTabs, lead));
   /* Подсказка — вне прокрутки карты: иначе у верхней строки её срезал бы край области прокрутки */
-  const tooltip = element('div', 'heatmap-tooltip glass');
-  tooltip.setAttribute('aria-hidden', 'true');
-  tooltip.hidden = true;
+  const tooltip = chartTooltip({ centered: true });
   const table = element('table', 'heatmap');
   table.append(heatmapHead(columns), heatmapBody(context, shown, columnPlans, { tooltip, view, tagged: shown.tagged }));
   const scroll = heatmapScroll(table, tooltip);
   const frame = element('div', 'heatmap-frame');
-  const resizer = titleResizer(view, frame, () => markOverflow(scroll));
+  const resizer = titleResizer(view, frame);
   frame.append(scroll, resizer);
   view.append(frame, tooltip);
   fitAfterPaint(scroll, resizer);
@@ -627,10 +604,9 @@ function paginatedView(context, part, page, rerender, cutTabs, lead = []) {
   иначе смена «План / Урон / Влияние» уводила карту к первому дню. Масштаб меняет колонки — его перерисовка без этого
 */
 function keepHeatmapScroll(block, render) {
-  const scrollLeft = block.element?.querySelector('.heatmap-scroll')?.scrollLeft ?? 0;
+  const restoreScroll = rememberScroll(block.element, '.heatmap-scroll');
   render();
-  const scroll = block.element?.querySelector('.heatmap-scroll');
-  if (scroll) scroll.scrollLeft = scrollLeft;
+  restoreScroll();
   return block.element;
 }
 

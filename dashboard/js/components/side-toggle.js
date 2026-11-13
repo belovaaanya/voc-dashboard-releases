@@ -1,12 +1,12 @@
 /*
   Кнопка боковой колонки — одна для ленты отзывов «Топ проблем» и календаря событий (J-148).
   Круг со стрелкой стоит в правом верхнем углу контейнера в обоих видах; свёрнутая колонка — полоса у правого края
-  с подписью под кругом. Контейнер — position: relative, класс свёрнутого вида — `side-toggle-host--collapsed`.
+  с подписью под кругом. Контейнер — position: relative; свёрнутый вид кнопка ставит ему сама
 */
 import { element } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 
-export function sideToggle({ label, controls, isHidden, onToggle }) {
+export function sideToggle({ label, controls, isHidden, onToggle, host = null, panel = null, hostClass = null, around = (change) => change() }) {
   const button = element('button', 'side-toggle');
   button.type = 'button';
   button.setAttribute('aria-controls', controls);
@@ -25,10 +25,17 @@ export function sideToggle({ label, controls, isHidden, onToggle }) {
     button.setAttribute('aria-label', hidden ? `Показать: ${name}` : `Скрыть: ${name}`);
     button.title = hidden ? `Показать: ${name}` : `Скрыть: ${name} — остальное во всю ширину`;
   };
-  button.addEventListener('click', () => {
-    onToggle();
+  const sync = () => {
+    const hidden = isHidden();
+    host?.classList.toggle('side-toggle-host--collapsed', hidden);
+    if (hostClass) host?.classList.toggle(hostClass, hidden);
+    if (panel) panel.hidden = hidden;
     paint();
-  });
-  paint();
+  };
+  button.addEventListener('click', () => around(() => {
+    onToggle();
+    sync();
+  }));
+  sync();
   return button;
 }

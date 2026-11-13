@@ -19,6 +19,8 @@ const WIDE = { mau: 1, sent: 0.72 };
 const RATED = 0.46;
 const THREAD = 0.03;
 const VIEW = { width: 500, height: 100 };
+/* Запас рамки над и под полосой в единицах VIEW: в нём размытые слои гаснут, а не срезаются краем рамки */
+export const HEADROOM = 60;
 /* Доли ширины колонок ступеней — те же, что `grid-template-columns` у `.conversion` (metrics.css): у неизвестных
    ступеней только «—», «10 459» оценок шире; по ним же стоят центры полосы */
 const COLUMNS = [0.7, 0.9, 1.4, 1, 1];
@@ -70,7 +72,7 @@ function bandPath(heights, scale) {
 function beamNode(steps) {
   /* Карточка одна на странице, контент перерисовывается целиком: ссылки градиента и фильтров не пересекаются */
   const id = 'conversion-beam';
-  const svg = svgNode('svg', 'conversion__beam', { viewBox: `0 0 ${VIEW.width} ${VIEW.height}`, preserveAspectRatio: 'none', 'aria-hidden': 'true', focusable: 'false' });
+  const svg = svgNode('svg', 'conversion__beam', { viewBox: `0 ${-HEADROOM} ${VIEW.width} ${VIEW.height + 2 * HEADROOM}`, preserveAspectRatio: 'none', 'aria-hidden': 'true', focusable: 'false' });
   const defs = svgNode('defs');
   const gradient = svgNode('linearGradient', null, { id: `${id}-flow`, x1: 0, y1: 0, x2: 1, y2: 0 });
   /* Нейтральный серый луч, как в тёмной теме стратегии: от тусклого края аудитории к светлому хвосту причины */
@@ -124,6 +126,8 @@ export function renderConversion(block, { slice, period, rows }) {
   }
   const steps = surveyConversion(slice);
   const layout = element('div', 'conversion');
+  layout.style.setProperty('--beam-ratio', VIEW.width / VIEW.height);
+  layout.style.setProperty('--beam-headroom', HEADROOM / VIEW.height);
   const list = element('ol', 'conversion__steps');
   list.setAttribute('role', 'list');
   list.append(...steps.map(stepNode));

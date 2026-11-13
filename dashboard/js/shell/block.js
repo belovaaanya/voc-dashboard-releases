@@ -57,7 +57,7 @@ function renderState(state, detail, compact = false) {
     const ownLine = state === EMPTY && detail;
     const hint = ownLine ? '' : detailText;
     wrap.classList.add('state--compact');
-    wrap.append(element('p', 'state__title', bindShortWords(ownLine || texts.compactTitle || texts.title)));
+    wrap.append(stateText('title', ownLine || texts.compactTitle || texts.title));
     if (hint) {
       wrap.setAttribute('title', hint);
       wrap.append(element('span', 'visually-hidden', ` ${hint}`));

@@ -28,6 +28,7 @@ import { renderEmptyHeader, renderHeader } from './shell/header.js';
 import { renderSideNav } from './shell/side-nav.js';
 import { alignHeaderAmbient } from './shell/header-ambient.js';
 import { sideToggle } from './components/side-toggle.js';
+import { statusPanel } from './components/status-panel.js';
 import { mountFeedback } from './shell/feedback.js';
 import { createLabels } from './core/labels.js';
 import { SOURCE_EMPTY, loadVerbatim as loadVerbatimFile, startLoading } from './io/loader.js';
@@ -51,8 +52,8 @@ const BLOCKS = [
   { id: 'distribution', title: 'Распределение оценок', host: 'metrics', modifier: 'card--distribution', render: renderDistribution },
   { id: 'summary', title: 'Главный вывод', host: 'metrics', modifier: 'card--summary', render: renderConclusion, ready: conclusionReady, placeholder: conclusionPlaceholder, detach: detachConclusion },
   { id: 'dynamics', title: 'Динамика VOC', host: 'main', modifier: 'card--dynamics card--fill', render: renderDynamics },
-  { id: 'antidrivers', title: 'Антидрайверы', host: 'drivers', modifier: 'card--antidrivers', render: renderAntidrivers },
-  { id: 'verbatim-cards', title: 'Топ проблем', host: 'problems', modifier: 'card--verbatim', render: renderVerbatimCards, verbatim: true },
+  { id: 'antidrivers', title: 'Антидрайверы', host: 'drivers', modifier: 'card--antidrivers', render: renderAntidrivers, heavy: true },
+  { id: 'verbatim-cards', title: 'Топ проблем', host: 'problems', modifier: 'card--verbatim', heavy: true, render: renderVerbatimCards, verbatim: true },
   { id: 'insights', title: 'Календарь событий', host: 'rail-main', modifier: 'card--insights card--fill', render: renderInsights, ready: calendarReady },
   /* J-151: таблица прямой речи — на странице «Обратная связь» */
   { id: 'verbatim-table', title: 'Прямая речь: детализация', host: 'full', modifier: 'card--verbatim-table', page: 'feedback', render: renderVerbatimTable, verbatim: true },
@@ -71,6 +72,8 @@ const BLOCKS = [
 ];
 /* J-151: страница блока; без поля — главная «VOC ЦК» */
 const pageOf = (spec) => spec.page ?? DEFAULT_PAGE;
+/* `heavy`: расчёт дольше кадра — на кадрах жеста таймлайна стоит прежнее содержимое, блок обновляется по отпусканию (docs/ui-shell.md#скорость) */
+const waitsForGesture = (spec, live) => live && spec.heavy;
 /* Оценки канала до переключателя кэшбека: дайджест показывает VOC и с поправкой, и без */
 const channelRowsCache = new WeakMap();
 function channelRowsOf(rows, channel) {
@@ -125,19 +128,15 @@ function keepScrollClearOfHeader(header) {
 let eventsHidden = false;
 /* J-148: кнопка календаря — та же, что у ленты отзывов: круг в правом верхнем углу строки группы, свёрнутый календарь — полоса «События» */
 function eventsToggle(row) {
-  const paint = () => {
-    row.classList.toggle('group-row--no-rail', eventsHidden);
-    row.classList.toggle('side-toggle-host--collapsed', eventsHidden);
-    row.querySelector('#rail-main').hidden = eventsHidden;
-  };
-  paint();
   return sideToggle({
     label: 'События',
     controls: 'rail-main',
+    host: row,
+    panel: row.querySelector('#rail-main'),
+    hostClass: 'group-row--no-rail',
     isHidden: () => eventsHidden,
     onToggle: () => {
       eventsHidden = !eventsHidden;
-      paint();
     },
   });
 }
@@ -157,8 +156,6 @@ const HOST_IDS = ['header', 'metrics', 'main', 'rail-main', 'drivers', 'problems
 function pageHosts() {
   const hosts = Object.fromEntries(HOST_IDS.map((id) => [id, document.getElementById(id)]));
   hosts.nav = document.getElementById('side-nav');
-  /* Строка действий над панелью рабочей области: в ней ссылка на срез (макет дизайнера 11.11) */
-  hosts.toolbar = document.getElementById('workspace-toolbar');
   return hosts;
 }
 
@@ -202,17 +199,15 @@ function showEmptyApp(hosts, cards, manifest) {
 
 /* Шапка тоже строится из данных, поэтому при их отсутствии несёт только диагностику */
 function showLoadError(hosts, cards, error) {
-  const notice = document.createElement('p');
-  notice.className = 'state__title';
-  notice.textContent = 'Данные не загрузились — дашборд показан без шапки';
-  hosts.header.replaceChildren(notice);
+  hosts.header.replaceChildren(statusPanel('shell-head__notice', { title: 'Данные не загрузились — дашборд показан без шапки' }));
   cards.setAll(ERROR, error.message);
 }
 
 /* Достроенное по умолчанию состояние дописывается в URL: пересланная ссылка обязана быть полной (D-31) */
+const currentLocation = () => window.location.search || window.location.pathname;
+
 function keepUrlComplete(state) {
-  const currentLocation = window.location.search || window.location.pathname;
-  if (toSearch(state) !== currentLocation) syncState(state);
+  if (toSearch(state) !== currentLocation()) syncState(state);
 }
 
 /* Один контекст на отрисовку: все блоки получают одну ссылку на срез (контракт — docs/ui-shell.md) */
@@ -259,7 +254,6 @@ function renderPageHeader(env, context) {
   const { hosts, source, channels, label, reference } = env;
   const { state, setState, period, dimensions } = context;
   renderHeader(hosts.header, {
-    toolbar: hosts.toolbar,
     /* J-168: на странице ролей фильтры, кэшбек и база дельт не действуют — в шапке только канал и период */
     slim: state.page === 'roles',
     channels,
@@ -344,7 +338,7 @@ function paintGroupHeads({ analysis, verbatimGroup }, { analysisContext, verbati
 }
 
 /* Блок с теми же входами стоит; блок с `ready` не из кэша рисуется следующим кадром, скелет — только у первой отрисовки */
-function renderBlocks(blocks, { only, mayDefer, page }, contextFor, context, paint) {
+function renderBlocks(blocks, { only, mayDefer, page, live }, contextFor, context, paint) {
   const deferred = [];
   /* J-151: карточки скрытых страниц не считаются и не висят в загрузке — пусты, пока страницу не откроют */
   for (const spec of only.filter((item) => pageOf(item) !== page)) {
@@ -361,7 +355,7 @@ function renderBlocks(blocks, { only, mayDefer, page }, contextFor, context, pai
     if (paint.current(spec.id, context)) continue;
     const blockContext = contextFor(spec.id);
     const body = block.element.querySelector('.card__body');
-    if (mayDefer && spec.ready && !spec.ready(blockContext)) {
+    if (mayDefer && ((spec.ready && !spec.ready(blockContext)) || waitsForGesture(spec, live))) {
       if (paint.painted(spec.id)) {
         /* Прежнее содержимое до кадра — без действий: его обработчики помнят прошлый срез */
         if (body) body.inert = true;
@@ -376,6 +370,7 @@ function renderBlocks(blocks, { only, mayDefer, page }, contextFor, context, pai
       if (spec.render) spec.render(block, watched);
       else block.setState(watched.slice.length ? READY : EMPTY, watched.slice.length ? NEXT_SLICE : undefined);
     }, { local: periodIds.get(blockContext), texts: Boolean(spec.verbatim) });
+    if (live) paint.markLive(spec.id);
   }
   return deferred;
 }
@@ -383,6 +378,7 @@ function renderBlocks(blocks, { only, mayDefer, page }, contextFor, context, pai
 /* Части страницы рисуются заново, только если прочитанное прошлой отрисовкой изменилось (docs/ui-shell.md) */
 function createPainter(latest) {
   const inputs = new Map();
+  const drawnLive = new Set();
   const draw = (id, context, paintPart, options) => {
     inputs.delete(id);
     const watch = watchInputs(context, { ...options, latest });
@@ -398,13 +394,19 @@ function createPainter(latest) {
     painted: (id) => inputs.has(id),
     expire: (id) => inputs.set(id, staleInputs()),
     forget: (id) => inputs.delete(id),
+    markLive: (id) => drawnLive.add(id),
+    /* Нарисованное на кадре жеста держит шкалу жеста: отпускание того же состояния рисует его заново */
+    expireLive: () => {
+      for (const id of drawnLive) inputs.set(id, staleInputs());
+      drawnLive.clear();
+    },
     clear: () => inputs.clear(),
   });
   return paint;
 }
 
 /* Отрисовка разрешённого состояния: контекст, страница, шапка и блоки; возвращает отложенные блоки */
-function paintPage(env, resolved, context, { only, withHeader, mayDefer }) {
+function paintPage(env, resolved, context, { only, withHeader, mayDefer, live }) {
   const { state } = context;
   const { paint } = env;
   /* J-151: видна одна страница; блоки других страниц не считаются. «Для аналитика» показывает вид главной */
@@ -416,7 +418,7 @@ function paintPage(env, resolved, context, { only, withHeader, mayDefer }) {
   }
   const groups = groupContexts(env, resolved, context);
   if (withHeader) paintGroupHeads(env.cards, groups, paint);
-  return renderBlocks(env.cards.blocks, { only, mayDefer, page: view }, groups.contextFor, context, paint);
+  return renderBlocks(env.cards.blocks, { only, mayDefer, page: view, live }, groups.contextFor, context, paint);
 }
 
 function startDashboard(env) {
@@ -464,11 +466,27 @@ function startDashboard(env) {
     releasePage();
   };
 
+  /* Адрес до жеста таймлайна: жест — одна запись истории (docs/ui-shell.md, `setState`) */
+  let gestureFrom = null;
+  /* Возвращает true, если запись жеста снята: состояние до жеста нарисует popstate */
+  const writeGesture = (next, gesture) => {
+    if (gestureFrom === null || !gesture) {
+      gestureFrom = gesture === 'move' ? currentLocation() : null;
+      writeState(next);
+      return false;
+    }
+    const back = gesture === 'end' && toSearch(next) === gestureFrom;
+    if (back) window.history.back();
+    else syncState(next);
+    if (gesture === 'end') gestureFrom = null;
+    return back;
+  };
+
   /* Новые данные встают на место прежних без проявления и скелета (D-56): движение — только у нажатого контрола */
-  const setState = (next) => {
+  const setState = (next, { gesture = null } = {}) => {
     holdPageHeight();
-    writeState(next);
-    renderSafely(next);
+    if (gesture !== 'move') env.paint.expireLive();
+    if (!writeGesture(next, gesture)) renderSafely(next, { live: gesture === 'move' });
   };
 
   function render(requested, options) {
@@ -483,12 +501,13 @@ function startDashboard(env) {
     Период живёт в URL и правится руками (D-31), поэтому вывернутый диапазон приходит и после загрузки — на popstate.
     Ядро на нём падает намеренно, и падение обязано стать состоянием ошибки, а не необработанным исключением
   */
-  function renderSafely(state, { only = BLOCKS, withHeader = true, mayDefer = true } = {}) {
+  function renderSafely(state, { only = BLOCKS, withHeader = true, mayDefer = true, live = false } = {}) {
     try {
       if (mayDefer) generation += 1;
-      const deferred = render(state, { only, withHeader, mayDefer });
+      const deferred = render(state, { only, withHeader, mayDefer, live });
       failed = false;
       const scheduled = generation;
+      if (live) return;
       if (deferred.length) afterPaint(() => {
         if (scheduled !== generation) return;
         renderRest(deferred);
@@ -510,7 +529,10 @@ function startDashboard(env) {
   }
 
   renderSafely(readState());
-  onStateChange((state) => renderSafely(state));
+  onStateChange((state) => {
+    gestureFrom = null;
+    renderSafely(state);
+  });
 }
 
 function main() {

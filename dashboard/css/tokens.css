@@ -300,7 +300,6 @@
   --workspace-edge: rgba(255, 255, 255, 0.06);
   --workspace-highlight: rgba(255, 255, 255, 0.015);
   --workspace-shadow: rgba(0, 0, 0, 0.6);
-  --workspace-toolbar-height: var(--space-8);
   /* Управление в шапке — канал, период, фильтры — одной высоты и на одной поверхности */
   --header-control-height: var(--control-height-lg);
   --filter-surface: linear-gradient(180deg, rgba(13, 14, 17, 0.74), rgba(16, 17, 21, 0.88));

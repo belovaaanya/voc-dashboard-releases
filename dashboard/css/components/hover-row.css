@@ -1,0 +1,12 @@
+/* Выбираемая строка списка: фокус — рамкой и подложкой, как наведение, без кольца (visual-style §7) */
+.hover-row {
+  border: var(--divider-width) solid transparent;
+  border-radius: var(--radius-control);
+}
+
+.hover-row:hover,
+.hover-row:focus-visible {
+  border-color: var(--color-border-strong);
+  background: var(--row-hover);
+  outline: none;
+}
