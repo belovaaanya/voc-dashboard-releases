@@ -18,7 +18,7 @@
   --text:#FFFFFF; --text-2:#C3C3C3; --text-3:rgba(255,255,255,.45);
   --pos:#2DDA93; --neg:#FF376B; --orange:#FF8A3D; --yellow:#F2C94C; --purple:#B18CFF; --blue:#6FA8FF;
   --pos-soft:rgba(45,218,147,.12); --neg-soft:rgba(255,55,107,.12); --orange-soft:rgba(255,138,61,.12);
-  --purple-soft:rgba(177,140,255,.13); --blue-soft:rgba(111,168,255,.13);
+  --purple-soft:rgba(177,140,255,.13); --blue-soft:rgba(111,168,255,.13); --yellow-soft:rgba(242,201,76,.13);
   --glow:radial-gradient(120% 140% at 50% 0%, #17181C 0%, #111214 60%);
   --font:"Manrope","Segoe UI",system-ui,-apple-system,sans-serif;
   color-scheme:dark;
@@ -29,7 +29,7 @@
   --text:#0E0F12; --text-2:#3D414A; --text-3:#7A7F8A;
   --pos:#00A26C; --neg:#E01E5A; --orange:#D9620F; --yellow:#A87A00; --purple:#7A4FD6; --blue:#2F6FDB;
   --pos-soft:rgba(0,162,108,.10); --neg-soft:rgba(224,30,90,.09); --orange-soft:rgba(217,98,15,.10);
-  --purple-soft:rgba(122,79,214,.10); --blue-soft:rgba(47,111,219,.10);
+  --purple-soft:rgba(122,79,214,.10); --blue-soft:rgba(47,111,219,.10); --yellow-soft:rgba(168,122,0,.10);
   --glow:radial-gradient(120% 140% at 50% 0%, #FFFFFF 0%, #FBFBFC 60%);
   color-scheme:light}}
 :root[data-theme="light"]{
@@ -38,7 +38,7 @@
   --text:#0E0F12; --text-2:#3D414A; --text-3:#7A7F8A;
   --pos:#00A26C; --neg:#E01E5A; --orange:#D9620F; --yellow:#A87A00; --purple:#7A4FD6; --blue:#2F6FDB;
   --pos-soft:rgba(0,162,108,.10); --neg-soft:rgba(224,30,90,.09); --orange-soft:rgba(217,98,15,.10);
-  --purple-soft:rgba(122,79,214,.10); --blue-soft:rgba(47,111,219,.10);
+  --purple-soft:rgba(122,79,214,.10); --blue-soft:rgba(47,111,219,.10); --yellow-soft:rgba(168,122,0,.10);
   --glow:radial-gradient(120% 140% at 50% 0%, #FFFFFF 0%, #FBFBFC 60%);
   color-scheme:light}
 *{box-sizing:border-box}
@@ -53,8 +53,8 @@ p{margin:0}
 .row{display:grid;gap:16px}
 .chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:3px 10px;border-radius:999px;border:1px solid var(--border-strong);color:var(--text-2);white-space:nowrap}
 .dot{width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}
-.t-calc{color:var(--blue)} .t-ui{color:var(--orange)} .t-req{color:var(--purple)} .t-ship{color:var(--pos)}
-.bg-calc{background:var(--blue-soft)} .bg-ui{background:var(--orange-soft)} .bg-req{background:var(--purple-soft)} .bg-ship{background:var(--pos-soft)}
+.t-calc{color:var(--blue)} .t-ui{color:var(--orange)} .t-req{color:var(--purple)} .t-qa{color:var(--yellow)} .t-ship{color:var(--pos)}
+.bg-calc{background:var(--blue-soft)} .bg-ui{background:var(--orange-soft)} .bg-req{background:var(--purple-soft)} .bg-ship{background:var(--pos-soft)} .bg-qa{background:var(--yellow-soft)}
 .num{font-variant-numeric:tabular-nums}
 a{color:inherit}
 
@@ -105,8 +105,9 @@ a{color:inherit}
 .stage em{font-style:normal;font-size:11px;letter-spacing:.06em;text-transform:uppercase}
 
 /* areas */
-.areas{grid-template-columns:repeat(3,minmax(0,1fr))}
-@media (max-width:900px){.areas{grid-template-columns:1fr}}
+.areas{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:1100px){.areas{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:640px){.areas{grid-template-columns:1fr}}
 .area{display:flex;flex-direction:column;gap:14px}
 .area .big{font-size:40px;font-weight:300;letter-spacing:-0.03em;line-height:1}
 .area ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
@@ -148,9 +149,10 @@ a{color:inherit}
 
 /* journal */
 .jhead{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
-.bars{display:flex;align-items:flex-end;gap:6px;height:80px}
-.bars .b{width:34px;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10.5px;color:var(--text-3)}
+.bars{display:flex;align-items:flex-end;gap:6px}
+.bars .b{width:40px;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10.5px;color:var(--text-3)}
 .bars .b div{width:100%;border-radius:6px 6px 2px 2px;background:linear-gradient(180deg,var(--pos),rgba(45,218,147,.15))}
+.bars .b .bl{display:block;height:2.5em;line-height:1.25;text-align:center}
 .bars .b.cur div{background:linear-gradient(180deg,var(--orange),rgba(255,138,61,.15))}
 .weeks{display:flex;flex-direction:column;gap:12px;margin-top:16px}
 .week{display:grid;grid-template-columns:200px minmax(0,1fr);gap:20px;padding:16px;border:1px solid var(--border);border-radius:16px;background:var(--surface)}
@@ -165,6 +167,21 @@ a{color:inherit}
 .week li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:baseline;font-size:13px;color:var(--text-2)}
 .tag{font-size:11px;padding:1px 8px;border-radius:999px;white-space:nowrap}
 .week.cur{border-color:var(--orange)}
+.week .mix{font-size:12px;color:var(--text-3);display:flex;flex-wrap:wrap;gap:4px 10px}
+.week .mix span{display:inline-flex;align-items:center;gap:5px}
+.grp-a{display:flex;flex-direction:column;gap:10px}
+.grp-a+.grp-a{margin-top:20px}
+.tag-n{opacity:.6;margin-left:2px}
+.grp-a .gh{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-3)}
+.grp-a ul{padding-left:2px}
+.grp-a li{grid-template-columns:8px minmax(0,1fr)}
+.grp-a li::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--text-3);margin-top:8px}
+.week details summary{cursor:pointer;font-size:13px;color:var(--text-2);list-style:none;display:inline-flex;align-items:center;gap:6px;padding:4px 0}
+.week details summary::-webkit-details-marker{display:none}
+.week details summary::before{content:"▸";color:var(--text-3);transition:transform .15s}
+.week details[open] summary::before{transform:rotate(90deg)}
+.week details[open] summary{margin-bottom:8px}
+.week details summary:focus-visible{outline:2px solid var(--text-3);outline-offset:2px;border-radius:4px}
 .badge{font-size:11px;padding:2px 8px;border-radius:999px;align-self:flex-start}
 .state{padding:20px;border:1px dashed var(--border-strong);border-radius:14px;color:var(--text-2);font-size:13px}
 
@@ -243,6 +260,25 @@ footer{font-size:12px;color:var(--text-3);padding-top:8px}
 @media (max-width:900px){.arch-rules{grid-template-columns:1fr 1fr}}
 @media (max-width:560px){.arch-rules{grid-template-columns:1fr}}
 @media (max-width:560px){.arch-layers .ln{grid-template-columns:1fr}.arch-layers .ln i{white-space:normal}}
+
+/* value: ценность для продакта — тезис, три пути сейчас, боль → решение, как замерим */
+.vthesis{font-size:clamp(20px,2.4vw,26px);font-weight:300;line-height:1.25;max-width:60ch}
+.value{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr)}
+@media (max-width:900px){.value{grid-template-columns:1fr}}
+.pain{display:flex;flex-direction:column;gap:2px;margin-top:12px}
+.pain .pr{display:grid;grid-template-columns:minmax(0,1fr) 20px minmax(0,1fr);gap:12px;padding:10px;border-radius:8px;align-items:baseline;font-size:13.5px}
+.pain .pr:nth-child(even){background:var(--sunken)}
+.pain .hd{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3)}
+.pain .was{color:var(--text-2)}
+.pain .ar{color:var(--text-3);text-align:center}
+.pain b{font-weight:500}
+@media (max-width:560px){.pain .pr{grid-template-columns:1fr;gap:4px}.pain .ar,.pain .hd-ar{display:none}}
+.base{display:flex;flex-direction:column;gap:2px;margin-top:12px}
+.base .br{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;padding:10px;border-radius:8px;align-items:baseline}
+.base .br:nth-child(odd){background:var(--sunken)}
+.base .br div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.base b{font-weight:500;font-size:13.5px}
+.base span{font-size:12.5px;color:var(--text-2)}
 </style>
 
 <div class="page">
@@ -253,6 +289,7 @@ footer{font-size:12px;color:var(--text-3);padding-top:8px}
       <span class="chip"><span class="dot t-req"></span>Требования</span>
       <span class="chip"><span class="dot t-calc"></span>Аналитика</span>
       <span class="chip"><span class="dot t-ui"></span>Дизайн и удобство</span>
+      <span class="chip"><span class="dot t-qa"></span>Качество</span>
       <span class="chip"><span class="dot t-ship"></span>Доставка</span>
     </div>
   </div>
@@ -263,7 +300,7 @@ footer{font-size:12px;color:var(--text-3);padding-top:8px}
     <section class="card">
       <span class="hint">Что это за проект</span>
       <h1>Дашборд VOC для продактов B2B: почему упала оценка клиентов и что с этим делать</h1>
-      <p class="lead">VOC — средняя оценка клиентов 1–5 после операций в каналах НИБ (веб) и АБМ (мобильное приложение). Сейчас её смотрят в 8+ разных отчётах с разными цифрами. Дашборд собирает всё в одно окно: метрики к плану, динамику, причины падения, события в каналах и живые отзывы.</p>
+      <p class="lead">VOC — средняя оценка клиентов 1–5 после операций в каналах НИБ (веб) и АБМ (мобильное приложение). Сейчас её смотрят в 8+ разных отчётах с разными цифрами, ждут недельный апдейт или запрос в аналитику. Дашборд собирает всё в одно окно: метрики к плану, динамику, причины падения, события в каналах и живые отзывы.</p>
       <div class="ctx">
         <div><b>Для кого</b><span>Продакты B2B, бизнес-партнёры каналов, руководители направлений</span></div>
         <div><b>Откуда данные</b><span>Выгрузки оценок, справочники, план, аварии и раскатки из систем банка</span></div>
@@ -286,7 +323,7 @@ footer{font-size:12px;color:var(--text-3);padding-top:8px}
   <!-- METRICS -->
   <div class="row metrics">
     <div class="card metric hl"><span class="lbl">Рабочих дней</span><span class="v num">≈10</span><span class="d">30% времени за 6,5 недели, ~1,5 дня в неделю</span></div>
-    <div class="card metric"><span class="lbl">Коммитов</span><span class="v num">337</span><span class="d">с 1 октября, ~34 на рабочий день</span></div>
+    <div class="card metric"><span class="lbl">Коммитов</span><span class="v num">337</span><span class="d">с 1 октября</span></div>
     <div class="card metric"><span class="lbl">Доработок записано</span><span class="v num">236</span><span class="d">52 замечания ревью и 184 записи журнала</span></div>
     <div class="card metric"><span class="lbl">Документов</span><span class="v num">25</span><span class="d">база знаний для агентов и команды</span></div>
     <div class="card metric"><span class="lbl">Автотестов</span><span class="v num">978</span><span class="d">прогоняются перед каждым коммитом</span></div>
@@ -304,8 +341,45 @@ footer{font-size:12px;color:var(--text-3);padding-top:8px}
     </div>
   </section>
 
+  <!-- VALUE -->
+  <h2 class="sect"><span>02</span>Зачем это продактам</h2>
+  <section class="card" style="display:flex;flex-direction:column;gap:16px">
+    <div class="card-title">Ценность для продакта <span class="hint">что меняется в работе с VOC</span></div>
+    <p class="vthesis">Продакт отвечает на «почему изменился VOC» сам, в день вопроса, а не ждёт апдейт или очередь в аналитику</p>
+    <span class="hint">Как продакт получает ответ сейчас</span>
+    <div class="ctx">
+      <div><b>Ждёт апдейт</b><span>Раз в неделю: между апдейтами падение видно с опозданием</span></div>
+      <div><b>Строит свой дашборд</b><span>Под свою цель, поэтому цифры расходятся с отчётами коллег</span></div>
+      <div><b>Пишет запрос в UX-аналитику</b><span>И ждёт, пока команда разберёт бэклог</span></div>
+    </div>
+    <p class="solo"><b>Для команды UX-аналитики</b> — меньше частотных запросов от продактов: типовые вопросы закрывает дашборд.</p>
+  </section>
+  <div class="row value">
+    <section class="card">
+      <div class="card-title">Боль → что даёт дашборд <span class="hint">по интервью и опросу продактов</span></div>
+      <div class="pain">
+        <div class="pr"><span class="hd">Боль сейчас</span><span class="hd hd-ar"></span><span class="hd">Что даёт дашборд</span></div>
+        <div class="pr"><span class="was">Нет единого окна: данные разбросаны по разным инструментам</span><span class="ar" aria-hidden="true">→</span><span>Метрики канала к плану, динамика, причины и отзывы <b>на одном экране</b></span></div>
+        <div class="pr"><span class="was">Медленная загрузка и сложные фильтры: проще дождаться ручного отчёта</span><span class="ar" aria-hidden="true">→</span><span>Фильтры по ролям, сегментам и сценариям, <b>срез сохраняется в ссылке</b></span></div>
+        <div class="pr"><span class="was">«Чужие» оценки и комментарии засоряют выдачу</span><span class="ar" aria-hidden="true">→</span><span><b>Клик по дню сужает</b> события, причины и отзывы до нужного</span></div>
+        <div class="pr"><span class="was">Апдейт раз в неделю, остальное — запрос в бэклог аналитики</span><span class="ar" aria-hidden="true">→</span><span><b>Главный вывод и антидрайверы</b> считаются сразу, без запроса</span></div>
+      </div>
+    </section>
+    <section class="card">
+      <div class="card-title">Как поймём, что сработало <span class="hint">снять до раскатки на продактов</span></div>
+      <div class="base">
+        <div class="br"><div><b>Запросы продактов в UX-аналитику</b><span>сколько в месяц и сколько дней ждут ответа</span></div><span class="chip">до запуска</span></div>
+        <div class="br"><div><b>Свои дашборды продактов по VOC</b><span>сколько их сейчас</span></div><span class="chip">до запуска</span></div>
+        <div class="br"><div><b>Как часто продакт видит свежий VOC</b><span>сейчас — раз в неделю</span></div><span class="chip">до запуска</span></div>
+        <div class="br"><div><b>Продакты, которые открывают дашборд</b><span>каждую неделю</span></div><span class="chip">после запуска</span></div>
+        <div class="br"><div><b>Качество «Главного вывода»</b><span>как часто аналитик согласен с выводом на разобранных срезах</span></div><span class="chip">после запуска</span></div>
+      </div>
+      <p class="hint" style="margin-top:12px">Через месяц после запуска сравниваем те же цифры.</p>
+    </section>
+  </div>
+
   <!-- AREAS -->
-  <h2 class="sect"><span>02</span>Что сделано</h2>
+  <h2 class="sect"><span>03</span>Что сделано</h2>
   <div class="row areas">
     <section class="card area t-req">
       <div class="card-title"><span><span class="dot" style="display:inline-block;margin-right:8px"></span>Требования</span><span class="hint">что нужно</span></div>
@@ -340,10 +414,21 @@ footer{font-size:12px;color:var(--text-3);padding-top:8px}
       </ul>
       <p class="src">Инструмент визуальной сверки ловит расхождения автоматически</p>
     </section>
+    <section class="card area t-qa">
+      <div class="card-title"><span><span class="dot" style="display:inline-block;margin-right:8px"></span>Качество</span><span class="hint">почему можно доверять</span></div>
+      <div><div class="big num" style="color:var(--text)">978</div><span class="hint">автотестов, прогоняются перед каждым коммитом</span></div>
+      <ul>
+        <li><span><b>Слои кода.</b> Импорт только вниз, тест архитектуры роняет сборку при нарушении.</span></li>
+        <li><span><b>Проверка без самопроверки.</b> Намеренные поломки и ревью кода другим агентом.</span></li>
+        <li><span><b>Два аудита кода.</b> Поиск без совпадений больше не роняет дашборд, урон считается только в ядре.</span></li>
+        <li><span><b>Данные клиентов не утекают.</b> Перед коммитом и в CI проверяются автор, тесты и отсутствие выгрузок.</span></li>
+      </ul>
+      <p class="src">У каждого модуля и блока есть описание — это тоже проверяют тесты</p>
+    </section>
   </div>
 
   <!-- WORKLOAD -->
-  <h2 class="sect"><span>03</span>Как устроена работа</h2>
+  <h2 class="sect"><span>04</span>Как устроена работа</h2>
   <section class="card">
     <div class="card-title">Дашборд — 30% моего времени <span class="hint">≈1,5 рабочих дня в неделю, остальное параллельно</span></div>
     <div class="load" role="img" aria-label="30% времени на дашборд, 70% на параллельные задачи">
@@ -375,9 +460,10 @@ footer{font-size:12px;color:var(--text-3);padding-top:8px}
           <span class="role t-req bg-req">Требования</span>
           <span class="role t-calc bg-calc">Аналитика и методика</span>
           <span class="role t-ui bg-ui">Дизайн интерфейса</span>
+          <span class="role t-qa bg-qa">Качество</span>
           <span class="role t-ship bg-ship">Выпуск</span>
         </div>
-        <p class="hint" style="margin-top:4px">Обычно это работа продакта, аналитика, дизайнера и разработчика.</p>
+        <p class="hint" style="margin-top:4px">Обычно это работа продакта, аналитика, дизайнера, разработчика и тестировщика.</p>
       </div>
     </div>
   </section>
@@ -421,7 +507,7 @@ footer{font-size:12px;color:var(--text-3);padding-top:8px}
   </section>
 
   <!-- ARCHITECTURE -->
-  <h2 class="sect"><span>04</span>Как устроен дашборд</h2>
+  <h2 class="sect"><span>05</span>Как устроен дашборд</h2>
   <section class="card arch">
     <div class="card-title">Путь данных <span class="hint">от выгрузки до экрана</span></div>
     <p class="arch-lead">Статическая страница без backend: аналитик правит книгу Excel, сборка превращает её в JSON, браузер считает срез и рисует блоки. Рядом со страницей — небольшой сервер: он ходит в LLM банка за «Главным выводом», а в десктопном приложении ещё и принимает CSV.</p>
@@ -589,7 +675,7 @@ footer{font-size:12px;color:var(--text-3);padding-top:8px}
   </div>
 
   <!-- STRUCTURE -->
-  <h2 class="sect"><span>05</span>Где всё записано</h2>
+  <h2 class="sect"><span>06</span>Где всё записано</h2>
   <div class="row struct">
     <section class="card">
       <div class="card-title">Структура проекта <span class="hint">что где лежит</span></div>
@@ -627,7 +713,7 @@ footer{font-size:12px;color:var(--text-3);padding-top:8px}
   </div>
 
   <!-- JOURNAL -->
-  <h2 class="sect"><span>06</span>Журнал по неделям</h2>
+  <h2 class="sect"><span>07</span>Журнал по неделям</h2>
   <section class="card" id="journal">
     <div class="jhead">
       <div style="display:flex;flex-direction:column;gap:6px">
@@ -640,10 +726,10 @@ footer{font-size:12px;color:var(--text-3);padding-top:8px}
   </section>
 
   <!-- OPEN -->
-  <h2 class="sect"><span>07</span>Что дальше</h2>
+  <h2 class="sect"><span>08</span>Что дальше</h2>
   <div class="row open">
     <section class="card"><div class="card-title">Следующий шаг</div>
-      <ul><li>Автообновление данных из БД банка вместо ручной загрузки CSV: нужны доступ к базе и согласование с ИБ.</li><li>Выводы сегментов в VOC-дайджесте — после архива отчётов за прошлые месяцы.</li><li>Показать продактам связку «антидрайвер → проблемы → отзывы» и собрать обратную связь.</li></ul></section>
+      <ul><li>Снять базовые цифры до раскатки: запросы в UX-аналитику, свои дашборды продактов, частота апдейтов.</li><li>Документ о подходе для коллег и пилот с 1–2 продактами на две недели.</li><li>Автообновление данных из БД банка вместо ручной загрузки CSV: нужны доступ к базе и согласование с ИБ.</li><li>Выводы сегментов в VOC-дайджесте — после архива отчётов за прошлые месяцы.</li><li>Показать продактам связку «антидрайвер → проблемы → отзывы» и собрать обратную связь.</li></ul></section>
     <section class="card"><div class="card-title">Вопросы заказчику</div>
       <ul><li>Подтвердить формулу урона ДКО.</li><li>Поведение карточки канала при фильтре «Без сегмента».</li><li>Колонка ID клиента в выгрузке для пинов.</li><li>Источник для «Стабильности», «Конверсии в опрос», «Покрытия».</li></ul></section>
     <section class="card"><div class="card-title">Не проверено</div>
@@ -655,7 +741,25 @@ footer{font-size:12px;color:var(--text-3);padding-top:8px}
 
 <script>
 (function(){
-  var AREA = {req:["Требования","t-req bg-req"], calc:["Аналитика","t-calc bg-calc"], ui:["Дизайн","t-ui bg-ui"], ship:["Доставка","t-ship bg-ship"]};
+  var AREA = {req:["Требования","t-req bg-req","t-req"], calc:["Аналитика","t-calc bg-calc","t-calc"], ui:["Дизайн","t-ui bg-ui","t-ui"], qa:["Качество","t-qa bg-qa","t-qa"], ship:["Доставка","t-ship bg-ship","t-ship"]};
+  var ORDER = ["req","calc","ui","qa","ship"];
+  function plural(n, one, few, many){var m10=n%10, m100=n%100; return (m10===1&&m100!==11)?one:(m10>=2&&m10<=4&&(m100<12||m100>14))?few:many;}
+  function groupItems(items){
+    var g = {}; (items||[]).forEach(function(it){var k = AREA[it.area]?it.area:"other"; (g[k]=g[k]||[]).push(it.text);});
+    return ORDER.concat(["other"]).filter(function(k){return g[k];}).map(function(k){return {key:k, items:g[k]};});
+  }
+  function renderGroups(groups){
+    var box = el("div");
+    groups.forEach(function(gr){
+      var a = AREA[gr.key]||["Прочее","",""];
+      var wrap = el("div","grp-a");
+      var gh = el("div","gh"); var tg = el("span","tag "+a[1],a[0]+" "); tg.appendChild(el("span","tag-n num",String(gr.items.length))); gh.appendChild(tg);
+      wrap.appendChild(gh);
+      var ul = el("ul"); gr.items.forEach(function(t){ ul.appendChild(el("li",null,t)); });
+      wrap.appendChild(ul); box.appendChild(wrap);
+    });
+    return box;
+  }
   var weeksEl = document.getElementById("weeks");
   var barsEl = document.getElementById("bars");
   function el(tag, cls, text){var e=document.createElement(tag); if(cls) e.className=cls; if(text!=null) e.textContent=text; return e;}
@@ -669,8 +773,8 @@ footer{font-size:12px;color:var(--text-3);padding-top:8px}
     weeks.slice().reverse().forEach(function(w){
       var b = el("div","b"+(w.status==="current"?" cur":""));
       var bar = el("div"); bar.style.height = Math.max(3, Math.round(56*(w.commits||0)/max))+"px";
-      b.title = (w.dates||"")+": "+(w.commits||0)+" коммитов";
-      b.appendChild(el("span","num",String(w.commits||0))); b.appendChild(bar); b.appendChild(el("span",null,w.short||""));
+      b.title = (w.dates||"")+": "+(w.commits||0)+" "+plural(w.commits||0,"коммит","коммита","коммитов");
+      b.appendChild(el("span","num",String(w.commits||0))); b.appendChild(bar); b.appendChild(el("span","bl",w.short||""));
       barsEl.appendChild(b);
     });
     weeks.forEach(function(w){
@@ -678,21 +782,23 @@ footer{font-size:12px;color:var(--text-3);padding-top:8px}
       var l = el("div","wl");
       l.appendChild(el("b",null,w.dates||""));
       l.appendChild(el("span","wt",w.title));
-      l.appendChild(el("span","wn",(w.commits||0)+" коммитов"+(w.entries?" · "+w.entries:"")));
-      if(w.status==="current"){var bd=el("span","badge bg-ui t-ui","идёт сейчас"); l.appendChild(bd);}
+      var c=w.commits||0; l.appendChild(el("span","wn",c+" "+plural(c,"коммит","коммита","коммитов")+(w.entries?" · "+w.entries:"")));
+      var groups = groupItems(w.items);
+      if(groups.length){
+        var mix = el("div","mix");
+        groups.forEach(function(gr){var a = AREA[gr.key]||["Прочее","",""]; var sp = el("span",a[2]); sp.appendChild(el("span","dot")); var t = el("span",null,a[0]+" "+gr.items.length); t.style.color="var(--text-3)"; sp.appendChild(t); mix.appendChild(sp);});
+        l.appendChild(mix);
+      }
+      if(w.status==="current"){l.appendChild(el("span","badge bg-ui t-ui","идёт сейчас"));}
       var r = el("div","wr");
       if(w.summary) r.appendChild(el("p","sum",w.summary));
-      var ul = el("ul");
-      (w.items||[]).forEach(function(it){
-        var a = AREA[it.area]||["Прочее",""];
-        var li = el("li"); li.appendChild(el("span","tag "+a[1],a[0])); li.appendChild(el("span",null,it.text)); ul.appendChild(li);
-      });
-      r.appendChild(ul);
+      var list = renderGroups(groups);
+      r.appendChild(list);
       card.appendChild(l); card.appendChild(r); weeksEl.appendChild(card);
     });
   }
   /* Статичная копия: недели вшиты на дату выгрузки, без базы claude.ai */
-  var WEEKS = [{"commits": 115, "dates": "5–11 октября", "entries": "3 пакета замечаний", "items": [{"area": "ui", "text": "Все 12 блоков сверены с Figma; собраны общие компоненты: карточка, переключатель, индикаторы, легенда."}, {"area": "ui", "text": "Инструмент визуальной сверки ловит наложения, обрезки и шрифт не по роли на трёх ширинах."}, {"area": "req", "text": "Первые три пакета замечаний заказчика (37 пунктов) разобраны и закрыты: шапка, «Мало оценок», свой период у блоков."}, {"area": "calc", "text": "Дневные аномалии VOC и частотности, порог достаточности выборки."}, {"area": "req", "text": "Четвёртый пакет по каналу АБМ разобран на 13 пунктов."}], "order": 41, "short": "5–11 окт", "status": "done", "summary": "Интерфейс приведён к макету, разобраны первые три пакета замечаний заказчика.", "title": "Единый стиль и первые замечания"}, {"commits": 63, "dates": "12–18 октября", "entries": "правки J-01–J-22", "items": [{"area": "calc", "text": "Главный вывод через внутренний LLM-шлюз банка; без него — расчёт по правилу."}, {"area": "calc", "text": "Антидрайверы по ДКО, частотность по всем разрезам, единый план канала."}, {"area": "calc", "text": "Календарь событий: аварии с длительностью и долей затронутых клиентов, раскатки, фильтр «С кэшбеком»."}, {"area": "ui", "text": "Стекло поверхностей, фильтр ОС в шапке, выбор дней на графике."}, {"area": "ship", "text": "Выгрузка текущего среза в Excel."}], "order": 42, "short": "12–18 окт", "status": "done", "summary": "Закрыт пакет замечаний по АБМ, главный вывод формулирует внутренняя LLM банка.", "title": "Канал АБМ и главный вывод через LLM"}, {"commits": 3, "dates": "19–25 октября", "entries": "правки J-23–J-34", "items": [{"area": "ui", "text": "Карточки «Топ проблем» и цитаты с фактической оценкой и датой."}, {"area": "calc", "text": "ДКО: исключены «Клиент отказался говорить» и пустые категории, подстановка группы категорий."}, {"area": "req", "text": "Подтверждено с заказчиком: состав листа НИБ, колонка роли, смысл экспертизы ОСЛК."}], "order": 43, "short": "19–25 окт", "status": "done", "summary": "Неделя крупных правок одним пакетом: мало коммитов, но 12 записей в журнале.", "title": "Прямая речь и правила ДКО"}, {"commits": 4, "dates": "26 октября — 1 ноября", "entries": "правки J-35–J-53", "items": [{"area": "ship", "text": "Реальная выгрузка хранится только локально, хук не даёт закоммитить данные клиентов."}, {"area": "req", "text": "Данные исследования продактов Q2 переданы в проект и легли в приоритеты блоков."}, {"area": "ui", "text": "Блоки объединены в группы «Динамика, события и антидрайверы» и «Прямая речь» со своим периодом."}, {"area": "ui", "text": "Правила набора текста, база сравнения у дельт, документ визуального стиля, шрифты Styrene."}], "order": 44, "short": "26 окт–1 ноя", "status": "done", "summary": "Дашборд впервые собран на реальной выгрузке; страница перестроена вокруг сценария «VOC упал».", "title": "Реальные данные и новая структура"}, {"commits": 53, "dates": "2–8 ноября", "entries": "правки J-54–J-111", "items": [{"area": "ship", "text": "Десктопное приложение для macOS и Windows: загрузка CSV, автообновление, страница скачивания."}, {"area": "ui", "text": "Светлая тема, система отступов и скруглений, новая анатомия карточек метрик."}, {"area": "calc", "text": "Новые метрики: «Доля оценок 1–3», «Дни относительно плана»; правило критического снижения."}, {"area": "calc", "text": "Урон ДКО как доля разрыва VOC до 5, технические категории исключены — как в отчётах заказчика."}, {"area": "ship", "text": "Скорость: кэш расчётов, загрузка частями; сборка книги 66 → 1,5 с."}], "order": 45, "short": "2–8 ноя", "status": "done", "summary": "Дашборд ушёл к пользователям как десктопное приложение с автообновлением.", "title": "Скорость, светлая тема и десктопное приложение"}, {"commits": 99, "dates": "9–15 ноября", "entries": "правки J-112–J-185", "items": [{"area": "ui", "text": "«Топ проблем» встал под антидрайверы: клик по строке или ячейке антидрайвера сужает проблемы, ленту отзывов и детализацию. Поиск по проблеме, динамика по неделям числами."}, {"area": "calc", "text": "Доля негатива по проблеме: размеченные отзывы растянуты на весь негатив, редкие проблемы больше не «нулевые». Доля жалоб — только от кейсов с обратной связью."}, {"area": "calc", "text": "Антидрайверы: режим «Влияние» — тянет элемент VOC вверх или вниз; версии приложения отдельными секциями iOS и Android; ДКО переехал в «Топ проблем»."}, {"area": "ui", "text": "Новые страницы: VOC-дайджест месяца канала по макету ежемесячного слайда и «VOC ролей» с портретами ролей от заказчика."}, {"area": "calc", "text": "Календарь событий: новый тип «Новый срез» — впервые пришли оценки по триггеру или версии; пояснения типов по значку «i»."}, {"area": "ship", "text": "Код разложен по слоям, направление зависимостей и правила блоков проверяют тесты; заготовка нового блока одной командой; схема каркаса."}, {"area": "ship", "text": "Перед каждым коммитом проверяются автор, тесты и отсутствие данных клиентов в репозитории."}, {"area": "req", "text": "Документация перестроена: у каждого факта одно место, вопросы к заказчику — одним списком."}], "order": 46, "short": "9–15 ноя", "status": "current", "summary": "Самая плотная неделя: 74 правки. «Топ проблем» стал инструментом поиска причины падения, появились VOC-дайджест и VOC ролей, код разложен по слоям с автоматической проверкой.", "title": "Поиск причины, новые страницы и порядок в коде"}];
+  var WEEKS = [{"commits": 115, "dates": "5–11 октября", "entries": "3 пакета замечаний", "items": [{"area": "ui", "text": "Все 12 блоков сверены с Figma; собраны общие компоненты: карточка, переключатель, индикаторы, легенда."}, {"area": "qa", "text": "Инструмент визуальной сверки ловит наложения, обрезки и шрифт не по роли на трёх ширинах."}, {"area": "req", "text": "Первые три пакета замечаний заказчика (37 пунктов) разобраны и закрыты: шапка, «Мало оценок», свой период у блоков."}, {"area": "calc", "text": "Дневные аномалии VOC и частотности, порог достаточности выборки."}, {"area": "req", "text": "Четвёртый пакет по каналу АБМ разобран на 13 пунктов."}], "order": 41, "short": "5–11 окт", "status": "done", "summary": "Интерфейс приведён к макету, разобраны первые три пакета замечаний заказчика.", "title": "Единый стиль и первые замечания"}, {"commits": 63, "dates": "12–18 октября", "entries": "правки J-01–J-22", "items": [{"area": "calc", "text": "Главный вывод через внутренний LLM-шлюз банка; без него — расчёт по правилу."}, {"area": "calc", "text": "Антидрайверы по ДКО, частотность по всем разрезам, единый план канала."}, {"area": "calc", "text": "Календарь событий: аварии с длительностью и долей затронутых клиентов, раскатки, фильтр «С кэшбеком»."}, {"area": "ui", "text": "Стекло поверхностей, фильтр ОС в шапке, выбор дней на графике."}, {"area": "ship", "text": "Выгрузка текущего среза в Excel."}], "order": 42, "short": "12–18 окт", "status": "done", "summary": "Закрыт пакет замечаний по АБМ, главный вывод формулирует внутренняя LLM банка.", "title": "Канал АБМ и главный вывод через LLM"}, {"commits": 3, "dates": "19–25 октября", "entries": "правки J-23–J-34", "items": [{"area": "ui", "text": "Карточки «Топ проблем» и цитаты с фактической оценкой и датой."}, {"area": "calc", "text": "ДКО: исключены «Клиент отказался говорить» и пустые категории, подстановка группы категорий."}, {"area": "req", "text": "Подтверждено с заказчиком: состав листа НИБ, колонка роли, смысл экспертизы ОСЛК."}], "order": 43, "short": "19–25 окт", "status": "done", "summary": "Неделя крупных правок одним пакетом: мало коммитов, но 12 записей в журнале.", "title": "Прямая речь и правила ДКО"}, {"commits": 4, "dates": "26 октября — 1 ноября", "entries": "правки J-35–J-53", "items": [{"area": "qa", "text": "Реальная выгрузка хранится только локально, хук не даёт закоммитить данные клиентов."}, {"area": "req", "text": "Данные исследования продактов Q2 переданы в проект и легли в приоритеты блоков."}, {"area": "ui", "text": "Блоки объединены в группы «Динамика, события и антидрайверы» и «Прямая речь» со своим периодом."}, {"area": "ui", "text": "Правила набора текста, база сравнения у дельт, документ визуального стиля, шрифты Styrene."}], "order": 44, "short": "26.10–1.11", "status": "done", "summary": "Дашборд впервые собран на реальной выгрузке; страница перестроена вокруг сценария «VOC упал».", "title": "Реальные данные и новая структура"}, {"commits": 53, "dates": "2–8 ноября", "entries": "правки J-54–J-111", "items": [{"area": "ship", "text": "Десктопное приложение для macOS и Windows: загрузка CSV, автообновление, страница скачивания."}, {"area": "ui", "text": "Светлая тема, система отступов и скруглений, новая анатомия карточек метрик."}, {"area": "calc", "text": "Новые метрики: «Доля оценок 1–3», «Дни относительно плана»; правило критического снижения."}, {"area": "calc", "text": "Урон ДКО как доля разрыва VOC до 5, технические категории исключены — как в отчётах заказчика."}, {"area": "ship", "text": "Скорость: кэш расчётов, загрузка частями; сборка книги 66 → 1,5 с."}], "order": 45, "short": "2–8 ноя", "status": "done", "summary": "Дашборд ушёл к пользователям как десктопное приложение с автообновлением.", "title": "Скорость, светлая тема и десктопное приложение"}, {"commits": 99, "dates": "9–15 ноября", "entries": "правки J-112–J-185", "items": [{"area": "ui", "text": "«Топ проблем» встал под антидрайверы: клик по строке или ячейке антидрайвера сужает проблемы, ленту отзывов и детализацию. Поиск по проблеме, динамика по неделям числами."}, {"area": "calc", "text": "Доля негатива по проблеме: размеченные отзывы растянуты на весь негатив, редкие проблемы больше не «нулевые». Доля жалоб — только от кейсов с обратной связью."}, {"area": "calc", "text": "Антидрайверы: режим «Влияние» — тянет элемент VOC вверх или вниз; версии приложения отдельными секциями iOS и Android; ДКО переехал в «Топ проблем»."}, {"area": "ui", "text": "Новые страницы: VOC-дайджест месяца канала по макету ежемесячного слайда и «VOC ролей» с портретами ролей от заказчика."}, {"area": "calc", "text": "Календарь событий: новый тип «Новый срез» — впервые пришли оценки по триггеру или версии; пояснения типов по значку «i»."}, {"area": "qa", "text": "Код разложен по слоям. Тесты проверяют направление зависимостей, правила блоков и то, что у каждого модуля и блока есть описание в документации. Новый блок создаётся заготовкой одной командой."}, {"area": "qa", "text": "Общие компоненты вместо копий в блоках: фильтр, панель «пусто и почему», поиск, кнопки порции, табы масштаба. Длинные функции блоков разбиты на части."}, {"area": "qa", "text": "Поиск в «Топ проблем» без совпадений больше не роняет дашборд, исключённый триггер не попадает в календарь как инцидент, урон считается только в ядре, числа в подписях склоняются, фокус и масштаб переживают перерисовку — по итогам двух аудитов кода."}, {"area": "qa", "text": "Перед каждым коммитом проверяются автор, тесты и отсутствие данных клиентов; те же проверки и отдельный поиск данных клиентов повторяет CI на GitHub."}, {"area": "ui", "text": "Схема каркаса с подсказками на блоках и стрелках: путь данных от выгрузки до экрана и до LLM банка."}, {"area": "qa", "text": "Документация перестроена: у каждого факта одно место, вопросы к заказчику — одним списком, устаревшие документы удалены или слиты."}, {"area": "ship", "text": "После рефакторинга выпущены обновлённый дашборд и схема каркаса."}], "order": 46, "short": "9–15 ноя", "status": "current", "summary": "Самая плотная неделя: 74 правки. «Топ проблем» стал инструментом поиска причины падения, появились VOC-дайджест и VOC ролей. Код разложен по слоям, прошёл два аудита, правила и документацию проверяют тесты и CI.", "title": "Поиск причины, новые страницы и порядок в коде"}];
   render(WEEKS.map(function(w){return {data:function(){return w;}};}));
 })();
 </script>
@@ -729,5 +835,4 @@ footer{font-size:12px;color:var(--text-3);padding-top:8px}
 })();
 </script>
 
-</body>
-</html>
+</body></html>
