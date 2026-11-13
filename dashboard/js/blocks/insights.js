@@ -1,0 +1,461 @@
+import {
+  VOC_METRIC,
+  isWorkingDay,
+} from '../core/anomalies.js';
+import { latestDate } from '../core/dates.js';
+import { selectionDays } from '../state/chart-selection.js';
+import { EMPTY } from '../shell/block.js';
+import { calendarAnomalies, hasEvaluatedSlice } from '../core/calendar-analysis.js';
+import { CRITICAL_DROP_MIN_WINDOW_RATINGS } from '../core/critical-drop.js';
+import { accidentColor } from '../core/incident-events.js';
+import { eventDetail, sameDetailEvent } from '../state/detail-event.js';
+import {
+  ANOMALY_EVENT,
+  INCIDENT_EVENT,
+  NEW_SLICE_EVENT,
+  ROLLOUT_EVENT,
+  SUSTAINED_EVENT,
+  coversDay,
+  eventType,
+  sortEvents,
+  workingDaysCaption,
+} from '../core/calendar.js';
+import { signTone } from '../components/delta.js';
+import { chipContent, focusChip } from '../components/focus-chip.js';
+import { statusDot } from '../components/status-dot.js';
+import { searchField } from '../components/search-field.js';
+import { statusPanel } from '../components/status-panel.js';
+import { tag } from '../components/tag.js';
+import { element } from '../ui/dom.js';
+import { icon } from '../ui/icons.js';
+import { bindPopover } from '../ui/popover.js';
+import { formatCount, formatDate, formatDayRange, formatDuration, formatEventTime, formatDelta, formatNumber, formatRatings, formatSigned, formatVoc, plural, quoted } from '../core/format.js';
+import { CRITICAL } from '../core/insights.js';
+import { ABOVE_PLAN, BELOW_PLAN, IN_PLAN } from '../core/plan.js';
+import { roundDelta, roundFrequency, roundShare, roundVoc } from '../core/round.js';
+import { DIMENSION_CAPTION } from '../core/dimensions.js';
+import { calendarEventsOf, eventSelectionContext, hasFilters, historyOf } from '../state/event-analysis.js';
+
+const NBSP = ' ';
+
+const PLAN_CAPTION = { [BELOW_PLAN]: 'ниже плана', [IN_PLAN]: 'в плане', [ABOVE_PLAN]: 'выше плана' };
+
+/* J-50: одна лента всех событий; чипы сужают её до выбранных типов, без выбора — всё сразу */
+const selectedKinds = new WeakMap();
+/* Один live-region на блок переживает перерисовку: смена состава ленты после чипа слышна screen reader */
+const feedStatus = new WeakMap();
+/* Запрос поиска — у своего блока, как выбор типов: перерисовка его не сбрасывает */
+const searchQueries = new WeakMap();
+/*
+  J-48: «Аномалии» переименованы в «Критическое снижение» — так снижения называют пользователи.
+  J-138: у каждого типа — пояснение, что считается событием. J-143: пояснения — не в чипах, а в окне по значку «i» у
+  заголовка блока, у каждого типа — его цветные метки из ленты (`tags`)
+*/
+export const KINDS = [
+  { value: ANOMALY_EVENT, label: 'Критическое снижение', tags: [{ label: 'Снижение VOC ниже плана', color: 'negative' }, { label: 'Снижение VOC', color: 'orange' }],
+    hint: 'VOC за день по каналу, сегменту, триггеру, продукту или ОС ниже средней за предыдущие 10 дней на 0,1 и больше, и при таком числе оценок это почти не бывает случайно (вероятность меньше 1 %). Нужно не меньше 100 оценок разреза за период' },
+  { value: INCIDENT_EVENT, label: 'Авария', tags: [{ label: 'Авария', color: 'negative' }],
+    hint: 'Сбой из листа аварий: начало, конец и доля затронутых пользователей. Показываются аварии всех каналов — авария соседнего канала тоже может сдвинуть VOC' },
+  { value: ROLLOUT_EVENT, label: 'Раскатка', tags: [{ label: 'Раскатка', color: 'neutral' }],
+    hint: 'Выпуск фичи из листа раскаток: дата, название, число пинов, версия приложения и ОС' },
+  { value: SUSTAINED_EVENT, label: 'Инцидент', tags: [{ label: 'Инцидент 3\u00a0дн', color: 'negative' }],
+    hint: 'Триггер из топ-15 по числу оценок три рабочих дня подряд и дольше держит VOC ниже нижней границы плана больше чем на 0,05' },
+  { value: NEW_SLICE_EVENT, label: 'Новый срез', tags: [{ label: 'Новый срез', color: 'purple' }],
+    hint: 'Начали приходить оценки по триггеру или версии приложения, которых раньше в выгрузке не было. Дата — первый день с такими оценками' },
+];
+
+const NEW_SLICE_CAPTION = { trigger: 'Новый триггер', app_version: 'Новая версия приложения' };
+
+/** Аномалия или серия словами (R-27, R-43, R-44); состав строки — `docs/blocks-insights.md`. */
+export function insightText(insight, { label, state }) {
+  const isVoc = insight.metric === VOC_METRIC;
+  const { label: title, color } = eventType(insight);
+  const slice = insight.dimension === 'channel'
+    ? (hasFilters(state.filters) ? 'Весь срез' : 'Канал целиком')
+    : `${DIMENSION_CAPTION[insight.dimension]}: ${label(insight.dimension, insight.key)}`;
+
+  const notes = [];
+  /* Серия ниже плана уже названа тегом: вторая строка число дней не повторяет */
+  const seriesInTag = !insight.calendar && insight.severity === CRITICAL && (insight.belowPlanDays ?? 1) === insight.streak;
+  if (insight.streak > 1 && !seriesInTag) notes.push(`${workingDaysCaption(insight.streak)} подряд`);
+  if (insight.startsBeforePeriod) notes.push('началась до периода');
+  if (insight.planStatus && insight.severity !== CRITICAL) notes.push(PLAN_CAPTION[insight.planStatus]);
+  notes.push(formatRatings(isVoc ? insight.ratings : insight.value));
+
+  const anomalyDelta = isVoc ? formatDelta(roundDelta(insight.delta)) : formatSigned(roundFrequency(insight.delta), 1);
+  const forms = insight.windowKind === 'calendar' ? ['календарный день', 'календарных дня', 'календарных дней'] : ['рабочий день', 'рабочих дня', 'рабочих дней'];
+  const windowDays = `${insight.windowValues} ${plural(insight.windowValues, forms)}`;
+  const dayVoc = insight.dayVoc ?? (isVoc ? insight.value : null);
+  const value = dayVoc === null ? 'VOC —' : `VOC ${formatVoc(roundVoc(dayVoc))}`;
+  const vocDelta = insight.vocDelta ?? null;
+  const delta = insight.calendar || vocDelta === null ? null : formatDelta(roundDelta(vocDelta));
+  const compared = delta === null
+    ? 'предыдущего рабочего дня с оценками нет'
+    : `${delta} к ${formatDate(insight.previousDay)}`;
+  const window = `${isVoc ? 'VOC' : 'число'} ${anomalyDelta} к среднему за ${windowDays}`;
+  const date = formatDayRange(insight.from ?? insight.date, insight.date);
+
+  return {
+    date,
+    title,
+    color,
+    /* Комментарий агента читает только «Главный вывод»; календарь его не показывает (R-43) */
+    comment: insight.comment ?? null,
+    detail: [slice, ...notes].join(' · '),
+    value,
+    delta,
+    /* У события частотности тон строки — про упоминания, а не про VOC: дельта VOC без цвета, иначе строка спорит сама с собой */
+    deltaTone: isVoc ? signTone(vocDelta) : 'neutral',
+    window,
+    sentence: `${date}. ${title}. ${[slice, ...notes].join(', ')}. ${value}${insight.calendar ? '' : `, ${compared}`}; ${window}`,
+  };
+}
+
+/* J-25: эффект — доля затронутых пользователей, а не падение VOC. */
+function effectCaption(effect) {
+  const percent = roundShare(effect * 100);
+  return `Затронуто: ${formatNumber(percent, Number.isInteger(percent) ? 0 : 1)}${NBSP}% пользователей`;
+}
+
+/** Строка раскатки или аварии (R-45): тип по правилу, во второй строке — фича или эффект с описанием. */
+function channelEventText(event, context) {
+  const { label: title, color } = eventType(event);
+  const scope = event.channel === null ? ['все каналы'] : [];
+  const parts = event.kind === ROLLOUT_EVENT
+    ? [event.feature ?? 'Фича без названия', ...(Number.isFinite(event.users) ? [`${formatCount(event.users)}${NBSP}${plural(event.users, ['пин', 'пина', 'пинов'])}`] : []),
+      ...(event.app_version ? [`Версия ${event.app_version}`] : []), ...(event.os ? [`ОС: ${event.os}`] : []), ...scope]
+    : [effectCaption(event.effect),
+      `Канал аварии: ${event.channel ?? 'все каналы'}${event.channel && context?.state?.channel && event.channel !== context.state.channel ? ' (другой канал)' : ''}`,
+      ...(event.product ? [`Продукт: ${event.product}`] : []), ...(event.description ? [event.description] : [])];
+  const date = event.started_at ? `${formatEventTime(event.started_at)} – ${formatEventTime(event.ended_at)}` : formatDate(event.date);
+  return {
+    date,
+    title,
+    color,
+    comment: null,
+    detail: parts.join(' · '),
+    value: null,
+    delta: null,
+    deltaTone: 'neutral',
+    window: event.kind === ROLLOUT_EVENT ? 'Раскатка фичи из листа rollouts' : `Авария из листа incidents${Number.isFinite(event.duration_seconds) ? `. Длительность: ${formatDuration(event.duration_seconds)}` : ''}`,
+    sentence: `${date}. ${title}. ${parts.join(', ')}.`,
+  };
+}
+
+/* J-138: новый срез — что появилось, сколько оценок с ним в периоде и их VOC */
+function newSliceText(event, context) {
+  const { label: title, color } = eventType(event);
+  const date = formatDate(event.date);
+  const name = event.dimension === 'trigger' ? context.label('trigger', event.key) : event.key;
+  const detail = [`${NEW_SLICE_CAPTION[event.dimension]}: ${name}`, formatRatings(event.ratings)].join(' · ');
+  const value = `VOC ${formatVoc(roundVoc(event.value))}`;
+  const window = `Первые оценки — ${date}; раньше в выгрузке ${event.dimension === 'trigger' ? 'этого триггера' : 'этой версии'} не было. Оценки и VOC — с первого дня до конца периода`;
+  return { date, title, color, comment: null, detail, value, delta: null, deltaTone: 'neutral', window, sentence: `${date}. ${title}. ${detail}. ${value}. ${window}` };
+}
+
+export function eventText(event, context) {
+  if (event.kind === NEW_SLICE_EVENT) return newSliceText(event, context);
+  if (event.kind === SUSTAINED_EVENT) {
+    const { label: title, color } = eventType(event);
+    const date = formatDayRange(event.from, event.date);
+    const detail = [`Триггер: ${context.label('trigger', event.key)}`,
+      ...(event.startsBeforePeriod ? ['начался до периода'] : []), formatRatings(event.ratings)].join(' · ');
+    const value = `VOC ${formatVoc(roundVoc(event.value))}`;
+    const window = `Продолжительность: ${workingDaysCaption(event.streak)}. Ниже нижней границы плана более чем на 0,05; триггер входит в топ-15 по числу оценок за период. План последнего дня: ${formatVoc(roundVoc(event.plan.min))}.`;
+    return { date, title, color, detail, value, delta: null, window, sentence: `${date}. ${title}. ${detail}. ${value}. ${window}` };
+  }
+  return event.kind === ROLLOUT_EVENT || event.kind === INCIDENT_EVENT ? channelEventText(event, context) : insightText(event, context);
+}
+
+/*
+  J-143: значок «i» у заголовка — окно «Типы событий»: у каждого типа его метки цветом, как в ленте, и коротко —
+  что считается событием. Окно — общий popover каркаса: Escape и клик вне закрывают
+*/
+function kindsHelp() {
+  const item = element('span', 'insight-help');
+  const trigger = element('button', 'insight-help__trigger');
+  trigger.type = 'button';
+  trigger.setAttribute('aria-label', 'Что значат типы событий');
+  trigger.title = 'Что значат типы событий';
+  trigger.append(icon('info', 'insight-help__icon'));
+  const panel = element('div', 'control-popover glass insight-help__panel');
+  panel.id = 'insight-kinds-help';
+  panel.setAttribute('aria-label', 'Типы событий');
+  panel.append(element('h2', 'control-popover__title', 'Типы событий'));
+  const list = element('dl', 'insight-help__list');
+  for (const { label, hint, tags } of KINDS) {
+    const term = element('dt', 'insight-help__term');
+    term.append(...tags.map(({ label: text, color }) => tag(text, color)));
+    term.setAttribute('aria-label', label);
+    list.append(term, element('dd', 'insight-help__text', hint));
+  }
+  panel.append(list);
+  item.append(trigger, panel);
+  bindPopover(item, trigger, panel);
+  return item;
+}
+
+function kindChips(block, context, counts) {
+  const chosen = selectedKinds.get(block) ?? new Set();
+  const group = element('div', 'insight-kinds');
+  group.setAttribute('role', 'group');
+  group.setAttribute('aria-label', 'Типы событий');
+  for (const { value, label } of KINDS) {
+    const pressed = chosen.has(value);
+    const count = counts.get(value) ?? 0;
+    const chip = element('button', 'insight-kind');
+    chip.type = 'button';
+    chip.dataset.kind = value;
+    chip.setAttribute('aria-pressed', String(pressed));
+    /* Тип без событий выбрать нельзя; выбранный остаётся доступным, чтобы его снять */
+    chip.disabled = !pressed && count === 0;
+    chip.append(element('span', 'insight-kind__label', label), element('span', 'insight-kind__count', formatCount(count)));
+    chip.setAttribute('aria-label', `${label}, ${formatCount(count)} ${plural(count, ['событие', 'события', 'событий'])}`);
+    chip.addEventListener('click', (event) => {
+      const next = new Set(chosen);
+      if (pressed) next.delete(value);
+      else next.add(value);
+      selectedKinds.set(block, next);
+      /* Другой состав — другой список: читать его с начала */
+      block.element.querySelector('.insight-list')?.scrollTo?.(0, 0);
+      renderInsights(block, context);
+      /* J-98: фокус возвращается только клавиатуре (detail 0): после клика мышью кольцо фокуса на чипе читалось как жирная обводка */
+      if (event?.detail > 0) return;
+      /* Снятый тип без событий становится недоступным: фокус — на первый доступный чип, а не на body */
+      const again = block.element.querySelector(`.insight-kind[data-kind="${value}"]`);
+      (again && !again.disabled ? again : [...block.element.querySelectorAll('.insight-kind')].find((node) => !node.disabled))?.focus?.();
+    });
+    group.append(chip);
+  }
+  return group;
+}
+
+function eventRow(block, context, event, index) {
+  const text = eventText(event, context);
+  const detailEvent = eventDetail(event, context.state.channel);
+  const sameEvent = sameDetailEvent(context.state.detailEvent, detailEvent);
+  /* J-60: выбранный день сужает ленту, но строки не обводит — нажатой остаётся только строка события из детализации */
+  const selected = Boolean(context.state.detailEvent) && sameEvent;
+  const row = element('button', `insight-row insight-row--${event.tone}`);
+  row.type = 'button';
+  if (event.kind === INCIDENT_EVENT) row.style.setProperty('--accident-tone', accidentColor(event.effect, event.duration_seconds));
+  /* Клик по серии выбирает её последний день (R-44) */
+  row.setAttribute('data-focus-date', event.date);
+  row.setAttribute('data-insight-index', String(index));
+  row.setAttribute('aria-pressed', String(selected));
+  row.setAttribute('aria-label', text.sentence);
+  row.title = text.window;
+
+  /* Тег — тип строки в одну строку, как в макете; длинный тип уходит под дату целиком, а не рвётся */
+  const headline = element('span', 'insight-row__headline');
+  const type = element('span', 'insight-row__type');
+  type.append(tag(text.title, text.color));
+  headline.append(element('span', 'insight-row__date', text.date), type);
+  const detail = element('span', 'insight-row__detail');
+  detail.append(element('span', 'insight-row__slice', text.detail));
+  if (text.value !== null) {
+    const value = element('span', 'insight-row__value', text.value);
+    value.title = text.value === 'VOC —'
+      ? 'За день события в этом разрезе нет оценок — VOC не рассчитывается.'
+      : 'VOC разреза за день события.';
+    detail.append(value);
+  }
+  const marker = element('span', 'insight-row__marker');
+  marker.append(statusDot(text.color, 'row'));
+  row.append(marker, headline);
+  row.append(detail);
+  row.addEventListener('click', () => {
+    context.setState({ ...context.state, focus: sameEvent ? null : event.date, days: [], detailEvent: sameEvent ? null : detailEvent });
+    /* Индекс — в полном списке: выбор даты сужает список, а строка остаётся той же */
+    const again = block.element.querySelector(`[data-focus-date="${event.date}"][data-insight-index="${index}"]`);
+    again?.focus({ preventScroll: true });
+    again?.scrollIntoView?.({ block: 'nearest' });
+  });
+  return row;
+}
+
+const NO_DROPS = 'Критических снижений нет';
+
+/** J-20: выходные участвуют; отсутствие VOC и истории объясняется отдельно. */
+export function noAnomaliesText(context) {
+  const history = context.rows.length ? historyOf(context) : [];
+  const dates = [...new Set(history.map(({ appeal_date }) => appeal_date))];
+  const current = dates.filter((date) => date >= context.period.from && date <= context.period.to);
+  if (!current.length) return ['Нет оценок в периоде', 'Для поиска снижений VOC нужны оценки в выбранном периоде.'];
+  if (!hasEvaluatedSlice(windowParams(context, history))) return ['Мало истории', `Для сравнения нужны хотя бы два дня и ${formatRatings(CRITICAL_DROP_MIN_WINDOW_RATINGS)} в предыдущем окне.`];
+  return [NO_DROPS, 'Ни в одном разрезе VOC не упал значимо: будни сравниваются с 10 рабочими днями, выходные — с 10 календарными.'];
+}
+
+/* Те же оценки и конец данных, что у `calendarAnomalies`: текст объясняет именно этот вердикт */
+function windowParams({ rows, reference, period }, history, day = null) {
+  return { rows: history, reference, period, day, dataEnd: latestDate(rows) };
+}
+
+/** Выбранный день без событий (R-41): почему пусто — выходной, день вне периода или ровный день. Лента общая (J-50). */
+export function noDayEventsText(context) {
+  const { focus } = context.state;
+  const title = `Нет событий за ${formatDate(focus)}`;
+  if (focus < context.period.from || focus > context.period.to) return [title, 'События ищутся в периоде блока, а выбранный день лежит вне его.'];
+  const history = context.rows.length ? historyOf(context) : [];
+  if (!history.some(({ appeal_date }) => appeal_date === focus)) return [title, 'За выбранный день нет оценок, раскаток и аварий.'];
+  if (!hasEvaluatedSlice(windowParams(context, history, focus))) return [title, `Раскаток и аварий нет; для поиска снижений VOC мало истории — в предыдущем окне нужны два дня и ${formatRatings(CRITICAL_DROP_MIN_WINDOW_RATINGS)}.`];
+  return [title, isWorkingDay(focus)
+    ? 'В этот день VOC не упал значимо к предыдущим 10 рабочим дням, раскаток и аварий нет.'
+    : 'В этот день VOC не упал значимо к предыдущим 10 календарным дням, раскаток и аварий нет.'];
+}
+
+const resetAction = (text, onClick) => ({ className: 'insight-search__reset', text, onClick });
+
+function noDayEvents(context) {
+  const [title, detail] = noDayEventsText(context);
+  return statusPanel('insight-unavailable', {
+    title,
+    detail,
+    action: resetAction('Сбросить дату', () => context.setState({ ...context.state, focus: null, days: [], detailEvent: null })),
+  });
+}
+
+/** При выбранной дате календарь показывает её события и серии, которые её покрывают (R-41, R-44); индекс строки — в полном списке. */
+export function eventsOfFocus(events, focus) {
+  const indexed = events.map((event, index) => ({ event, index }));
+  const days = Array.isArray(focus) ? focus : focus ? [focus] : [];
+  return days.length ? indexed.filter(({ event }) => days.some((day) => coversDay(event, day))) : indexed;
+}
+
+/** Пустая лента за период: причина та же, что у снижений VOC (нет оценок, мало истории), иначе — событий нет ни одного типа. */
+export function noEventsText(context) {
+  const [title, detail] = noAnomaliesText(context);
+  return title === NO_DROPS
+    ? ['Событий нет', 'За период VOC значимо не падал; раскаток, аварий и инцидентов нет.']
+    : [title, detail];
+}
+
+function noEvents(context) {
+  const [title, detail] = noEventsText(context);
+  return statusPanel('insight-unavailable', { title, detail });
+}
+
+/* «ммб» находит «ММБ», «платежи» — «Платёж висит»: без регистра и различия е/ё */
+/* Знак минус U+2212 (J-36) ищется и обычным дефисом с клавиатуры */
+const normalized = (text) => text.toLocaleLowerCase('ru').replaceAll('ё', 'е').replaceAll('−', '-');
+
+/** Поиск по событиям (R-26): дата, тип, разрез, фича или описание аварии; каждое слово запроса должно найтись. */
+export function searchInsights(events, query, context) {
+  const words = normalized(query).split(/\s+/).filter(Boolean);
+  if (!words.length) return events;
+  return events.filter((event) => {
+    const text = eventText(event, context);
+    /* Код разреза — тоже: подпись сегмента полная, а ищут «ммб» (D-53) */
+    const haystack = normalized([text.date, ...(event.days ?? [event.date]).map(formatDate), text.title, text.detail, event.key ?? ''].join(' '));
+    return words.every((word) => haystack.includes(word));
+  });
+}
+
+function eventSearch(block, onInput) {
+  return searchField({
+    className: 'insight-search-field', inputClass: 'insight-search', label: 'Поиск по событиям', placeholder: 'Поиск: ММБ, платежи…',
+    value: searchQueries.get(block) ?? '',
+    onInput: (value) => {
+      searchQueries.set(block, value);
+      onInput();
+    },
+  }).field;
+}
+
+function noChosenKinds(onReset) {
+  return statusPanel('insight-unavailable', {
+    title: 'Нет событий выбранных типов',
+    detail: 'Снимите выбор типа или выберите другой.',
+    action: resetAction('Показать все события', onReset),
+  });
+}
+
+function nothingFound(query, onReset) {
+  return statusPanel('insight-unavailable', {
+    title: 'Ничего не найдено',
+    detail: `По запросу ${quoted(query.trim())} событий нет.`,
+    action: resetAction('Сбросить поиск', onReset),
+  });
+}
+
+function daysChip(context) {
+  const days = selectionDays(context.state);
+  const reset = element('button', 'focus-chip');
+  reset.append(...chipContent('Дни', formatCount(days.length)));
+  reset.type = 'button';
+  reset.setAttribute('aria-label', `Сбросить выбранные дни: ${days.map(formatDate).join(', ')}`);
+  reset.title = days.map(formatDate).join(', ');
+  reset.addEventListener('click', () => context.setState({ ...context.state, focus: null, days: [], detailEvent: null }));
+  return reset;
+}
+
+export function renderInsights(block, context) {
+  block.setTitle('Календарь событий');
+  if (!context.rows.length) {
+    block.setHead();
+    block.setState(EMPTY);
+    return;
+  }
+  context = eventSelectionContext(context);
+  /* Лента — от свежей даты; серия и инцидент стоят по последнему дню (J-50) */
+  const all = sortEvents(calendarEventsOf(context), 'chronology');
+  const { focus } = context.state;
+  const days = selectionDays(context.state);
+  const inDays = eventsOfFocus(all, days);
+  const counts = new Map(KINDS.map(({ value }) => [value, inDays.filter(({ event }) => event.kind === value).length]));
+  const chosen = selectedKinds.get(block) ?? new Set();
+  const ofDay = chosen.size ? inDays.filter(({ event }) => chosen.has(event.kind)) : inDays;
+  const content = element('div', 'insights');
+  const toolbar = element('div', 'insights__toolbar');
+  /* Ввод перестраивает только список: поле поиска не теряет фокус и курсор */
+  const listHost = element('div', 'insights__results');
+  /* Тип события — по правилу, без комментария агента: пометки «Сделано с AI» в календаре нет (R-43, D-33) */
+  block.setHead({ help: kindsHelp(), controls: context.state.days?.length ? daysChip(context) : focus ? focusChip(context) : null });
+  let status = feedStatus.get(block);
+  if (!status) {
+    status = element('span', 'visually-hidden');
+    status.setAttribute('role', 'status');
+    feedStatus.set(block, status);
+  }
+  const fill = () => {
+    const matched = new Set(searchInsights(ofDay.map(({ event }) => event), searchQueries.get(block) ?? '', context));
+    const found = ofDay.filter(({ event }) => matched.has(event));
+    status.textContent = `В ленте ${formatCount(found.length)} ${plural(found.length, ['событие', 'события', 'событий'])}`;
+    if (chosen.size && inDays.length && ofDay.length === 0) {
+      listHost.replaceChildren(noChosenKinds(() => {
+        selectedKinds.set(block, new Set());
+        renderInsights(block, context);
+      }));
+      return;
+    }
+    if (days.length && ofDay.length === 0) {
+      if (context.state.days?.length) {
+        listHost.replaceChildren(statusPanel('insight-unavailable', { title: 'За выбранные дни событий нет', extra: [daysChip(context)] }));
+      } else listHost.replaceChildren(noDayEvents(context));
+      return;
+    }
+    if (all.length === 0) {
+      listHost.replaceChildren(noEvents(context));
+      return;
+    }
+    if (found.length === 0) {
+      listHost.replaceChildren(nothingFound(searchQueries.get(block) ?? '', () => {
+        searchQueries.delete(block);
+        renderInsights(block, context);
+        block.element.querySelector('.insight-search')?.focus();
+      }));
+      return;
+    }
+    const list = element('div', 'insight-list scroll-area');
+    found.forEach(({ event, index }) => list.append(eventRow(block, context, event, index)));
+    listHost.replaceChildren(list);
+  };
+  toolbar.append(eventSearch(block, fill));
+  content.append(kindChips(block, context, counts), status, toolbar, listHost);
+  /* Список прокручивается внутри карточки (D-55): перерисовка сохраняет прокрутку; выросший список браузер может поджать к концу */
+  const scrolled = block.element.querySelector('.insight-list')?.scrollTop ?? 0;
+  fill();
+  block.setContent(content);
+  const list = block.element.querySelector('.insight-list');
+  if (list) list.scrollTop = scrolled;
+}

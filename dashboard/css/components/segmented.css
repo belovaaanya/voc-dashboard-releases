@@ -1,0 +1,142 @@
+/* ── Сегментный переключатель (C-03, Figma 3204:2881, каналы — 3204:2686) ── */
+
+/* По ширине содержимого; своя группа наложения — едущая рамка выбора над фоном, но под текстом всех табов */
+.segmented {
+  isolation: isolate;
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: fit-content;
+  align-items: center;
+  gap: var(--segmented-inset);
+  padding: var(--segmented-inset);
+  border: var(--hairline) solid var(--color-control-border);
+  border-radius: var(--radius-pill);
+  background: var(--control-surface);
+}
+
+.segmented__tab {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: var(--tab-height);
+  min-width: var(--tab-min-width);
+  padding: 0 var(--space-2);
+  position: relative;
+  border: var(--hairline) solid transparent;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: var(--type-caption);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--motion-fast) var(--ease-standard), background-color var(--motion-fast) var(--ease-standard);
+}
+
+/* Ширина под акцентное начертание заранее: выбор таба не сдвигает соседей */
+.segmented__tab::after {
+  content: attr(data-label);
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  font: var(--type-caption-strong);
+}
+
+/* J-135: подпись и значки смысла в одну строку; ширина под жирное — у подписи (::after), значки добавляются к ней */
+.segmented__row {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.segmented__tab:has(.segmented__row)::after {
+  padding-inline-end: calc(var(--icon-size) + var(--space-1));
+}
+
+.segmented__icons {
+  display: inline-flex;
+  align-items: center;
+}
+
+.segmented__icon {
+  width: var(--icon-size);
+  height: var(--icon-size);
+  flex: 0 0 auto;
+}
+
+/* Треугольник занимает половину своего квадрата 16 × 16: два значка стоят вплотную */
+.segmented__icon + .segmented__icon {
+  margin-inline-start: calc(-1 * var(--space-1));
+}
+
+.segmented__icon--negative {
+  color: var(--color-negative);
+}
+
+.segmented__icon--positive {
+  color: var(--color-positive);
+}
+
+/* Каналы — карточка из табов во всю высоту, без внутренних отступов (Figma 3204:2686) */
+.segmented--lg {
+  height: var(--tab-height-lg);
+  gap: 0;
+  padding: 0;
+  border-color: var(--color-card-border);
+  border-radius: var(--radius-card);
+  background: var(--card-surface);
+}
+
+/* Поверхность карточки и в её плотном варианте (R-50) */
+@media (prefers-reduced-transparency: reduce) {
+  .segmented--lg {
+    background: var(--card-surface-solid);
+  }
+}
+
+/* Размер варианта — до состояний: при равной специфичности hover и выбор побеждают порядком */
+.segmented--lg .segmented__tab {
+  height: 100%;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-card);
+  color: var(--color-text-secondary);
+  font: var(--type-text);
+}
+
+.segmented__tab:hover,
+.segmented__tab:focus-visible {
+  color: var(--color-text-strong);
+}
+
+.segmented__tab:not([aria-selected='true']):hover {
+  background-color: var(--row-hover);
+}
+
+/* Выбранный таб отличается рамкой и начертанием, а не только цветом (D-26); рамка — отдельный слой, чтобы переезжать между табами (D-56) */
+.segmented__tab[aria-selected='true'] {
+  color: var(--color-text-strong);
+  font: var(--type-caption-strong);
+}
+
+.segmented__tab[aria-selected='true']::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border: var(--hairline) solid var(--color-control-border);
+  border-radius: inherit;
+  background: var(--tab-active-surface);
+  box-shadow: var(--control-raised-edge);
+}
+
+.segmented--lg .segmented__tab::after,
+.segmented--lg .segmented__tab[aria-selected='true'] {
+  font: var(--type-text-strong);
+}
+
+/* J-45: выбранный канал светлее соседей и с яркой рамкой — как выбор в остальных переключателях; тёмная подложка макета читалась как невыбранная (V-54) */
+.segmented--lg .segmented__tab[aria-selected='true']::before {
+  border-color: var(--color-border-strong);
+  background: var(--tab-active-surface);
+  box-shadow: var(--control-raised-edge);
+}

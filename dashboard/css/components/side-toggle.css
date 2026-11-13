@@ -1,0 +1,51 @@
+/*
+  J-148: кнопка боковой колонки на линии раздела (лента отзывов, календарь событий). Контейнер — position: relative,
+  место линии — `--side-toggle-at`; свёрнутая колонка — кнопка с подписью у правого края
+*/
+.side-toggle {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  inset-inline-start: var(--side-toggle-at, 100%);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: var(--space-6);
+  height: var(--space-6);
+  padding: 0 var(--space-1);
+  border: var(--hairline) solid var(--color-control-border);
+  border-radius: var(--radius-pill);
+  background: var(--control-raised);
+  color: var(--color-text-secondary);
+  font: var(--type-caption);
+  cursor: pointer;
+  transform: translateX(-50%);
+}
+
+.side-toggle:hover,
+.side-toggle:focus-visible {
+  border-color: var(--color-text-strong);
+  color: var(--color-text-strong);
+}
+
+.side-toggle__icon {
+  width: var(--icon-size);
+  height: var(--icon-size);
+  transform: rotate(-90deg);
+}
+
+.side-toggle--collapsed {
+  inset-inline-start: auto;
+  inset-inline-end: 0;
+  padding-inline: var(--space-2) var(--space-3);
+  transform: none;
+}
+
+.side-toggle--collapsed .side-toggle__icon {
+  transform: rotate(90deg);
+}
+
+/* Свёрнутая колонка: справа остаётся полоса под кнопку с подписью, линия — у её левого края */
+.side-toggle-host--collapsed {
+  padding-inline-end: var(--side-toggle-reserve);
+}

@@ -1,0 +1,90 @@
+/* ── Распределение оценок (P0 №8, D-40, V-22, V-31) ─────────────── */
+
+.distribution {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.distribution-row {
+  display: grid;
+  /* J-130: оценка, полоса, число, доля. J-137: колонки изменения доли нет. J-145: ширина числа и доли общая для строк — колонки ровные */
+  grid-template-columns: var(--space-6) minmax(0, 1fr) var(--distribution-count-width) var(--distribution-percent-width);
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--space-4);
+  padding: 0 var(--space-1);
+  border: var(--divider-width) solid transparent;
+  border-radius: var(--radius-control);
+  color: var(--color-text-tertiary);
+}
+
+.distribution-row:hover,
+.distribution-row:focus-visible {
+  border-color: var(--color-border-strong);
+  background: var(--row-hover);
+  outline: none;
+}
+
+.distribution-row__mark,
+.distribution-row__share {
+  font: var(--type-caption);
+  white-space: nowrap;
+}
+
+.distribution-row__share {
+  color: var(--color-text-secondary);
+  text-align: end;
+}
+
+.distribution-row__track {
+  display: block;
+  overflow: hidden;
+  height: var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-sunken);
+}
+
+.distribution-row__fill {
+  display: block;
+  width: var(--distribution-share);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-neutral);
+}
+
+.distribution-row--1 .distribution-row__fill,
+.distribution-row--2 .distribution-row__fill {
+  background: var(--color-negative);
+}
+
+.distribution-row--4 .distribution-row__fill,
+.distribution-row--5 .distribution-row__fill {
+  background: var(--color-text-secondary);
+}
+
+/* Вывод — по содержимому, остаток высоты рейла забирает распределение: строки оценок расходятся по высоте, а не оставляют пустоту под выводом (D-55, J-09) */
+.column--bounded > .card--distribution {
+  flex-shrink: 0;
+}
+
+.card--distribution .card__body,
+.card--distribution .distribution {
+  flex: 1 1 auto;
+}
+
+.card--distribution .distribution {
+  justify-content: space-between;
+}
+
+/* J-137: доля в скобках — тише числа оценок */
+.distribution-row__percent {
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.distribution-row__share {
+  font-variant-numeric: tabular-nums;
+}

@@ -1,0 +1,490 @@
+/*
+  Токены дашборда. Единственный файл, где цвет задаётся литералом:
+  остальные стили обязаны обращаться через var().
+
+  Палитра — docs/design-spec.md §5, шкала отступов — V-02, гарнитура — D-30,
+  роли текста — D-48, контраст — D-28 (проверяется страницей site/dev/contrast.html).
+*/
+
+@font-face {
+  font-family: "Manrope";
+  src: url("../fonts/manrope-latin.woff2") format("woff2");
+  font-weight: 200 800;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Manrope";
+  src: url("../fonts/manrope-cyrillic.woff2") format("woff2");
+  font-weight: 200 800;
+  font-display: swap;
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+
+/*
+  J-52: Styrene, как в макете (V-33): A LC — крупные числа, B LC — заголовки. Шрифт коммерческий, репозиторий
+  публичный: файлов в нём нет, начертания берутся из установленных на компьютере (local()).
+  Где Styrene не установлен (и в Safari, который не отдаёт странице пользовательские шрифты), —
+  Manrope, как раньше
+*/
+@font-face {
+  font-family: "Styrene Numbers";
+  src: local("Styrene A LC Light"), local("StyreneALC-Light");
+  font-weight: 300;
+}
+
+@font-face {
+  font-family: "Styrene Headings";
+  src: local("Styrene B LC Light"), local("StyreneBLC-Light");
+  font-weight: 300;
+}
+
+/* J-170, J-171: заголовок страницы (VOC ролей) — Styrene B Regular, плотнее Light; где его нет — Manrope 400 */
+@font-face {
+  font-family: "Styrene Headings";
+  src: local("Styrene B LC Regular"), local("StyreneBLC-Regular");
+  font-weight: 400;
+}
+
+/* Ширина Manrope и Arial на тексте дашборда совпадает: запасной гарнитуре нужны только вертикальные метрики */
+@font-face {
+  font-family: "Manrope Fallback";
+  src: local("Arial"), local("ArialMT");
+  ascent-override: 106.6%;
+  descent-override: 30%;
+  line-gap-override: 0%;
+}
+
+:root {
+  /* Поверхности */
+  --color-bg: #0B0B0D;
+  --color-surface: #111214;
+  --color-surface-sunken: #0D0D0F;
+  --color-border: #232427;
+  --color-border-strong: #34353A;
+
+  /* Текст */
+  /* Три уровня текста (R-36): основной, обычный и второстепенный — белый 40 % (R-37) */
+  --color-text-strong: #FFFFFF;
+  --color-text-secondary: #C3C3C3;
+  --color-text-tertiary: rgba(255, 255, 255, 0.4);
+
+  /* Акценты */
+  --color-positive: #2DDA93;
+  --color-positive-fill: #29C083;
+  --color-negative: #FF376B;
+  /*
+    J-70: цвет текста тона — дельты, теги, бейджи, ошибки. В тёмной теме совпадает с тоном;
+    в светлой тон — чистый цвет заливок и свечения, а текст того же оттенка темнее для AA (D-28)
+  */
+  --color-positive-ink: var(--color-positive);
+  --color-negative-ink: var(--color-negative);
+  --color-neutral: #A4A4A5;
+  /* Цвета типов событий календаря (R-43, R-51): оранжевый — снижение VOC и рост жалоб, жёлтый — спад числа оценок, фиолетовый — раскатка */
+  --color-orange: #FF8A3D;
+  --color-yellow: #F2C94C;
+  --color-purple: #B18CFF;
+  /* Палитра календаря J-20: мятный, жёлтый и оранжевый тегов и точек ленты */
+  --calendar-mint: #85E294;
+  --calendar-yellow: #DBED99;
+  --calendar-orange: #FF933C;
+  --calendar-mint-ink: var(--calendar-mint);
+  --calendar-orange-ink: var(--calendar-orange);
+  --calendar-accident-amber: #E07800;
+
+  /*
+    J-125: переключатель чёрно-белый, без фиолетового тона J-122: включённая ручка — цвет основного текста темы
+    (в тёмной белая, в светлой почти чёрная) с мягким краем, дорожка — лёгкая заливка тем же цветом. Токены ссылаются
+    на цвета темы, поэтому одни на обе темы
+  */
+  --toggle-tone: var(--color-text-strong);
+  --toggle-tone-edge: color-mix(in srgb, var(--color-text-strong) var(--tone-rim), transparent);
+  --toggle-rim: transparent;
+  --toggle-glow: transparent;
+  --toggle-track-on: color-mix(in srgb, var(--color-text-strong) var(--tone-tint), transparent);
+  --toggle-track-border: color-mix(in srgb, var(--color-text-strong) var(--tone-rim), transparent);
+  --toggle-ring: transparent;
+  --toggle-knob-off: linear-gradient(180deg, #3A3B41, #26272C);
+
+  /* Текст на акцентной заливке: белое на #FF376B даёт 3.49:1 и AA не проходит */
+  --color-on-accent: #0B0B0D;
+
+  /* «В плане» — серая нейтральная ячейка макета (R-16): отличима от ячейки без подсветки */
+  --color-heat-neutral: #2A2B30;
+
+  /* Коридор плана на графике (Figma 3204:2952) */
+  --color-plan-band: rgba(217, 217, 217, 0.08);
+
+  /* Шкала отступов: только кратное 4 (V-02) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  /* Два уровня зазоров (R-35): между блоками страницы и между плитками метрик внутри группы */
+  --gap-section: var(--space-4);
+  --gap-tile: var(--space-2);
+  /* Поле карточки — одно на все карточки */
+  --card-padding: var(--space-5);
+
+  /* Сетка. Рейл одной ширины во всех строках (V-01) */
+  --content-max: 1400px;
+  --content-min: 1200px;
+  --page-gutter: var(--space-6);
+  --rail-width: 344px;
+  /* J-115: боковое меню — развёрнутое с подписями и свёрнутое до иконок */
+  --nav-width: 232px;
+  --nav-width-collapsed: 64px;
+
+  /* Типографика: роль — начертание, размер и интерлиньяж вместе (C-01, D-48); мельче 12 px только оси (V-33) */
+  --font-sans: "Manrope", "Manrope Fallback", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  /* J-52: крупные числа — Styrene A, заголовки — Styrene B, текст, календарь и комментарии — Manrope */
+  --font-numbers: "Styrene Numbers", var(--font-sans);
+  --font-headings: "Styrene Headings", var(--font-sans);
+
+  --type-display: 300 96px/1 var(--font-numbers);
+  --type-value: 300 48px/1 var(--font-numbers);
+  /* J-165: VOC карточки роли — между значением карточки (48) и итогом дайджеста (96) */
+  --type-value-lg: 300 72px/1 var(--font-numbers);
+  --type-value-sm: 300 28px/1.1 var(--font-numbers);
+  --type-title: 300 14px/1.4 var(--font-headings);
+  /* J-168: заголовок страницы в карточке-шапке (VOC ролей) — крупнее заголовка блока */
+  --type-page-title: 400 24px/1.3 var(--font-headings);
+  --type-text: 400 14px/1.4 var(--font-sans);
+  --type-text-strong: 500 14px/1.4 var(--font-sans);
+  --type-caption: 400 12px/1.4 var(--font-sans);
+  --type-caption-strong: 500 12px/1.4 var(--font-sans);
+  --type-quote: italic 500 12px/1.4 var(--font-sans);
+  --type-axis: 400 11px/1.2 var(--font-sans);
+
+  --tracking-display: -8px;
+  --tracking-value: -2px;
+  --tracking-value-lg: -4px;
+  /* J-59: заголовки блоков плотнее — разрядка +0,02em читалась как широкий набор */
+  --tracking-title: -0.01em;
+
+  /* Поверхность карточки и её шапки — wireframe (V-32, Figma 3204:2724, 3204:2866) */
+  --color-card-border: rgba(61, 63, 67, 0.5);
+  /* Карточка — радиальный градиент макета от тёмного центра (J-15, Figma 3204:2724), полупрозрачный над подсветкой (R-50) */
+  --card-gradient-shape: ellipse 62% 72% at 55% 46%;
+  --card-fill-opacity: 88%;
+  --card-fill: radial-gradient(var(--card-gradient-shape), color-mix(in srgb, var(--color-bg) var(--card-fill-opacity), transparent), color-mix(in srgb, var(--color-surface) var(--card-fill-opacity), transparent));
+  --card-surface: var(--card-fill);
+  --card-surface-solid: radial-gradient(var(--card-gradient-shape), var(--color-bg), var(--color-surface));
+  --card-edge: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+
+  /* Два уровня высоты (R-50, J-08): 1 — карточка без кромки (J-15), 2 — стекло окон с кромкой и тенью глубже */
+  --shadow-contact: 0 1px 2px rgba(0, 0, 0, 0.32);
+  --card-shadow: var(--shadow-contact), 0 16px 40px -24px rgba(0, 0, 0, 0.72);
+  --card-shadow-hover: var(--shadow-contact), 0 20px 44px -24px rgba(0, 0, 0, 0.84);
+  /* J-42: наведённая кликабельная карточка заметно светлее — рамка и лёгкий подсвет; выбранная остаётся тёмной с яркой рамкой */
+  --card-hover-edge: rgba(255, 255, 255, 0.24);
+  --card-hover-wash: linear-gradient(rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.045));
+
+  /* Подсветка страницы: мягкие пятна тонов дашборда, под стеклом карточек они дают глубину, а не цвет */
+  --page-ambient:
+    radial-gradient(960px 680px at 10% 16%, rgba(255, 255, 255, 0.055), transparent 70%),
+    radial-gradient(880px 760px at 94% 30%, rgba(177, 140, 255, 0.045), transparent 70%),
+    radial-gradient(1040px 800px at 32% 60%, rgba(255, 55, 107, 0.03), transparent 70%),
+    radial-gradient(960px 720px at 84% 88%, rgba(255, 255, 255, 0.035), transparent 70%);
+
+  /*
+    Жидкое стекло всплывающих окон (R-50): тёмная заливка, умеренное размытие и насыщение фона,
+    светлая кромка, блик сверху и тень уровня 2. J-14: прозрачная заливка 62%; brightness в .glass сохраняет контраст над светлым фоном
+  */
+  --glass-tint: #15171C;
+  --glass-opacity: 62%;
+  --glass-fill: color-mix(in srgb, var(--glass-tint) var(--glass-opacity), transparent);
+  /* Без backdrop-filter и при prefers-reduced-transparency — тот же тон, каким стекло выглядит над карточкой */
+  --glass-fill-solid: color-mix(in srgb, var(--glass-tint) var(--glass-opacity), var(--color-surface));
+  /* Размытие умеренное (J-08): фон под окном читается формой, а не мутным пятном */
+  --glass-blur: blur(12px) saturate(140%);
+  --glass-edge: rgba(255, 255, 255, 0.1);
+  /* Кнопки и поля внутри стекла — светлее стекла, а не провалы в нём */
+  --glass-control: rgba(255, 255, 255, 0.05);
+  --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  --glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.015) 32%, rgba(255, 255, 255, 0) 64%);
+
+  /* Кнопки, чипы и выбранный таб — тёмная подложка макета с тенью внутрь (J-15, Figma 2601:766, 3204:3034) */
+  --control-raised: linear-gradient(149deg, rgba(20, 22, 27, 0.5), rgba(32, 33, 40, 0.5));
+  --control-raised-hover: linear-gradient(149deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.035));
+  --control-raised-edge: var(--shadow-inset);
+  /*
+    Наведённая и выбранная строка — едва светлее карточки, состояние несёт рамка строки: светлее подложка
+    опустила бы красный тег на подложке тона ниже AA (D-28)
+  */
+  --row-hover-strength: 2%;
+  --row-selected-strength: 2.5%;
+  --row-hover: color-mix(in srgb, var(--color-text-strong) var(--row-hover-strength), transparent);
+  --row-selected: color-mix(in srgb, var(--color-text-strong) var(--row-selected-strength), transparent);
+  /* Шапка при скролле — стекло тона страницы: на месте она не выделяется полосой, а нижний край растворяется */
+  /* Шапка плотнее окон: при умеренном размытии заголовки блоков под ней иначе читались бы сквозь строку фильтров */
+  --header-opacity: 90%;
+  --header-fill: color-mix(in srgb, var(--color-bg) var(--header-opacity), transparent);
+  /* Растворяется только нижнее поле шапки: строка под фильтрами остаётся на плотном стекле */
+  --header-pad: var(--space-3);
+  --header-fade: linear-gradient(to bottom, #000 calc(100% - var(--header-pad)), transparent);
+  --glass-shadow: var(--glass-highlight), var(--shadow-contact), 0 8px 24px -8px rgba(0, 0, 0, 0.48), 0 24px 56px -16px rgba(0, 0, 0, 0.56);
+  --color-control-border: rgba(255, 255, 255, 0.1);
+  --ai-badge-surface: radial-gradient(circle at 42% 46%, rgba(157, 157, 182, 0.16), rgba(20, 22, 27, 0) 70%);
+  --shadow-inset: inset 0 4px 4px rgba(0, 0, 0, 0.16);
+  --hairline: 0.5px;
+
+  /* Движение подтверждает действие, смысла не несёт (D-56) */
+  --motion-fast: 160ms;
+  --motion-base: 220ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --action-width: 48px;
+  --icon-size: 16px;
+  --icon-size-lg: 22px;
+  --value-gradient: linear-gradient(142.86deg, var(--color-text-strong) 43.37%, transparent 230.47%);
+  --icon-size-sm: 12px;
+  /* Галочка отмеченного checkbox: чёрная на белом; цвет штриха держать равным --color-on-accent — в data URI переменная не работает */
+  --icon-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6.2 5 8.6 9.5 3.6' fill='none' stroke='%230B0B0D' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+
+  /* Сегментный переключатель (C-03, Figma 3204:2881, 3204:2686) */
+  --control-surface: linear-gradient(178deg, rgba(26, 28, 34, 0.5) 37%, rgba(13, 15, 19, 0.5) 80%);
+  --tab-active-surface: var(--control-raised);
+  /* Рамка выбора почти заполняет переключатель: узкий зазор у края, таб не уже макетного */
+  --tab-height: 24px;
+  --tab-min-width: 64px;
+  --segmented-inset: 2px;
+  --tab-height-lg: 40px;
+
+  /* Индикаторы, легенда и sparkline (C-04, C-05): доли цвета тона и размеры из макета */
+  --tone-tint: 12%;
+  --tone-wash: 6%;
+  --tone-rim: 40%;
+  --tone-ring-end: 8%;
+  --tone-glow: 40%;
+  /* J-89: угол карточки сегмента у кольца светится тоном плана — доли тона, а не новые цвета; сильное отклонение плотнее */
+  --plan-glow-shape: ellipse 60% 70% at 100% 0;
+  --plan-glow-rim-shape: ellipse 60% 80% at 100% 0;
+  --plan-glow-soft: 22%;
+  --plan-glow-strong: 40%;
+  --plan-glow-rim-soft: 60%;
+  --plan-glow-rim-strong: 90%;
+  /* J-101: наведённая цветная карточка — тот же тон плотнее и шире, а не белая рамка */
+  --plan-glow-hover: 56%;
+  --plan-glow-rim-hover: 100%;
+  --plan-glow-shape-hover: ellipse 90% 110% at 100% 0;
+  /* В плане — нейтральная стеклянная текстура: мягкий светлый градиент поверх поверхности (белый 5 %, не цвет тона) */
+  --plan-wash-neutral: linear-gradient(160deg, rgba(255, 255, 255, 0.05), transparent 55%);
+  /* Pill тона (J-15, Figma 3204:2734): прозрачный центр, тон к краю; радиусы — доли ширины и высоты, градиент — в indicators.css */
+  --tone-pill-rx: 87%;
+  --tone-pill-ry: 181%;
+  /* Нейтральная ячейка heatmap макета: едва заметный тон по диагонали (Figma 2601:551) */
+  --heat-cell-rim: rgba(49, 49, 61, 0.5);
+  --heat-cell-surface: linear-gradient(251deg, rgba(49, 49, 61, 0.2) 58%, rgba(49, 49, 61, 0));
+  /* Рамка карточки прямой речи тише общей кромки тона: пять карточек подряд не сливаются в красную полосу */
+  --verbatim-rim: 28%;
+  /* J-73: основа плитки «Топ проблем» под заливкой тона; в светлой теме — белая, без серой подложки */
+  --problem-card-surface: var(--color-surface-sunken);
+  --badge-min-width: 104px;
+  --plan-days-ring: 124px;
+  /* J-106: каждая дуга кольца от насыщенного начала к почти прозрачному концу */
+  --plan-days-ring-inner: 90%;
+  --plan-days-below-start: var(--color-negative);
+  --plan-days-below-end: color-mix(in srgb, var(--color-negative) var(--tone-ring-end), transparent);
+  --plan-days-above-start: var(--color-positive);
+  --plan-days-above-end: color-mix(in srgb, var(--color-positive) var(--tone-ring-end), transparent);
+  --plan-days-in-start: var(--color-neutral);
+  --plan-days-in-end: color-mix(in srgb, var(--color-neutral) var(--tone-ring-end), transparent);
+  --plan-days-in-mark: color-mix(in srgb, var(--color-neutral) var(--tone-rim), transparent);
+  /* Сжатый фильтр шапки не уже кода сегмента с крестиком: многоточие получают длинные значения */
+  --filter-min-width: 72px;
+  --filter-dot-size: 2px;
+  --status-dot-size: 10px;
+  --status-dot-size-sm: 6px;
+  --legend-marker-size: 20px;
+  --sparkline-width: 91px;
+  --sparkline-height: 28px;
+  --sparkline-stroke: 1.5px;
+  --sparkline-fill-opacity: 0.24;
+
+  /* Радиусы */
+  --radius-card: 20px;
+  --radius-problem-card: 12px;
+  /* Строки, подложки, поля внутри карточки и окна — один уровень вложенности, один радиус (J-63: было 10) */
+  --radius-control: 8px;
+  /* Окно и подсказка скруглены меньше карточки и больше контролов внутри: радиусы вложенных слоёв убывают */
+  --radius-popover: 16px;
+  --radius-tooltip: 12px;
+  --radius-action: 8px;
+  --radius-tag: 4px;
+  --radius-pill: 999px;
+  /* J-167: портрет роли уходит в прозрачность к левому нижнему углу, как на макете заказчика */
+  --portrait-fade: linear-gradient(to top right, transparent 8%, #000 62%);
+  --scrollbar-size: 6px;
+
+  /* График VOC — замеры Figma node 3204:2865 */
+  --chart-plot-height: 222px;
+  --chart-tooltip-max: 220px;
+  /* J-46: выбранная точка крупнее обычной (радиус 3 в dynamics.js) — выбор виден без поиска */
+  --chart-point-selected-radius: 5px;
+  /* Полоса выбранного дня ярче выбранной строки: на графике её ищут издалека, под линией и столбиками */
+  --chart-selected-strength: 8%;
+  --chart-selected-fill: color-mix(in srgb, var(--color-text-strong) var(--chart-selected-strength), transparent);
+  --chart-fill-opacity: 0.4;
+  --chart-volume-opacity: 0.32;
+  --chart-voc-overlay-opacity: 0.5;
+  --chart-damage-opacity: 0.8;
+  --chart-previous-opacity: 0.72;
+  --chart-grid-minor-opacity: 0.4;
+  /* Сетка — сплошная тонкая линия: пунктир остаётся за перекрестьем, прошлым периодом и пропуском (J-08) */
+  --chart-grid: rgba(255, 255, 255, 0.055);
+  /* Терминальный вид графика (R-50): заливка под линией гаснет к оси, цветная линия светится своим тоном */
+  --chart-depth-opacity: 0.12;
+  --chart-glow-radius: 4px;
+  /* Свечение линии слабее свечения индикаторов: шире и тише, линия не расплывается */
+  --chart-glow-strength: 28%;
+  --chart-pill-date: var(--color-text-secondary);
+  /*
+    J-71, J-72: линия VOC в коридоре плана и её точки. Тон линии плавно переходит в зелёный и красный (J-15):
+    средне-серый в таком переходе даёт мутный оливковый, поэтому в светлой теме линия светло-серая —
+    в смеси с тоном получается мятный и розовый
+  */
+  --chart-line-neutral: var(--color-neutral);
+  --heatmap-row-title-width: 160px;
+  /* J-68: стык подписей с плитками и правый край — затуханием; пределы ширины колонки — в antidrivers.js */
+  --heatmap-fade: 24px;
+  --heatmap-cell-width: 80px;
+  /* J-71: пустая плитка heatmap (интервал без оценок) */
+  --heat-cell-empty: var(--color-surface-sunken);
+  /* Липкие подписи строк — тон левой части градиента карточки (J-15): плоский --color-surface читался бы полосой */
+  --heatmap-sticky-share: 60%;
+  --heatmap-sticky-fill: color-mix(in srgb, var(--color-surface) var(--heatmap-sticky-share), var(--color-bg));
+  --verbatim-card-height: 141px;
+  /* J-128: список групп слева от таблицы топа проблем */
+  /* J-128: закреплённая колонка названия в плоской таблице — уже: рядом список групп и лента */
+  --problem-name-flat: 240px;
+  /* J-130: поле поиска по проблематике над таблицей топа */
+  --problem-search-width: 320px;
+  /* J-145: колонки числа и доли в распределении оценок: «10 564» и «(93,3 %)» цифрами одной ширины */
+  --distribution-count-width: 6ch;
+  --distribution-percent-width: 8ch;
+  /* J-120: красный сектора частой версии — цвет столбиков урона динамики (мини-график снят в J-128) */
+  --mini-bars-fill: color-mix(in srgb, var(--color-negative) calc(var(--chart-damage-opacity) * 100%), transparent);
+  --mini-bars-fill-positive: color-mix(in srgb, var(--color-positive) calc(var(--chart-damage-opacity) * 100%), transparent);
+  /* J-120: доля сектором — размер строчного значка, остаток круга бледным нейтральным */
+  --share-pie-size: 14px;
+  --share-pie-track: color-mix(in srgb, var(--color-neutral) var(--tone-tint), transparent);
+
+  /* Недоступный контрол — весь элемент тише, без своих цветов текста и фона (ui-system §4) */
+  --disabled-opacity: 0.3;
+
+  /* Прочее */
+  --focus-ring: 2px;
+  --divider-width: 1px;
+  --label-halo: 3px;
+  /* Ореол подписи экстремума на графике — цвет поверхности под графиком (J-69: в светлой теме карточка белая, а фон страницы серый) */
+  --label-halo-color: var(--color-bg);
+
+  /* J-69: тема страницы для нативных контролов (календарь даты, полосы прокрутки) и яркость фона под стеклом */
+  --color-scheme: dark;
+  --glass-backdrop-brightness: 55%;
+}
+
+/*
+  J-69: светлая тема — второй режим тех же семантических токенов, как режимы переменных
+  в Figma: блоки и компоненты не знают о теме, меняются только значения цветов, теней и
+  подложек. Размеры, шрифты и доли тона общие. Контраст текста на #FFFFFF и #F3F4F6
+  проверен по D-28 — и на подложках, где текст стоит на деле: выбранная карточка
+  (#ECEEF1), тег (12 % тона), край бейджа (18 % тона). Текст тона и второстепенный —
+  от 4,5 на любой из них; проверяет test/theme.test.js
+*/
+:root[data-theme='light'] {
+  --color-scheme: light;
+
+  --color-bg: #F3F4F6;
+  --color-surface: #FFFFFF;
+  --color-surface-sunken: #ECEEF1;
+  --color-border: #E3E5E9;
+  --color-border-strong: #CBCED5;
+
+  --color-text-strong: #16171A;
+  --color-text-secondary: #454850;
+  --color-text-tertiary: rgba(22, 23, 26, 0.63);
+
+  /*
+    J-70: чистые тона референса автора 03.11 — заливки, свечение, плитки heatmap, линии графика;
+    мелкий текст — те же оттенки без серой примеси, темнее: #FF2468 и #00CC88 на белом дают 3,7 и 2,1
+  */
+  --color-positive: #00CC88;
+  --color-positive-fill: #00CC88;
+  --color-negative: #FF2468;
+  --color-positive-ink: #00704B;
+  --color-negative-ink: #C80045;
+  --color-neutral: #696C74;
+  --color-orange: #A64808;
+  --color-yellow: #8A6500;
+  --color-purple: #6F45D6;
+  /* J-69, J-71: в светлой теме мятный и жёлтый плотнее, текст мятного и оранжевого — темнее; аварию сдвигает к янтарному */
+  --calendar-mint: #2FBF71;
+  --calendar-mint-ink: #00704B;
+  --calendar-yellow: #F2A900;
+  --calendar-orange-ink: #B84A00;
+  --calendar-accident-amber: #E07800;
+
+  /* J-122, J-125: в светлой теме выключенная ручка — белая; цвета включённой — общие токены от цвета текста темы */
+  --toggle-knob-off: linear-gradient(180deg, #FFFFFF, #E9EBEF);
+
+  /* Заливка выбранного — тёмная (текст основного цвета), текст и галочка на ней — белые */
+  --color-on-accent: #FFFFFF;
+  --icon-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6.2 5 8.6 9.5 3.6' fill='none' stroke='%23FFFFFF' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+
+  --color-heat-neutral: #EEF0F3;
+  --color-plan-band: rgba(22, 23, 26, 0.06);
+
+  /* Карточка — белая, к краю чуть серее: та же форма градиента, что в тёмной теме */
+  --color-card-border: rgba(22, 23, 26, 0.08);
+  --card-fill: radial-gradient(var(--card-gradient-shape), rgba(255, 255, 255, 0.92), rgba(250, 251, 252, 0.88));
+  --card-surface-solid: radial-gradient(var(--card-gradient-shape), #FFFFFF, #FAFBFC);
+  --card-edge: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+
+  --shadow-contact: 0 1px 2px rgba(17, 24, 39, 0.06);
+  --card-shadow: var(--shadow-contact), 0 16px 40px -24px rgba(17, 24, 39, 0.18);
+  --card-shadow-hover: var(--shadow-contact), 0 20px 44px -22px rgba(17, 24, 39, 0.26);
+  --card-hover-edge: rgba(22, 23, 26, 0.22);
+  --card-hover-wash: linear-gradient(rgba(22, 23, 26, 0.025), rgba(22, 23, 26, 0.025));
+
+  --page-ambient:
+    radial-gradient(960px 680px at 10% 16%, rgba(255, 255, 255, 0.9), transparent 70%),
+    radial-gradient(880px 760px at 94% 30%, rgba(111, 69, 214, 0.06), transparent 70%),
+    radial-gradient(1040px 800px at 32% 60%, rgba(209, 29, 82, 0.035), transparent 70%),
+    radial-gradient(960px 720px at 84% 88%, rgba(11, 127, 82, 0.04), transparent 70%);
+
+  /* Стекло — светлое: фон под окном светлеет, а не темнеет */
+  --glass-tint: #FFFFFF;
+  --glass-opacity: 78%;
+  --glass-backdrop-brightness: 104%;
+  --glass-edge: rgba(22, 23, 26, 0.1);
+  --glass-control: rgba(22, 23, 26, 0.04);
+  --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.2) 32%, rgba(255, 255, 255, 0) 64%);
+  --glass-shadow: var(--glass-highlight), var(--shadow-contact), 0 8px 24px -8px rgba(17, 24, 39, 0.14), 0 24px 56px -16px rgba(17, 24, 39, 0.18);
+
+  --control-raised: linear-gradient(149deg, rgba(255, 255, 255, 0.95), rgba(243, 244, 246, 0.95));
+  --control-raised-hover: linear-gradient(149deg, rgba(22, 23, 26, 0.06), rgba(22, 23, 26, 0.035));
+  --color-control-border: rgba(22, 23, 26, 0.12);
+  --ai-badge-surface: radial-gradient(circle at 42% 46%, rgba(111, 69, 214, 0.12), rgba(255, 255, 255, 0) 70%);
+  --shadow-inset: inset 0 1px 2px rgba(17, 24, 39, 0.08);
+  --control-surface: linear-gradient(178deg, rgba(236, 238, 241, 0.9) 37%, rgba(229, 231, 235, 0.9) 80%);
+
+  --plan-wash-neutral: linear-gradient(160deg, rgba(22, 23, 26, 0.03), transparent 55%);
+  /* J-71: нейтральные и пустые плитки — почти белые: серая заливка на белой карточке грязнит */
+  --heat-cell-rim: rgba(22, 23, 26, 0.1);
+  --heat-cell-surface: linear-gradient(251deg, #FFFFFF 58%, #F8F9FA);
+  --heat-cell-empty: #FAFBFC;
+  --problem-card-surface: #FFFFFF;
+  --label-halo-color: var(--color-surface);
+  /* Край бейджа тона тише: текст тона на нём проходит AA (V-40) */
+  --tone-glow: 18%;
+  --chart-grid: rgba(22, 23, 26, 0.08);
+  --chart-line-neutral: #A9ADB6;
+}

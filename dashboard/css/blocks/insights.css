@@ -1,0 +1,305 @@
+/* ── Календарь событий (P0 №6, P1 №10–11, D-16, V-17, V-30, R-43) ─── */
+
+.card--insights .card__body,
+.insights {
+  flex: 1 1 auto;
+}
+
+.insights {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-height: 0;
+}
+
+/*
+  J-50: чипы типов над лентой — переключатели, а не вкладки: без выбора видно всё,
+  выбранный чип — яркая рамка и подложка, как выбранная строка. Узкий рейл переносит чипы
+*/
+.insight-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.insight-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border: var(--divider-width) solid var(--color-control-border);
+  border-radius: var(--radius-pill);
+  background: var(--control-raised);
+  box-shadow: var(--control-raised-edge);
+  color: var(--color-text-secondary);
+  font: var(--type-caption);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.insight-kind__count {
+  color: var(--color-text-tertiary);
+}
+
+/* J-143: значок «i» у заголовка — окно «Типы событий» с метками цветом и правилами */
+.insight-help {
+  position: relative;
+  display: inline-flex;
+  vertical-align: middle;
+  margin-inline-start: var(--space-2);
+}
+
+.insight-help__trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-1);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+}
+
+.insight-help__trigger:hover,
+.insight-help__trigger[aria-expanded='true'] {
+  background: var(--control-raised-hover);
+  color: var(--color-text-strong);
+}
+
+.insight-help__trigger:focus-visible {
+  outline: var(--focus-ring) solid var(--color-text-strong);
+  outline-offset: 2px;
+}
+
+.insight-help__icon {
+  width: var(--icon-size);
+  height: var(--icon-size);
+}
+
+/* Календарь — правая колонка: окно раскрывается влево от значка, чтобы не уйти за край страницы */
+.control-popover.insight-help__panel {
+  inset-inline-start: auto;
+  inset-inline-end: 0;
+  width: calc(var(--space-10) * 9);
+  font: var(--type-caption);
+  text-align: start;
+}
+
+.insight-help__list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.insight-help__term {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-block-start: var(--space-2);
+}
+
+.insight-help__term:first-child {
+  margin-block-start: 0;
+}
+
+.insight-help__text {
+  margin: 0;
+  color: var(--color-text-secondary);
+  text-wrap: pretty;
+}
+
+.insight-kind:hover,
+.insight-kind:focus-visible {
+  background: var(--control-raised-hover);
+  color: var(--color-text-strong);
+}
+
+/* J-98: выбранный чип — как выбранный таб: подложка, рамка и акцентный текст, без белой заливки (была J-58) */
+.insight-kind[aria-pressed='true'],
+.insight-kind[aria-pressed='true']:hover,
+.insight-kind[aria-pressed='true']:focus-visible {
+  border-color: var(--color-border-strong);
+  background: var(--tab-active-surface);
+  color: var(--color-text-strong);
+  font: var(--type-caption-strong);
+}
+
+.insight-kind[aria-pressed='true'] .insight-kind__count {
+  color: var(--color-text-secondary);
+  font: var(--type-caption);
+}
+
+/* Высоту строки задаёт левая колонка (D-55): список, не влезающий в неё, прокручивается сам */
+.insight-list {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  /* J-131: событие — двухстрочный блок; между блоками заметно больше, чем между строками внутри (36 против 4) */
+  gap: var(--space-5);
+  min-height: 0;
+  overflow-y: auto;
+  /* Место под полосу есть всегда: правый край строк не прыгает, когда список начинает прокручиваться */
+  scrollbar-gutter: stable;
+}
+
+/* J-20: дельта к прошлому дню удалена; ширина отдана дате, типу и разрезу. */
+.insight-row {
+  display: grid;
+  grid-template-areas:
+    'dot headline'
+    '. detail';
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-1) var(--space-2);
+  /* Список прокручивается, а не сжимает строки до min-height (D-55) */
+  flex-shrink: 0;
+  width: 100%;
+  min-height: var(--space-10);
+  padding: var(--space-2);
+  border: var(--divider-width) solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.insight-row:hover,
+.insight-row:focus-visible {
+  border-color: var(--color-border-strong);
+  background: var(--row-hover);
+  outline: none;
+}
+
+/* J-60: выбранным остаётся только событие, переданное в детализацию; дни выбранной даты не обводятся, строку подсвечивает наведение */
+.insight-row[aria-pressed='true'] {
+  border-color: var(--color-text-tertiary);
+  background: var(--row-selected);
+}
+
+/* Точка — по центру первой строки, даже когда тег ушёл под дату */
+.insight-row__marker {
+  display: flex;
+  grid-area: dot;
+  align-items: center;
+  height: 1lh;
+  font: var(--type-caption);
+}
+
+.insight-row__headline,
+.insight-row__detail {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  min-width: 0;
+}
+
+.insight-row__headline {
+  grid-area: headline;
+  flex-wrap: wrap;
+}
+
+.insight-row__type {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.insight-row__date {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--color-text-secondary);
+  font: var(--type-caption);
+}
+
+.insight-row__value {
+  flex: 0 0 auto;
+  font: var(--type-caption-strong);
+}
+
+.insight-row__detail {
+  grid-area: detail;
+  flex-wrap: wrap;
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+}
+
+.insight-row__slice {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.insight-row__value {
+  color: var(--color-text-secondary);
+}
+
+/* Пустой список — компактно под переключателем, а не посередине вытянутой карточки (B-12) */
+.insight-unavailable {
+  display: grid;
+  gap: var(--space-1);
+  padding-block: var(--space-4);
+  text-align: center;
+}
+
+/* Вкладки и поиск занимают собственные строки, включая узкий рейл. */
+.insights__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.insights__results {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.insight-search-field {
+  display: flex;
+  flex: 1 1 calc(var(--space-10) * 3);
+  min-width: 0;
+}
+
+.insight-search {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: var(--tab-height);
+  padding: var(--space-1) var(--space-3);
+  border: var(--hairline) solid var(--color-control-border);
+  border-radius: var(--radius-pill);
+  background: var(--control-surface);
+  color: var(--color-text-strong);
+  font: var(--type-caption);
+}
+
+.insight-search::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+.insight-search:hover,
+.insight-search:focus-visible {
+  border-color: var(--color-border-strong);
+}
+
+.insight-search__reset {
+  justify-self: center;
+  margin-block-start: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border: var(--divider-width) solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--control-raised);
+  box-shadow: var(--control-raised-edge);
+  color: var(--color-text-secondary);
+  font: var(--type-caption);
+  cursor: pointer;
+}
+
+.insight-search__reset:hover {
+  border-color: var(--color-text-strong);
+  background: var(--control-raised-hover);
+}

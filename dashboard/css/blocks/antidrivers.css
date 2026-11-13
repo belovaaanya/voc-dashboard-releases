@@ -1,0 +1,390 @@
+/* ── Антидрайверы (P0 №5, D-10, D-27, V-18, V-19, V-29) ─────────── */
+
+.antidriver-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.antidriver-heatmap {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.antidriver-unavailable {
+  display: grid;
+  flex: 1 1 auto;
+  align-content: center;
+  text-align: center;
+}
+
+/* Рамка карты: внутри — прокрутка и ручка ширины колонки подписей (J-68) */
+.heatmap-frame {
+  position: relative;
+  min-width: 0;
+}
+
+/* Полоса прокрутки — общая scroll-area из каркаса (B-13) */
+.heatmap-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  padding-block-end: var(--space-2);
+}
+
+/*
+  J-68: справа есть ещё колонки — плитки у края затухают, а не обрываются. Наложение
+  тоном липкой колонки, как и стык слева; полоса прокрутки под ним не гаснет. Маска на
+  области прокрутки с липкой колонкой в Chrome гасила всю карту, поэтому — наложение
+*/
+.heatmap-frame:has(> .heatmap-scroll[data-more-end])::after {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  inset-block: 0 calc(var(--scrollbar-size) + var(--space-2));
+  inset-inline-end: 0;
+  width: var(--heatmap-fade);
+  background: linear-gradient(to right, transparent, var(--heatmap-sticky-fill));
+  pointer-events: none;
+}
+
+/*
+  J-68: без border-spacing — промежутки между плитками дают поля ячеек. Иначе в
+  щели между строками липкой колонки просвечивали плитки, уехавшие под подписи
+*/
+.heatmap {
+  width: max-content;
+  border-spacing: 0;
+}
+
+.heatmap th,
+.heatmap td {
+  padding: 1px;
+}
+
+/* Липкая колонка подписей: плотная до своего правого поля, дальше — затухание поверх уехавших под неё плиток.
+   Селектор с th — тяжелее общего поля ячеек `.heatmap th` */
+.heatmap th.heatmap__row-title {
+  position: sticky;
+  z-index: 1;
+  inset-inline-start: 0;
+  width: var(--heatmap-row-title-width);
+  min-width: var(--heatmap-row-title-width);
+  max-width: var(--heatmap-row-title-width);
+  padding-inline-end: var(--heatmap-fade);
+  background: linear-gradient(to right, var(--heatmap-sticky-fill) calc(100% - var(--heatmap-fade)), transparent);
+  color: var(--color-text-secondary);
+  font: var(--type-caption);
+  text-align: start;
+}
+
+/* В режиме высокой контрастности градиента нет — подписи на плотном фоне системы, плитки под ними не просвечивают */
+@media (forced-colors: active) {
+  .heatmap th.heatmap__row-title {
+    background: Canvas;
+  }
+}
+
+/* Подпись строки — в одну строку с многоточием, полная — в подсказке (R-47) */
+.heatmap__row-label {
+  display: block;
+  max-width: calc(var(--heatmap-row-title-width) - var(--heatmap-fade));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* J-68: ручка ширины колонки подписей — на всю высоту карты у правого края колонки */
+.heatmap-resizer {
+  position: absolute;
+  z-index: 2;
+  inset-block: 0 var(--space-2);
+  inset-inline-start: calc(var(--heatmap-row-title-width) - var(--heatmap-fade) / 2 - var(--space-2));
+  width: var(--space-4);
+  border-radius: var(--radius-pill);
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.heatmap-resizer::after {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: calc(50% - var(--hairline));
+  width: calc(2 * var(--hairline));
+  border-radius: var(--radius-pill);
+  background: var(--color-border-strong);
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--ease-standard);
+}
+
+.heatmap-resizer:hover::after,
+.heatmap-resizer:focus-visible::after,
+.heatmap-resizer[data-dragging]::after {
+  opacity: 1;
+}
+
+.heatmap__date {
+  min-width: var(--heatmap-cell-width);
+  color: var(--color-text-tertiary);
+  font: var(--type-axis);
+  text-align: center;
+}
+
+.heatmap-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin-block-end: var(--space-2);
+}
+
+/* J-74: пояснение уходит под пункты легенды своей строкой — между ними 4, как у связанной пары (ui-system §2): с нулём строки слипались */
+.heatmap-legend {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  min-width: 0;
+}
+
+/* J-144: пояснение в одну строку с многоточием — высота легенды одна во всех режимах, страница не прыгает */
+.heatmap-legend__note {
+  flex: 1 1 0;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.heatmap-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-block-start: var(--space-2);
+}
+
+.heatmap-pagination__status {
+  margin: 0;
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+}
+
+.heatmap-more,
+.heatmap-collapse {
+  padding: var(--space-2) var(--space-4);
+  border: var(--hairline) solid var(--color-control-border);
+  border-radius: var(--radius-pill);
+  background: var(--control-raised);
+  box-shadow: var(--control-raised-edge);
+  color: var(--color-text-secondary);
+  font: var(--type-caption-strong);
+  cursor: pointer;
+}
+
+.heatmap-more:hover,
+.heatmap-more:focus-visible,
+.heatmap-collapse:hover,
+.heatmap-collapse:focus-visible {
+  border-color: var(--color-border-strong);
+  background: var(--control-raised-hover);
+  color: var(--color-text-strong);
+}
+
+/* Ячейка — pill макета (J-15, Figma 3204:3046); сила подсветки J-13 — радиус градиента: слабая окрашивает лишь край */
+.heatmap-cell {
+  display: inline-grid;
+  vertical-align: middle;
+  width: var(--heatmap-cell-width);
+  min-height: var(--space-8);
+  place-content: center;
+  justify-items: center;
+  border: var(--hairline) solid var(--cell-rim, var(--heat-cell-rim));
+  border-radius: var(--radius-pill);
+  background: var(--heat-cell-surface);
+  color: var(--color-text-strong);
+  font: var(--type-caption);
+  transition: border-color var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard);
+}
+
+.heatmap-cell--bad,
+.heatmap-cell--good {
+  /* Сила 25 % → радиус слабой ячейки макета, 100 % → самой сильной (78 % × 105 % pill) */
+  --pill-rx: calc(267% - 1.89 * var(--heat-strength, 0%));
+  --pill-ry: calc(405% - 3 * var(--heat-strength, 0%));
+  --cell-rim: color-mix(in srgb, var(--tone) var(--tone-rim), transparent);
+  background: var(--tone-pill);
+}
+
+.heatmap-cell--bad {
+  --tone: var(--color-negative);
+}
+
+.heatmap-cell--good {
+  --tone: var(--color-positive);
+}
+
+/* «В плане» использует базовую поверхность и рамку «Без подсветки». */
+
+/* J-13: ниже Q75 знак остаётся в рамке, цветной заливки нет. */
+.heatmap-cell--muted {
+  background: var(--heat-cell-surface);
+}
+
+.heatmap-cell--empty {
+  background: var(--heat-cell-empty);
+  color: var(--color-text-tertiary);
+}
+
+/* Наведение обводит ячейку цветом её тона (R-17): красная — красным, зелёная — зелёным, остальные — белым */
+.heatmap-cell:hover {
+  --cell-ring: var(--color-text-strong);
+  border-color: var(--cell-ring);
+  box-shadow: 0 0 0 var(--hairline) var(--cell-ring), 0 0 var(--space-3) calc(-1 * var(--space-1)) var(--cell-ring);
+}
+
+.heatmap-cell--bad:hover {
+  --cell-ring: var(--color-negative);
+}
+
+.heatmap-cell--good:hover {
+  --cell-ring: var(--color-positive);
+}
+
+/* Кольцо фокуса — общее каркаса; на красной и зелёной ячейке — цвета тона, иначе зелёное кольцо на зелёной ячейке не видно */
+.heatmap-cell--bad:focus-visible {
+  outline-color: var(--color-negative-ink);
+}
+
+/* J-69: цвет текста тона — чистый зелёный светлой темы кольцом на белом не виден; в тёмной ink равен тону */
+.heatmap-cell--good:focus-visible {
+  outline-color: var(--color-positive-ink);
+}
+
+/* Подсказка ячейки: VOC интервала, оценки и отклонение режима подсветки (R-18) */
+.heatmap-tooltip {
+  position: absolute;
+  z-index: 2;
+  inset-inline-start: var(--tooltip-x);
+  inset-block-start: calc(var(--tooltip-y) - var(--space-2));
+  display: grid;
+  gap: var(--space-1);
+  width: max-content;
+  max-width: var(--chart-tooltip-max);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-tooltip);
+  color: var(--color-text-secondary);
+  font: var(--type-caption);
+  pointer-events: none;
+  /* Свойство translate, а не transform: проявление карточки анимирует transform и сдвигало бы подсказку */
+  translate: -50% -100%;
+}
+
+.heatmap-tooltip[hidden] {
+  display: none;
+}
+
+.heatmap-tooltip__title {
+  margin-block-end: var(--space-1);
+  color: var(--color-text-strong);
+  font: var(--type-caption-strong);
+}
+
+.heatmap-pagination__actions { display: flex; gap: var(--space-2); }
+
+/* ── J-128: выбор антидрайвера — строка или ячейка сужает «Топ проблем» и детализацию ── */
+
+.heatmap-cell {
+  padding: 0;
+  cursor: pointer;
+}
+
+/* Выбранная ячейка — рамкой цвета текста и жирным числом, а не только цветом (D-26) */
+.heatmap-cell[aria-pressed='true'] {
+  --cell-ring: var(--color-text-strong);
+  border-color: var(--cell-ring);
+  box-shadow: 0 0 0 var(--focus-ring) var(--cell-ring);
+  font: var(--type-caption-strong);
+}
+
+.heatmap__row-pick {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: var(--space-8);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.heatmap__row-pick .heatmap__row-label {
+  min-width: 0;
+}
+
+.heatmap__row-pick:hover {
+  color: var(--color-text-strong);
+}
+
+.heatmap__row-pick:focus-visible {
+  outline: var(--focus-ring) solid var(--color-text-strong);
+  outline-offset: -2px;
+}
+
+/* Выбранная строка — подложкой и жирной подписью */
+.heatmap__row-pick[aria-pressed='true'] {
+  background: var(--row-selected);
+  color: var(--color-text-strong);
+  font: var(--type-caption-strong);
+}
+
+.heatmap tr.is-picked th.heatmap__row-title {
+  color: var(--color-text-strong);
+}
+
+/* Платформа версии — тихой меткой перед номером: одинаковые номера iOS и Android различимы */
+.heatmap__os {
+  flex: none;
+  padding: 0 var(--space-1);
+  border: var(--hairline) solid var(--color-card-border);
+  border-radius: var(--radius-tag);
+  color: var(--color-text-tertiary);
+  font: var(--type-axis);
+}
+
+
+/* J-149: секция платформы у разреза «Версии» — подзаголовок строкой во всю ширину карты, кнопки порции — под строками */
+.heatmap .heatmap__section-title {
+  position: sticky;
+  inset-inline-start: 0;
+  padding: var(--space-4) var(--space-2) var(--space-2);
+  color: var(--color-text-strong);
+  font: var(--type-caption-strong);
+  text-align: start;
+}
+
+.heatmap__section:first-child .heatmap__section-title {
+  padding-block-start: var(--space-1);
+}
+
+.heatmap__section-count {
+  margin-inline-start: var(--space-2);
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+}
+
+.heatmap__section-actions td {
+  padding-block: var(--space-2);
+}

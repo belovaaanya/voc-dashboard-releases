@@ -1,0 +1,455 @@
+/* ── J-151: VOC-дайджест — месяц канала; части — карточки метрик, sparkline и пилюли тепловой карты дашборда ── */
+
+.digest {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-section);
+}
+
+/* J-154: стабильность и детализация — рядом в одну строку: треть и две трети, карточки одной высоты */
+.digest__pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: var(--gap-section);
+  align-items: stretch;
+}
+
+/* J-154: три сегмента — в ряд, одной высоты, как карточки сегментов на главной */
+.digest__segments {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--gap-section);
+  align-items: stretch;
+}
+
+@media (max-width: 1100px) {
+  .digest__pair,
+  .digest__segments {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Итог месяца: VOC с поправкой, линия полугода, оценки */
+.digest-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: end;
+}
+
+@media (max-width: 900px) {
+  .digest-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* J-176: число оценок и столбики месяцев рядом; столбики — по высоте числа */
+.digest-summary__count {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+.digest-bars--count {
+  flex: none;
+}
+
+.digest-bars--count .digest-bars__item {
+  width: calc(var(--space-10) * 1.25);
+}
+
+.digest-trend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.digest-caption {
+  margin: 0;
+  color: var(--color-text-tertiary);
+  font: var(--type-axis);
+}
+
+/* Сегмент: слева числа, справа вывод и линия полугода */
+.digest-segment {
+  display: grid;
+  /* J-159: числа — строкой сверху (VOC слева, оценки справа), линия недель — на всю ширину карточки под ними */
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.digest-segment__numbers.metric {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: var(--space-1) var(--space-4);
+}
+
+/* J-156: дельта VOC — справа сверху от числа, объём и его дельта — одной строкой */
+.digest-segment__numbers .metric__figure {
+  flex-wrap: nowrap;
+  align-items: flex-start;
+}
+
+.digest-segment__numbers .metric__caption {
+  flex-wrap: nowrap;
+}
+
+.digest-segment__story {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.digest-segment__note,
+.digest-headline {
+  margin: 0;
+  color: var(--color-text-strong);
+  font: var(--type-text);
+  text-wrap: pretty;
+}
+
+/* Антидрайверы ДКО: группа — заголовком с долей, категории — строками с долей по месяцам */
+.digest-stability {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* J-155: детализация плотнее — заголовок темы, доля и таблица проблем идут одной группой */
+.digest-topic {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.digest-topic .digest-table th,
+.digest-topic .digest-table td {
+  padding-block: calc(var(--space-1) / 2);
+}
+
+/* J-154: группы — в три колонки на всю ширину страницы: таблица короче, группы читаются рядом */
+.digest-dko {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-6) var(--space-8);
+  align-content: start;
+}
+
+@media (max-width: 1100px) {
+  .digest-dko {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .digest-dko {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Стабильность в карточке одной высоты с детализацией: столбики забирают остаток высоты, подпись — у нижнего края */
+.card--digest-stability > .card__body,
+.digest-stability {
+  flex: 1 1 auto;
+}
+
+.digest-stability .digest-bars {
+  flex: 1 1 auto;
+}
+
+.digest-stability .digest-bars__bar {
+  height: auto;
+  flex: 0 1 calc(var(--space-10) * 4 * var(--bar, 0));
+}
+
+.digest-stability .digest-bars__item {
+  justify-content: flex-end;
+  align-self: stretch;
+}
+
+.digest-dko__title {
+  margin: 0 0 var(--space-1);
+  color: var(--color-text-strong);
+  font: var(--type-text);
+}
+
+.digest-table {
+  width: 100%;
+  /* J-153: ячейки месяцев — через 1 px */
+  border-collapse: separate;
+  border-spacing: 1px;
+}
+
+.digest-table th,
+.digest-table td {
+  padding: var(--space-1) 0;
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+
+.digest-table td {
+  color: var(--color-text-strong);
+}
+
+.digest-table .digest-table__name {
+  color: var(--color-text-strong);
+  text-align: start;
+}
+
+.digest-table__total th,
+.digest-table__total td {
+  border-top: var(--hairline) solid var(--color-card-border);
+  font: var(--type-caption-strong);
+}
+
+/* Пилюля тепловой карты в узкой колонке месяца: ширина — по колонке таблицы, шесть месяцев помещаются в правую колонку */
+.digest-pill.heatmap-cell {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--space-6);
+  padding-inline: var(--space-1);
+  white-space: nowrap;
+}
+
+.digest-table {
+  table-layout: fixed;
+}
+
+/* J-158: в антидрайверах ячейка — по высоте двух строк названия категории, пилюли не теряются рядом с подписью */
+.digest-dko .digest-pill.heatmap-cell {
+  min-height: var(--space-10);
+}
+
+.digest-table .digest-table__name {
+  width: 38%;
+}
+
+/* J-152: серые столбики месяцев (стабильность) — как на слайде: столбик гаснет книзу, значение и месяц под ним */
+.digest-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+}
+
+.digest-bars__item {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.digest-bars__bar {
+  display: block;
+  width: var(--space-2);
+  /* --bar — доля от самого большого урона, 0…1 */
+  height: calc(var(--space-10) * 1.5 * var(--bar, 0));
+  min-height: var(--space-1);
+  border-radius: var(--radius-pill);
+  background: linear-gradient(var(--color-text-secondary), transparent);
+}
+
+.digest-bars__value {
+  color: var(--color-text-secondary);
+  font: var(--type-caption);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.digest-bars__month {
+  color: var(--color-text-tertiary);
+  font: var(--type-axis);
+}
+
+/* Выбор месяца и темы — нативный список в капсуле контрола */
+.digest-select__input {
+  max-width: calc(var(--space-10) * 6);
+  height: var(--tab-height);
+  padding: 0 var(--space-3);
+  border: var(--hairline) solid var(--color-control-border);
+  border-radius: var(--radius-pill);
+  background: var(--control-surface);
+  color: var(--color-text-strong);
+  font: var(--type-caption);
+  cursor: pointer;
+}
+
+.digest-stub {
+  padding: var(--space-6) 0;
+}
+
+/*
+  J-161, J-162: VOC ролей — карточка-строка на роль: портрет → VOC → оценки → линия по неделям → топ проблем.
+  Уже 1100 px линия и проблемы уходят второй строкой, уже 700 px — всё колонкой
+*/
+.card--role[hidden] {
+  display: none;
+}
+
+.roles-caption {
+  margin: 0;
+}
+
+.role-card {
+  display: grid;
+  /* J-169: портрет ушёл в шапку — VOC слева, линия следом, топ проблем шире */
+  grid-template-columns: auto minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: var(--space-8);
+  /* J-163: колонки — на высоту плитки, линия недель растягивается по ней */
+  align-items: stretch;
+}
+
+.digest-trend--fill {
+  flex: 1 1 auto;
+}
+
+.role-card__column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.role-card__caption {
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+}
+
+.role-card .metric__figure {
+  flex-wrap: nowrap;
+  align-items: flex-start;
+}
+
+/* J-165: VOC роли — 72 px */
+.role-card .metric__value {
+  font: var(--type-value-lg);
+  letter-spacing: var(--tracking-value-lg);
+  white-space: nowrap;
+}
+
+/*
+  J-175: топ проблем отделён от линии серой линией посередине зазора — как календарь событий и лента
+  отзывов на странице VOC ЦК (цвет и толщина — те же). Линия декоративная: псевдоэлемент без содержимого
+*/
+.role-card__column--problems {
+  position: relative;
+}
+
+.role-card__column--problems::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: calc(-1 * var(--space-8) / 2);
+  width: var(--hairline);
+  background: var(--color-card-border);
+}
+
+/* J-172: VOC и оценки — одной группой по центру плитки по высоте */
+.role-card__column--center {
+  justify-content: center;
+}
+
+/* Портрет роли — круг; до портретов от заказчика — тихая заглушка с иконкой */
+.role-card__avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: var(--space-10);
+  aspect-ratio: 1;
+  border-radius: var(--radius-pill);
+  background: var(--chart-selected-fill);
+  color: var(--color-text-tertiary);
+}
+
+.role-card__avatar {
+  overflow: hidden;
+}
+
+/* J-167: под портретом нет подложки — угол уходит в фон карточки */
+.role-card__avatar--portrait {
+  background: none;
+}
+
+.role-card__portrait {
+  -webkit-mask-image: var(--portrait-fade);
+  mask-image: var(--portrait-fade);
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.role-card__avatar-icon {
+  width: var(--space-5);
+  height: var(--space-5);
+}
+
+.role-card__problems {
+  display: flex;
+  flex-direction: column;
+  /* J-164, J-173: проблемы в несколько строк не слипаются — между ними шире, чем между строками одной */
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.role-card__problem {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: baseline;
+  color: var(--color-text-strong);
+  font: var(--type-caption);
+}
+
+.role-card__problem-name {
+  overflow-wrap: anywhere;
+}
+
+.role-card__problem-count {
+  display: inline-flex;
+  gap: var(--space-2);
+  align-items: baseline;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.role-card__none {
+  margin: 0;
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+}
+
+@media (max-width: 1100px) {
+  .role-card {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .role-card > :nth-child(3) {
+    grid-column: 1 / -1;
+  }
+
+  /* Топ проблем — второй строкой: линия-разделитель уже не между колонками */
+  .role-card__column--problems::before {
+    content: none;
+  }
+}
+
+@media (max-width: 700px) {
+  .role-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

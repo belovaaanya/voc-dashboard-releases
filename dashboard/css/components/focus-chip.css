@@ -1,0 +1,34 @@
+/* ── Выбранная дата в шапке блока (D-31, R-41) ─────────────────────── */
+
+/* J-46: выбор заметен — рамка ярче, значение крупнее подписи, сброс иконкой */
+.focus-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border: var(--divider-width) solid var(--color-text-tertiary);
+  border-radius: var(--radius-pill);
+  background: var(--control-raised);
+  box-shadow: var(--control-raised-edge);
+  color: var(--color-text-secondary);
+  font: var(--type-caption);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.focus-chip__value {
+  color: var(--color-text-strong);
+  font: var(--type-text-strong);
+}
+
+.focus-chip__icon {
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
+  margin-inline-start: var(--space-1);
+}
+
+.focus-chip:hover,
+.focus-chip:focus-visible {
+  background: var(--control-raised-hover);
+  color: var(--color-text-strong);
+}

@@ -1,0 +1,15 @@
+/* ── Доля сектором круговой диаграммы (J-120): цвет столбиков урона, остаток — бледный трек ── */
+
+.share-pie {
+  display: inline-block;
+  flex: none;
+  width: var(--share-pie-size);
+  height: var(--share-pie-size);
+  border-radius: 50%;
+  background: conic-gradient(var(--mini-bars-fill) 0 var(--share), var(--share-pie-track) 0);
+  vertical-align: middle;
+}
+
+.share-pie--positive {
+  background: conic-gradient(var(--mini-bars-fill-positive) 0 var(--share), var(--share-pie-track) 0);
+}

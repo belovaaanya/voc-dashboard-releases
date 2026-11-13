@@ -1,0 +1,34 @@
+/* Кнопка копирования (J-44): обёртка держит кнопку и live-region итога */
+
+.copy-button {
+  display: inline-flex;
+  vertical-align: middle;
+}
+
+/* Иконка в ячейке комментария: видна без наведения, тихая — светлеет при наведении и фокусе */
+.verbatim-table__copy {
+  display: inline-grid;
+  /* Мишень 24 px вокруг иконки 12 (WCAG 2.5.8): попасть легко, а строка таблицы не становится выше */
+  width: var(--space-6);
+  height: var(--space-6);
+  margin-block: calc(-1 * var(--space-2));
+  margin-inline-start: var(--space-1);
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-action);
+  background: none;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  transition: color var(--motion-fast) var(--ease-standard);
+}
+
+.verbatim-table__copy:hover,
+.verbatim-table__copy:focus-visible {
+  color: var(--color-text-strong);
+}
+
+.copy-button__icon {
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
+}

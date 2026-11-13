@@ -1,0 +1,118 @@
+/* Sparkline (C-05, Figma 3030:3263, 3030:3283): сглаженная линия цвета тона без осей и точки ряда на ней; шаг точек — D-52 */
+
+import { areaPaths, linePaths, planZoneStops, plotPoints } from '../core/chart-geometry.js';
+import { element, svgNode } from '../ui/dom.js';
+
+const VIEWBOX = { width: 91, height: 28 };
+const DOT_RADIUS = 1.5;
+let sequence = 0;
+
+/* Заливка под линией гаснет к низу, как у графика динамики (R-50) */
+function appendFill(svg, points) {
+  const id = `sparkline-fill-${sequence += 1}`;
+  const gradient = svgNode('linearGradient', 'sparkline__gradient', { id, x1: 0, x2: 0, y1: 0, y2: 1 });
+  gradient.append(svgNode('stop', 'sparkline__stop', { offset: 0 }), svgNode('stop', 'sparkline__stop sparkline__stop--clear', { offset: 1 }));
+  const defs = svgNode('defs');
+  defs.append(gradient);
+  svg.append(defs);
+  for (const d of areaPaths(points, VIEWBOX.height).filter((path) => path.includes(' C '))) svg.append(svgNode('path', 'sparkline__area', { d, fill: `url(#${id})` }));
+}
+
+/** Шкала по умолчанию — от минимума до максимума ряда: форма важнее абсолютного уровня. */
+/*
+  J-151: `wide` — линия на ширину колонки (дайджест): та же геометрия, растянута по ширине.
+  J-153: `band` — коридор плана полосой за линией; шкала тогда включает и его, чтобы план было видно рядом с точками
+*/
+/*
+  J-157: `label` — подпись значения над каждой точкой широкой линии. Подписи — HTML поверх растянутого SVG:
+  текст внутри SVG растянулся бы вместе с линией. Крайние подписи прижаты к краю, чтобы не срезаться
+*/
+/* J-163: `fill` — широкая линия на всю высоту контейнера (плитка роли), а не фиксированной высоты */
+/* J-165: `axis` — подписи под точками широкой линии (даты недель), по одной на значение */
+export function sparkline(values, { tone, domain, wide = false, fill = false, band = null, label = null, axis = null }) {
+  const scale = domain ?? rangeOf(band ? [...values, band.min, band.max] : values);
+  const points = plotPoints(values.map((voc) => ({ voc })), { ...VIEWBOX, ...scale });
+  const svg = svgNode('svg', `sparkline${wide ? ' sparkline--wide' : ''}${wide && fill ? ' sparkline--fill' : ''} tone--${tone}`, {
+    viewBox: `0 0 ${VIEWBOX.width} ${VIEWBOX.height}`, 'aria-hidden': 'true', focusable: 'false', ...(wide ? { preserveAspectRatio: 'none' } : {}),
+  });
+  if (band) {
+    const y = (value) => VIEWBOX.height - ((value - scale.min) / (scale.max - scale.min)) * VIEWBOX.height;
+    svg.append(svgNode('rect', 'sparkline__band', { x: 0, y: y(band.max), width: VIEWBOX.width, height: Math.max(0.5, y(band.min) - y(band.max)) }));
+  }
+  appendFill(svg, points);
+  /* Точка без соседей — отрезок нулевой длины: её видно только кружком */
+  const lines = linePaths(points).filter((path) => path.includes(' C '));
+  if (band) appendPlanLines(svg, lines, scale, band);
+  else for (const d of lines) svg.append(svgNode('path', 'sparkline__line', { d }));
+  /* J-156: с коридором плана точка ниже него — тоном негатива, выше — позитива, в коридоре — тоном линии */
+  const planTone = (value) => (!band || value === null ? '' : value < band.min ? ' tone--negative' : value > band.max ? ' tone--positive' : '');
+  if (!wide) {
+    points.forEach(({ x, y }, index) => {
+      if (y !== null) svg.append(svgNode('circle', `sparkline__dot${planTone(values[index])}`, { cx: x, cy: y, r: DOT_RADIUS }));
+    });
+    return svg;
+  }
+  /*
+    J-177: точки растянутой линии — HTML-кружки поверх SVG, как подписи. Точка из SVG (J-152: отрезок нулевой длины
+    с круглым концом и толщиной в пикселях экрана) в WebKit — окне десктопного приложения и Safari — растягивалась
+    в овал вместе с линией; HTML-кружок круглый в любом движке
+  */
+  const plot = element('div', 'sparkline-labels__plot');
+  plot.append(svg);
+  const at = (node, x, y) => {
+    node.style.setProperty('--x', `${(x / VIEWBOX.width) * 100}%`);
+    node.style.setProperty('--y', `${(y / VIEWBOX.height) * 100}%`);
+    return node;
+  };
+  points.forEach(({ x, y }, index) => {
+    if (y === null) return;
+    plot.append(at(element('span', `sparkline__marker${planTone(values[index]) || ` tone--${tone}`}`), x, y));
+    if (!label) return;
+    const edge = index === 0 && points.length > 1 ? ' sparkline-labels__value--start' : index === points.length - 1 && points.length > 1 ? ' sparkline-labels__value--end' : '';
+    plot.append(at(element('span', `sparkline-labels__value${edge}`, label(values[index])), x, y));
+  });
+  const wrap = element('div', fill ? 'sparkline-labels sparkline-labels--fill' : 'sparkline-labels');
+  wrap.append(plot);
+  if (axis) {
+    const row = element('div', 'sparkline-labels__axis');
+    points.forEach(({ x }, index) => {
+      const edge = index === 0 && points.length > 1 ? ' sparkline-labels__tick--start' : index === points.length - 1 && points.length > 1 ? ' sparkline-labels__tick--end' : '';
+      const tick = element('span', `sparkline-labels__tick${edge}`, axis[index] ?? '');
+      tick.style.setProperty('--x', `${(x / VIEWBOX.width) * 100}%`);
+      row.append(tick);
+    });
+    wrap.append(row);
+  }
+  return wrap;
+}
+
+/*
+  J-160: с коридором плана линия красится, как на графике динамики, — тем же градиентом зон (`planZoneStops`,
+  стопы `chart-zones__stop`): зелёная выше коридора, серая в нём, красная ниже, с плавным переходом на границе
+*/
+const ZONE_FADE = VIEWBOX.height / 4;
+
+function appendPlanLines(svg, lines, scale, band) {
+  const y = (value) => VIEWBOX.height - ((value - scale.min) / (scale.max - scale.min)) * VIEWBOX.height;
+  const id = `sparkline-zones-${sequence += 1}`;
+  const gradient = svgNode('linearGradient', 'chart-zones', { id, gradientUnits: 'userSpaceOnUse', x1: 0, x2: 0, y1: 0, y2: VIEWBOX.height });
+  for (const { offset, zone } of planZoneStops(y(band.max), y(band.min), VIEWBOX.height, ZONE_FADE)) {
+    gradient.append(svgNode('stop', `chart-zones__stop chart-zones__stop--${zone}`, { offset }));
+  }
+  const defs = svgNode('defs');
+  defs.append(gradient);
+  svg.append(defs);
+  for (const d of lines) {
+    const path = svgNode('path', 'sparkline__line sparkline__line--zones', { d });
+    path.style.setProperty('--sparkline-zones', `url(#${id})`);
+    svg.append(path);
+  }
+}
+
+function rangeOf(values) {
+  const finite = values.filter(Number.isFinite);
+  if (!finite.length) return { min: 0, max: 1 };
+  const min = Math.min(...finite);
+  const max = Math.max(...finite);
+  return min === max ? { min: min - 1, max: max + 1 } : { min, max };
+}

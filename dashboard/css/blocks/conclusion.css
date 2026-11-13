@@ -1,0 +1,155 @@
+/* ── Главный вывод (D-10, D-33, V-16, Figma 3204:2849) ──────────── */
+
+.card--summary,
+.column--bounded > .card--summary {
+  min-height: calc(var(--space-10) * 4);
+}
+
+/* Высоту верхней строки задают плитки метрик (D-55): длинный вывод прокручивается в своей карточке */
+.column--bounded > .card--summary .card__body {
+  overflow-y: auto;
+  /* Поле прокрутки вмещает рамку наведения строки: иначе её срезал бы край области */
+  margin-inline: calc(-1 * (var(--space-2) + var(--divider-width)));
+  padding-inline: calc(var(--space-2) + var(--divider-width));
+}
+
+.summary-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.summary-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-width: 0;
+  min-height: var(--space-8);
+  /* J-63: рамка наведения не касается иконки и текста; J-96: рамка выступает в поле карточки, иконка стоит по левому краю заголовка */
+  margin-inline: calc(-1 * (var(--space-2) + var(--divider-width)));
+  padding: var(--space-1) var(--space-2);
+  border: var(--divider-width) solid transparent;
+  border-radius: var(--radius-control);
+}
+
+.summary-row:hover,
+.summary-row:focus-visible {
+  border-color: var(--color-border-strong);
+  background: var(--row-hover);
+  outline: none;
+}
+
+.summary-row__icon {
+  display: inline-grid;
+  flex: 0 0 auto;
+  width: var(--space-8);
+  height: var(--space-8);
+  place-items: center;
+  border-radius: var(--radius-control);
+  color: var(--tone-ink, var(--tone));
+  background: color-mix(in srgb, var(--tone) var(--tone-tint), transparent);
+}
+
+.summary-row__text {
+  min-width: 0;
+  color: var(--color-text-strong);
+  font: var(--type-text-strong);
+  overflow-wrap: break-word;
+}
+
+.summary-row__factors {
+  color: var(--tone-ink, var(--tone));
+}
+
+.summary-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+/* Одна причина в 3–10 слов (J-07): не больше двух строк, полный текст — в подсказке */
+.summary-group .summary-insight {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.summary-row__lead {
+  color: var(--tone-ink, var(--tone));
+}
+
+.summary-note {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font: var(--type-text);
+}
+
+.summary-insight--llm {
+  margin: 0;
+}
+
+/* J-63: источник в шапке — подсказка, как подпись шапки `card__note`, а не текст вывода */
+.summary-source {
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+  white-space: nowrap;
+}
+
+/* Источник вывода — служебная подпись, тише текста вывода (R-46) */
+.summary-note--source {
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+}
+
+.summary-list--skeleton .summary-row {
+  align-items: center;
+}
+
+.summary-list--skeleton .summary-row__icon {
+  background: var(--color-surface-sunken);
+}
+
+.summary-list--skeleton .summary-row__icon > * {
+  visibility: hidden;
+}
+
+/* J-14: top layer не обрезается карточкой; заливка общая для всех окон. */
+.summary-tooltip {
+  position: fixed;
+  inset: auto;
+  display: none;
+  width: max-content;
+  max-width: min(440px, calc(100% - 16px));
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-tooltip);
+  color: var(--color-text-secondary);
+  font: var(--type-caption);
+  overflow-wrap: anywhere;
+}
+
+.summary-tooltip:popover-open {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.summary-tooltip--portal:not([hidden]) {
+  z-index: 100;
+  display: grid;
+  gap: var(--space-1);
+}
+
+.summary-tooltip__title {
+  color: var(--color-text-strong);
+  font: var(--type-caption-strong);
+}
+
+.summary-unavailable {
+  display: grid;
+  min-height: calc(var(--space-8) * 2 + var(--space-2));
+  align-content: center;
+}

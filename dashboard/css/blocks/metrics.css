@@ -1,0 +1,388 @@
+/* ── Карточка метрики ──────────────────────────────────────────────── */
+
+/*
+  Содержимое занимает карточку по высоте и прижато к низу: заголовки из
+  справочника (D-02) занимают разное число строк, и без этого значения соседних
+  карточек стоят на разной высоте. Бейдж и точка остаются на первой строке
+*/
+.card--metric .card__body {
+  flex: 1 1 auto;
+  justify-content: flex-end;
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.metric__value {
+  color: var(--color-text-strong);
+  font: var(--type-value);
+  letter-spacing: var(--tracking-value);
+}
+
+.metric__meta {
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+}
+
+/*
+  J-65: число и его дельта — одной строкой, базовой линией по числу; не помещаясь,
+  дельта уходит под число. Порядок чтения — название, число, дельта, подпись
+*/
+.metric__figure {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  min-width: 0;
+}
+
+.metric__lead--empty,
+.metric__caption--empty {
+  visibility: hidden;
+}
+
+/* Строка подписи под числом: объём или дельта с коридором — через точку */
+.metric__caption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--space-2);
+  min-width: 0;
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+}
+
+/* Части подписи не рвутся по словам («6 240 / оценок», B-09) */
+.metric__caption > * {
+  white-space: nowrap;
+}
+
+/* J-94: пометка выборки — серая иконка в строке объёма; слова и порог — в подсказке, цвет смысла не несёт (D-25, D-26) */
+.metric__warning {
+  display: inline-flex;
+  align-self: center;
+  color: var(--color-neutral);
+}
+
+.metric__warning-icon {
+  width: var(--icon-size);
+  height: var(--icon-size);
+}
+
+.metric__caption > * + .metric__meta::before {
+  /* Без поддержки alt-текста строка с «/ ''» отбрасывается целиком — тогда работает первая */
+  content: '·';
+  content: '·' / '';
+  margin-inline-end: var(--space-2);
+  color: var(--color-text-tertiary);
+}
+
+/* ── Большая карточка (design-spec §3.1) ───────────────────────────── */
+
+.metric--big {
+  flex: 1 1 auto;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+/* Поле под весь диапазон 1,00–5,00: четыре числовых разряда с трекингом.
+   Градиент отсчитывается от поля значения, а не от карточки (J-17). */
+.metric__value--big {
+  align-self: flex-start;
+  font: var(--type-display);
+  letter-spacing: var(--tracking-display);
+  inline-size: calc(4ch + 4 * var(--tracking-display));
+  white-space: nowrap;
+  /* Отрицательный трекинг сокращает и последний advance: сохраняем край
+     последней цифры внутри background-clip: text (J-16, V-41). */
+  padding-inline-end: calc(-1 * var(--tracking-display));
+}
+
+/* Градиент цифр из макета (Figma 3204:2733): низ цифр проходит контраст крупного текста (D-28); без обрезки по тексту — плоский цвет, а не прямоугольник градиента */
+@supports (background-clip: text) or (-webkit-background-clip: text) {
+  @media not (forced-colors: active) {
+    .metric__value--big {
+      background: var(--value-gradient);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+  }
+}
+
+/* ── Малая карточка (design-spec §3.2) ─────────────────────────────── */
+
+/* J-66, J-94: содержимое сегмента прижато к нижнему краю; числа на одной линии — у подписей одна строка (B-08) */
+.metric--segment {
+  flex: 1 1 auto;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+/* Поле числа под весь диапазон 1,00–5,00: дельты трёх карточек стоят на одном отступе (J-17) */
+.metric--segment .metric__figure > .metric__value {
+  flex: none;
+  inline-size: calc(4ch + 4 * var(--tracking-value));
+  white-space: nowrap;
+}
+
+/* ── Вторая строка метрик (V-10a, V-25) ────────────────────────────── */
+
+/*
+  J-87: подписи слева, кольцо справа на всю высоту карточки, вровень с заголовком.
+  На самой узкой карточке (1200) заголовок и подписи до кольца не доходят.
+  J-96: поле кольца сверху, справа и снизу одно — поле карточки: кольцо стоит у нижнего правого
+  угла содержимого и выше него на шапку (строка --space-6 и зазор --space-3). Точка отсчёта — само
+  содержимое: у тела карточки на время проявления есть transform, от него кольцо меняло бы размер
+*/
+.plan-days {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  align-items: flex-end;
+  min-width: 0;
+}
+
+.plan-days__ring {
+  position: absolute;
+  inset-block-end: 0;
+  inset-inline-end: 0;
+  height: calc(100% + var(--space-6) + var(--space-3));
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: conic-gradient(var(--plan-days-arcs));
+  /* Тонкое кольцо: 1 px на сглаживание краёв */
+  mask: radial-gradient(closest-side, transparent calc(var(--plan-days-ring-inner) - 1px), var(--color-text-strong) var(--plan-days-ring-inner), var(--color-text-strong) calc(100% - 1px), transparent 100%);
+}
+
+/*
+  Числа в ряд у низа карточки: на одной линии с соседней плиткой. Узкая плитка переносит
+  подпись, а не число; длинные числа, которым тесно в ряду (период больше 100 дней на
+  узком экране), уходят на следующую строку и не наезжают друг на друга
+*/
+.plan-days__legend {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-width: 0;
+  margin: 0;
+  margin-inline-end: calc(var(--plan-days-ring) + var(--space-6));
+  padding: 0;
+  list-style: none;
+}
+
+.plan-days__item {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: min-content;
+}
+
+.plan-days__figure {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.plan-days__count {
+  color: var(--color-text-strong);
+  font: var(--type-value-sm);
+}
+
+.plan-days__caption {
+  color: var(--color-text-secondary);
+  font: var(--type-caption);
+}
+
+.plan-days__swatch {
+  flex: none;
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: 50%;
+}
+
+.plan-days__swatch--below { background: var(--color-negative); }
+.plan-days__swatch--above { background: var(--color-positive); }
+.plan-days__swatch--in { background: var(--plan-days-in-mark); }
+
+.metric--tally {
+  flex: 1 1 auto;
+  justify-content: flex-end;
+}
+
+.metric--tally .metric__value {
+  font: var(--type-value-sm);
+}
+
+/* J-96: дельта у правого края плитки; не поместившись, уходит под число */
+.metric--tally .metric__figure {
+  justify-content: space-between;
+}
+
+/*
+  J-65: пустая карточка держит анатомию соседних — «—» на месте числа, строка
+  «Нет данных за период» на месте подписи; прочерк декоративный, его не озвучивают
+*/
+.card--metric .state--empty.state--compact::before {
+  content: '—';
+  content: '—' / '';
+  display: block;
+  margin-block-end: var(--space-2);
+  color: var(--color-text-tertiary);
+  font: var(--type-value);
+}
+
+.card--metric-big .state--empty.state--compact::before {
+  font: var(--type-display);
+}
+
+.card--metric-tally .state--empty.state--compact::before {
+  font: var(--type-value-sm);
+}
+
+/*
+  ── Свечение сегмента по плану (J-67, J-89) ──────────────────────────
+  Правый верхний угол — там, где кольцо статуса, — светится: ниже плана красным, выше
+  зелёным; сильное отклонение плотнее. В плане цвета нет — нейтральная текстура. Статус и
+  его силу называет кольцо (подсказка и доступное имя). Пока в карточке служебное состояние — загрузка, пусто,
+  ошибка, — свечения нет: оно описывает число, а не его отсутствие. Свечение — слои под
+  содержимым, а не фон карточки: наведение и выбор меняют фон и рамку, статус остаётся виден
+*/
+.card--metric-segment[data-plan-glow]:not(:has(.state)) {
+  --plan-tone: var(--color-positive);
+  --plan-glow: var(--plan-glow-soft);
+  --plan-glow-rim: var(--plan-glow-rim-soft);
+  --plan-shape: var(--plan-glow-shape);
+  --plan-rim-shape: var(--plan-glow-rim-shape);
+  position: relative;
+  isolation: isolate;
+}
+
+.card--metric-segment[data-plan-glow='below']:not(:has(.state)),
+.card--metric-segment[data-plan-glow='below-strong']:not(:has(.state)) {
+  --plan-tone: var(--color-negative);
+}
+
+.card--metric-segment[data-plan-glow='below-strong']:not(:has(.state)),
+.card--metric-segment[data-plan-glow='above-strong']:not(:has(.state)) {
+  --plan-glow: var(--plan-glow-strong);
+  --plan-glow-rim: var(--plan-glow-rim-strong);
+}
+
+.card--metric-segment[data-plan-glow]:not(:has(.state))::before,
+.card--metric-segment[data-plan-glow]:not(:has(.state))::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.card--metric-segment[data-plan-glow]:not(:has(.state))::before {
+  inset: 0;
+  background: radial-gradient(var(--plan-shape), color-mix(in srgb, var(--plan-tone) var(--plan-glow), transparent), transparent);
+}
+
+/* Рамка тона гаснет от угла: кольцо-маска поверх обычной рамки карточки */
+.card--metric-segment[data-plan-glow]:not(:has(.state))::after {
+  inset: calc(-1 * var(--hairline));
+  padding: var(--hairline);
+  background: radial-gradient(var(--plan-rim-shape), color-mix(in srgb, var(--plan-tone) var(--plan-glow-rim), transparent), transparent);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+
+/*
+  J-101: наведение и фокус на цветной карточке — в её тоне: свечение плотнее и шире, рамка тона;
+  серый подсвет наведения остаётся фоном карточки. В плане цвета нет — наведение обычное, белое
+*/
+.card--metric-segment[data-plan-glow]:not([data-plan-glow='in']):not(:has(.state)):has(.metric__toggle:hover, .metric__toggle:focus-visible) {
+  --plan-glow: var(--plan-glow-hover);
+  --plan-glow-rim: var(--plan-glow-rim-hover);
+  --plan-shape: var(--plan-glow-shape-hover);
+  --plan-rim-shape: var(--plan-glow-shape-hover);
+  border-color: color-mix(in srgb, var(--plan-tone) var(--plan-glow-rim-soft), transparent);
+}
+
+/* В плане — без цвета: текстура вместо свечения, рамка карточки обычная */
+.card--metric-segment[data-plan-glow='in']:not(:has(.state))::before {
+  background: var(--plan-wash-neutral);
+}
+
+.card--metric-segment[data-plan-glow='in']:not(:has(.state))::after {
+  content: none;
+}
+
+/* ── Кликабельная карточка (P0 №7, D-31, V-26) ─────────────────────── */
+
+.metric__toggle {
+  flex: 1 1 auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+/*
+  Реакция на всю карточку, а не только на её содержимое: кликом читается вся плитка.
+  J-42: наведение заметно — рамка светлее и подсвет поверх поверхности; клавиатурный фокус — так же
+*/
+.card:has(.metric__toggle:hover),
+.card:has(.metric__toggle:focus-visible) {
+  border-color: var(--card-hover-edge);
+  background: var(--card-hover-wash), var(--card-surface);
+  box-shadow: var(--card-shadow-hover);
+}
+
+/* Подсвет не возвращает полупрозрачную поверхность там, где просили без прозрачности */
+@media (prefers-reduced-transparency: reduce) {
+  .card:has(.metric__toggle:hover),
+  .card:has(.metric__toggle:focus-visible) {
+    background: var(--card-hover-wash), var(--card-surface-solid);
+  }
+}
+
+/*
+  Применённый фильтр различается формой, а не только цветом (D-26): рамка
+  удваивается внутренней тенью, фон уходит вглубь. inset-тень вместо толщины
+  рамки — иначе карточка дёргается на 1px при каждом клике
+*/
+.card:has(.metric__toggle[aria-pressed='true']) {
+  border-color: var(--color-text-tertiary);
+  box-shadow: inset 0 0 0 var(--divider-width) var(--color-text-tertiary);
+  background: var(--color-surface-sunken);
+}
+
+/*
+  Выбран один сегмент — остальные плитки серые (R-33): тон дельты и точки уходит
+  в серый, крупное значение — во второстепенный цвет (крупный текст, AA 3:1).
+  Всю плитку прозрачностью не гасим: мелкие подписи ушли бы ниже AA
+*/
+.metrics-grid:has(.metric__toggle[aria-pressed='true']) .card:has(.metric__toggle[aria-pressed='false']:not(:hover, :focus-visible)) {
+  filter: grayscale(1);
+}
+
+.metrics-grid:has(.metric__toggle[aria-pressed='true']) .metric__toggle[aria-pressed='false']:not(:hover, :focus-visible) .metric__value {
+  color: var(--color-text-tertiary);
+}
+
+/* J-95: карточка канала при выбранном сегменте — как невыбранные сегменты: не кнопка, поэтому наведение её не проявляет */
+.metrics-grid:has(.metric__toggle[aria-pressed='true']) .card--metric-big {
+  filter: grayscale(1);
+}
+
+.metrics-grid:has(.metric__toggle[aria-pressed='true']) .card--metric-big .metric__value--big {
+  background: none;
+  color: var(--color-text-tertiary);
+}

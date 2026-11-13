@@ -1,0 +1,636 @@
+/* ── Прямая речь (D-05, D-17–D-19, D-44, V-23) ─────────────────── */
+
+/* Контейнер — тело блока: запрос смотрит на предка, сам элемент себя не запрашивает */
+.card--verbatim .card__body {
+  container: verbatim-problems / inline-size;
+}
+
+.verbatim-problems {
+  --feed-width: calc(var(--rail-width) - 2 * var(--card-padding));
+  --feed-gap: calc(var(--gap-section) + 2 * var(--card-padding));
+  position: relative;
+  --side-toggle-at: calc(100% - var(--feed-width) - var(--feed-gap) / 2);
+  --side-toggle-reserve: calc(var(--space-10) * 2 + var(--space-4));
+  /* J-146: линия между таблицей и лентой — посередине зазора, как у календаря событий */
+  background-image: linear-gradient(var(--color-card-border), var(--color-card-border));
+  background-repeat: no-repeat;
+  background-size: var(--hairline) 100%;
+  background-position: calc(100% - var(--feed-width) - var(--feed-gap) / 2) 0;
+  display: grid;
+  /* J-114: лента справа — шириной и по линии колонки календаря событий выше. J-128: слева — список групп */
+  /* J-139: списка групп слева нет — таблица и лента */
+  grid-template-columns: minmax(0, 1fr) calc(var(--rail-width) - 2 * var(--card-padding));
+  gap: calc(var(--gap-section) + 2 * var(--card-padding));
+  align-items: stretch;
+}
+
+/* J-136: лента скрыта — таблица забирает её место */
+.verbatim-problems--no-feed {
+  grid-template-columns: minmax(0, 1fr);
+  /* Свёрнутая лента — кнопка «Отзывы» у правого края (J-148): линия — у левого края полосы под неё */
+  background-position: calc(100% - var(--side-toggle-reserve) + var(--space-4)) 0;
+}
+
+
+.verbatim-problems__feed[hidden],
+.verbatim-detail__paging[hidden] {
+  display: none;
+}
+
+/* Узкий блок — лента под таблицей, а не рядом */
+@container verbatim-problems (max-width: 1100px) {
+  .verbatim-problems {
+    grid-template-columns: minmax(0, 1fr);
+    background-image: none;
+  }
+
+  /* Лента под таблицей: кнопка — обычной строкой перед ней, без линии раздела */
+  .verbatim-problems > .side-toggle {
+    position: static;
+    justify-self: end;
+    transform: none;
+  }
+
+  .verbatim-problems__feed {
+    grid-column: 1 / -1;
+  }
+}
+
+
+/* J-114: колонка цитат по высоте — как таблица слева; лишнее прокручивается внутри колонки */
+.verbatim-problems__feed {
+  position: relative;
+  min-width: 0;
+  min-height: calc(var(--space-10) * 10);
+}
+
+.verbatim-problems__feed > .verbatim-feed {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+}
+
+.verbatim-problems__list {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+
+
+
+/* Фокус — общее кольцо каркаса, отличное от рамки выбора: выбранная строка с фокусом видна (WCAG 2.4.7) */
+.problem-table__name:focus-visible,
+.verbatim-feed__item:focus-visible {
+  outline: var(--focus-ring) solid var(--color-text-strong);
+  outline-offset: 2px;
+}
+
+
+
+/* Лента комментариев выбранной проблемы: свежие сверху, полный текст без обрезки */
+.verbatim-feed {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* J-125: служебная строка над названием, а не рядом — название занимает всю ширину ленты */
+.verbatim-feed__title {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  color: var(--color-text-strong);
+  font: var(--type-caption-strong);
+}
+
+.verbatim-feed__title small {
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+}
+
+.verbatim-feed__list {
+  display: flex;
+  flex-direction: column;
+}
+
+.verbatim-feed__item {
+  display: flex;
+  flex-direction: column;
+  /* J-131: звёзды, цитата и подпись — 8 внутри; между отзывами 20 + линия + 20, отзыв читается целиком */
+  gap: var(--space-2);
+  padding-block: var(--space-5);
+  border-block-start: var(--hairline) solid var(--color-card-border);
+}
+
+.verbatim-feed__item:first-child {
+  padding-block-start: 0;
+  border-block-start: 0;
+}
+
+.verbatim-feed__quote {
+  margin: 0;
+  color: var(--color-text-strong);
+  font: var(--type-quote);
+}
+
+.verbatim-feed__source {
+  margin: 0;
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+}
+
+.verbatim-feed--skeleton {
+  visibility: hidden;
+}
+
+
+
+
+
+
+
+.verbatim-card__frequency strong {
+  color: var(--color-text-strong);
+  font: var(--type-caption-strong);
+}
+
+/* J-51: частотность за период к прошлому — строка итога; мини-графика нет (J-64) */
+.verbatim-card__frequency {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--space-1);
+}
+
+.verbatim-card__frequency small {
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+}
+
+/* Скелет — те же строки со скрытым содержимым: высота совпадает с загруженной по построению */
+
+
+.verbatim-unavailable {
+  display: grid;
+  min-height: var(--verbatim-card-height);
+  align-content: center;
+  text-align: center;
+}
+
+.verbatim-search {
+  display: block;
+  width: min(394px, 40%);
+}
+
+/* Поле и «Показать ещё» — в оформлении контролов шапки (Figma 3030:3301) */
+.verbatim-search__input {
+  display: block;
+  width: 100%;
+  min-height: var(--space-10);
+  padding: var(--space-2) var(--space-6);
+  border: var(--hairline) solid var(--color-control-border);
+  border-radius: var(--radius-pill);
+  background: var(--control-surface);
+  box-shadow: var(--shadow-inset);
+  color: var(--color-text-strong);
+  font: var(--type-caption);
+}
+
+.verbatim-search__input::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+.verbatim-search__input:hover,
+.verbatim-search__input:focus-visible {
+  border-color: var(--color-border-strong);
+  outline: none;
+}
+
+.verbatim-detail {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.verbatim-detail__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.verbatim-detail__status {
+  margin: 0;
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+}
+
+.verbatim-table-scroll {
+  overflow-x: auto;
+}
+
+.verbatim-table {
+  width: 100%;
+  min-width: 2604px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.verbatim-table th,
+.verbatim-table td {
+  padding: var(--space-2);
+  border-bottom: var(--divider-width) solid var(--color-border);
+  color: var(--color-text-secondary);
+  font: var(--type-caption);
+  text-align: start;
+  vertical-align: top;
+}
+
+.verbatim-table th {
+  color: var(--color-text-secondary);
+}
+
+/* Ширина — классом столбца: версия скрыта вне АБМ, и nth-child съехал бы. Заголовок с двузначным счётчиком и стрелкой — в одну строку. */
+.verbatim-table__col--date { width: 84px; }
+.verbatim-table__col--segment { width: 104px; }
+.verbatim-table__col--triggers { width: 160px; }
+.verbatim-table__col--products { width: 160px; }
+.verbatim-table__col--domain { width: 144px; }
+.verbatim-table__col--role { width: 112px; }
+.verbatim-table__col--categoryGroup { width: 196px; }
+.verbatim-table__col--category { width: 216px; }
+.verbatim-table__col--os { width: 84px; }
+.verbatim-table__col--appVersion { width: 168px; }
+.verbatim-table__col--rating { width: 96px; }
+.verbatim-table__col--comment { width: 300px; }
+.verbatim-table__col--expertise { width: 280px; }
+.verbatim-table__col--problemType { width: 180px; }
+.verbatim-table__col--problem { width: 220px; }
+
+/* Popover фильтра колонки — вне scroll-контейнера, под своим заголовком (координаты ставит скрипт) */
+.verbatim-popover {
+  top: calc(var(--popover-y) + var(--space-1));
+  inset-inline-start: var(--popover-x);
+}
+
+/* Строчный, а не flex: длинная подпись переносится, а стрелка идёт за последним словом */
+/* Подпись переносится внутри себя: счётчик и стрелка держатся справа от неё и не уходят на строку одни */
+.verbatim-head__trigger {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.verbatim-head__trigger:hover,
+.verbatim-head__trigger:focus-visible,
+.verbatim-head__trigger[aria-expanded='true'],
+.verbatim-head__trigger[data-active='true'] {
+  color: var(--color-text-strong);
+}
+
+/* Применённый фильтр отличается не только цветом: подпись подчёркнута, как в шапке (D-26) */
+.verbatim-head__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.verbatim-head__trigger[data-active='true'] .verbatim-head__label {
+  text-decoration: underline;
+  text-decoration-thickness: var(--divider-width);
+  text-underline-offset: var(--hairline);
+}
+
+.verbatim-head__count {
+  color: var(--color-text-strong);
+  font: var(--type-caption-strong);
+}
+
+.verbatim-head__count,
+.verbatim-head__icon {
+  margin-inline-start: var(--space-1);
+}
+
+.verbatim-head__icon {
+  flex: 0 0 auto;
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
+}
+
+.verbatim-head__count {
+  flex: 0 0 auto;
+}
+
+.verbatim-head__trigger[aria-expanded='true'] .verbatim-head__icon {
+  transform: rotate(180deg);
+}
+
+.verbatim-table tbody tr:hover td {
+  background: var(--row-hover);
+  color: var(--color-text-strong);
+}
+
+.verbatim-table__text--comment {
+  color: var(--color-text-strong);
+}
+
+.verbatim-table__text--expertise {
+  white-space: pre-line;
+}
+
+.verbatim-table__empty {
+  padding: var(--space-6);
+  text-align: center;
+}
+
+.verbatim-detail__reset {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text-secondary);
+  font: var(--type-caption-strong);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.verbatim-detail__reset:hover,
+.verbatim-detail__reset:focus-visible {
+  color: var(--color-text-strong);
+}
+
+.verbatim-detail__more {
+  align-self: center;
+  padding: var(--space-2) var(--space-4);
+  border: var(--hairline) solid var(--color-control-border);
+  border-radius: var(--radius-pill);
+  background: var(--control-raised);
+  box-shadow: var(--control-raised-edge);
+  color: var(--color-text-secondary);
+  font: var(--type-caption-strong);
+  cursor: pointer;
+}
+
+.verbatim-detail__more:hover,
+.verbatim-detail__more:focus-visible {
+  border-color: var(--color-border-strong);
+  background: var(--control-raised-hover);
+  color: var(--color-text-strong);
+}
+
+.verbatim-problems__actions,
+.verbatim-detail__paging {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.verbatim-card__rating {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.verbatim-card__star {
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
+  color: var(--color-text-tertiary);
+  fill: none;
+}
+
+.verbatim-card__star:not(.verbatim-card__star--filled) path {
+  fill: none;
+  stroke: currentColor;
+}
+
+.verbatim-card__star--filled {
+  color: var(--color-text-secondary);
+}
+
+/* ── J-114: таблица проблем — строка на проблему, колонки разрезов и шагов периода ── */
+
+.problem-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  padding-block-end: var(--space-2);
+}
+
+.problem-table {
+  width: max-content;
+  min-width: 100%;
+  border-spacing: 0;
+  color: var(--color-text-secondary);
+  font: var(--type-caption);
+}
+
+.problem-table th,
+.problem-table td {
+  /* J-131: строка таблицы — 8 сверху и снизу. J-141: 16 — таблица воздушнее, строки не слипаются */
+  padding: var(--space-4) var(--space-2);
+  border-block-end: var(--hairline) solid var(--color-card-border);
+  text-align: end;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.problem-table__head {
+  color: var(--color-text-tertiary);
+  font: var(--type-axis);
+}
+
+/* Первая колонка — подпись проблемы: прилипает при прокрутке, текст переносится по словам */
+/* Длинная проблема переносится по словам внутри липкой колонки: специфичность выше общего nowrap ячеек */
+.problem-table .problem-table__problem,
+.problem-table thead th:first-child {
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 1;
+  width: var(--problem-name-flat);
+  min-width: var(--problem-name-flat);
+  max-width: var(--problem-name-flat);
+  background: var(--color-surface);
+  text-align: start;
+  white-space: normal;
+}
+
+.problem-table__name {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text-strong);
+  font: var(--type-caption);
+  text-align: start;
+  cursor: pointer;
+}
+
+/* Выбранная проблема — жирнее и подложкой строки, а не только цветом (D-26) */
+.problem-table__name[aria-pressed='true'] {
+  font: var(--type-caption-strong);
+}
+
+.problem-table__row {
+  cursor: pointer;
+}
+
+.problem-table__row.is-selected td {
+  background: var(--row-selected);
+}
+
+/* Закреплённая ячейка выбранной строки — подложка поверх непрозрачной поверхности: иначе под ней просвечивают прокрученные столбцы */
+.problem-table__row.is-selected th {
+  background: linear-gradient(var(--row-selected), var(--row-selected)), var(--color-surface);
+}
+
+/* J-120: жалобы, «было» и доля — одной строкой; обёртка внутри ячейки: ячейка с display: flex перестаёт быть ячейкой */
+.problem-table__total-body {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.problem-table__count {
+  color: var(--color-text-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.problem-table__text span {
+  display: inline-block;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}
+
+.problem-table__peak {
+  color: var(--color-text-strong);
+}
+
+.problem-table__peak--none,
+.problem-table__peak--few {
+  color: var(--color-text-tertiary);
+}
+
+.problem-table--skeleton {
+  visibility: hidden;
+}
+
+/* J-120: частая версия — номер и сектор доли в одну строку */
+.problem-table__version-body {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-strong);
+}
+
+
+
+/* J-128: пустое значение в таблице — серым прочерком, а не цветом числа */
+.problem-table .problem-table__none {
+  color: var(--color-text-tertiary);
+}
+
+.problem-table__group-name span {
+  max-width: 160px;
+}
+
+/* J-139: группа — текст, по левому краю: короткие и обрезанные названия стоят в одну линию */
+.problem-table .problem-table__group-name {
+  text-align: start;
+}
+
+/* J-139: период «было» — второй строкой в шапке «Жалоб» */
+.problem-table__head-note {
+  display: block;
+  color: var(--color-text-tertiary);
+  font: var(--type-axis);
+  white-space: nowrap;
+}
+
+/* J-136: без сравнения треугольник невидим, но держит место — доли строк в одну колонку */
+.delta--no-arrow .delta__arrow {
+  visibility: hidden;
+}
+
+/* J-136: поиск, разрез, числа, шаг и кнопка ленты — одной строкой над таблицей; кнопка ленты — справа */
+.problem-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.problem-toolbar .problem-search {
+  flex: 1 1 calc(var(--problem-search-width) / 2);
+  min-width: calc(var(--problem-search-width) / 2);
+}
+
+/* J-130: поиск по проблематике — над таблицей топа, не шире колонки названия */
+.problem-search {
+  width: 100%;
+  max-width: var(--problem-search-width);
+}
+
+.problem-table .problem-table__empty {
+  padding-block: var(--space-4);
+  color: var(--color-text-tertiary);
+  text-align: start;
+}
+
+/*
+  J-142: две части таблицы — итог «За период» и «Динамика» по шагам. Подпись частей — строкой над шапкой;
+  граница частей — линия слева от первого шага
+*/
+.problem-table .problem-table__part {
+  padding-block: 0 var(--space-1);
+  border-block-end: 0;
+  color: var(--color-text-secondary);
+  font: var(--type-caption);
+  text-align: start;
+}
+
+.problem-table .problem-table__part--lead {
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 1;
+  background: var(--color-surface);
+}
+
+.problem-table .problem-table__step--first,
+.problem-table .problem-table__part--steps {
+  border-inline-start: var(--hairline) solid var(--color-card-border);
+  padding-inline-start: var(--space-3);
+}
+
+/* Шаг подсвечен тоном негатива по силе значения (--step-heat из блока), как плитки антидрайверов */
+.problem-table .problem-table__step {
+  background: color-mix(in srgb, var(--color-negative) calc(var(--step-heat, 0%) * 0.28), transparent);
+  background-clip: padding-box;
+}
+
+.problem-table__row.is-selected .problem-table__step {
+  background: color-mix(in srgb, var(--color-negative) calc(var(--step-heat, 0%) * 0.28), var(--row-selected));
+}
+
+/* J-150: шаг «Урон и жалобы» — урон крупно, число жалоб строкой ниже, тише */
+.problem-table__step--both .problem-table__step-main,
+.problem-table__step--both .problem-table__step-sub {
+  display: block;
+  white-space: nowrap;
+}
+
+.problem-table__step-sub {
+  color: var(--color-text-tertiary);
+  font: var(--type-axis);
+}

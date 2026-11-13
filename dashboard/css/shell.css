@@ -1,0 +1,1575 @@
+/*
+  Каркас страницы: сетка, карточки, шапка, служебные состояния.
+  Цвет и размеры — только через токены из tokens.css.
+*/
+
+/* Шорткат font сбрасывает font-variant-numeric, поэтому моноширинные цифры закреплены за каждым элементом (C-01) */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  font-variant-numeric: tabular-nums !important;
+}
+
+html {
+  /* J-69: нативные контролы и полосы прокрутки следуют теме */
+  color-scheme: var(--color-scheme);
+  background: var(--color-bg);
+  scroll-padding-top: var(--header-height, 0px);
+}
+
+body {
+  margin: 0;
+  /* Ниже --content-min страница скроллится по горизонтали, сетка не ломается (D-29) */
+  min-width: calc(var(--content-min) + var(--nav-current, var(--nav-width)));
+  padding: var(--space-10) var(--page-gutter);
+  background: var(--page-ambient), var(--color-bg);
+  color: var(--color-text-secondary);
+  font: var(--type-text);
+}
+
+/* Без движения по просьбе системы: смысл от анимаций не зависит (D-56) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+:focus-visible {
+  outline: var(--focus-ring) solid var(--color-text-strong);
+  outline-offset: 2px;
+}
+
+/* J-63: недоступный контрол тише целиком, своих цветов у него нет; наведение на нём не срабатывает */
+:disabled,
+[aria-disabled='true'] {
+  opacity: var(--disabled-opacity);
+  pointer-events: none;
+}
+
+/* ── Сетка ─────────────────────────────────────────────────────────── */
+
+/*
+  Колонка контента — в полях .page, а сама .page во всю ширину body: о её край
+  обрезается полоса стекла шапки, без vw и без горизонтального скролла (R-50)
+*/
+/* J-115: меню слева, страница — остаток ширины; свёрнутое меню отдаёт место странице */
+.app {
+  display: grid;
+  grid-template-columns: var(--nav-current, var(--nav-width)) minmax(0, 1fr);
+  gap: var(--gap-section);
+  align-items: start;
+}
+
+:root {
+  --nav-current: var(--nav-width);
+}
+
+:root[data-nav='collapsed'] {
+  --nav-current: var(--nav-width-collapsed);
+}
+
+.side-nav {
+  position: sticky;
+  top: var(--space-10);
+  display: flex;
+  min-width: 0;
+  height: calc(100vh - 2 * var(--space-10));
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.side-nav__brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: var(--space-10);
+  padding-inline-start: var(--space-3);
+}
+
+.side-nav__logo {
+  color: var(--color-text-strong);
+  font: var(--type-caption-strong);
+  white-space: nowrap;
+}
+
+.side-nav__logo .side-nav__label {
+  color: var(--color-text-secondary);
+  font: var(--type-caption);
+}
+
+.side-nav__toggle,
+.side-nav__link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  border: var(--hairline) solid transparent;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--color-text-secondary);
+  font: var(--type-text);
+  text-align: start;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.side-nav__toggle {
+  flex: none;
+  padding: var(--space-2);
+}
+
+.side-nav__link {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+}
+
+.side-nav__toggle:hover,
+.side-nav__link:hover {
+  background: var(--control-raised-hover);
+  color: var(--color-text-strong);
+}
+
+/* Текущий раздел — плашкой и рамкой, а не только цветом (D-26) */
+.side-nav__link[aria-current='page'] {
+  border-color: var(--color-border-strong);
+  background: var(--control-raised);
+  box-shadow: var(--control-raised-edge);
+  color: var(--color-text-strong);
+}
+
+.side-nav__icon {
+  flex: none;
+  width: var(--icon-size);
+  height: var(--icon-size);
+}
+
+/* J-151: страница — та же колонка с зазором секций, что у .page: обёртка не склеивает строки карточек */
+.page-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-section);
+  min-width: 0;
+}
+
+/* J-151: скрытая страница не видна, даже если её контейнер задаёт свой display (у дайджеста — flex) */
+.page-view[hidden] {
+  display: none;
+}
+
+/* J-151: значок главной — текст «1.0» в квадрате иконки, тем же цветом, что иконки пунктов */
+.side-nav__version {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  min-width: var(--icon-size);
+  font: var(--type-caption-strong);
+}
+
+.side-nav__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.side-nav__foot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-block-start: auto;
+}
+
+.side-nav__method {
+  position: relative;
+}
+
+.side-nav__data {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: var(--hairline) solid var(--color-card-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+}
+
+.side-nav__data-icon {
+  display: none;
+}
+
+.side-nav__data-body {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* Свёрнутое меню: только иконки; подписи остаются для screen reader, название — в подсказке */
+:root[data-nav='collapsed'] .side-nav__brand {
+  flex-direction: column;
+  padding-inline-start: 0;
+}
+
+:root[data-nav='collapsed'] .side-nav__label,
+:root[data-nav='collapsed'] .side-nav__data-body {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+:root[data-nav='collapsed'] .side-nav__link {
+  justify-content: center;
+  padding-inline: 0;
+}
+
+:root[data-nav='collapsed'] .side-nav__data {
+  justify-content: center;
+  padding-inline: 0;
+}
+
+:root[data-nav='collapsed'] .side-nav__data-icon {
+  display: block;
+}
+
+.page {
+  margin-inline: calc(-1 * var(--page-gutter));
+  padding-inline: max(var(--page-gutter), (100% + 2 * var(--page-gutter) - var(--content-max)) / 2);
+  overflow-x: clip;
+}
+
+/* Рядом с меню страница начинается у его края: отрицательное поле слева заходило бы под меню */
+.app > .page {
+  margin-inline-start: 0;
+  padding-inline-start: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-section);
+}
+
+/*
+  Обе контентные строки берут ширину рейла из одного токена, поэтому правые
+  края совпадают по построению, а колонки в сумме дают контентную ширину (V-01)
+*/
+.page-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--rail-width);
+  gap: var(--gap-section);
+  align-items: stretch;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-section);
+  min-width: 0;
+}
+
+/* Колонки строки кончаются одной линией (C-06): остаток высоты забирает карточка с card--fill, одна на колонку */
+.column > .card--fill {
+  flex-grow: 1;
+}
+
+/* Колонка не задаёт высоту строки, её задаёт соседняя: длинный список прокручивается в своей карточке, а не двигает соседей (D-55) */
+.column--bounded {
+  contain: size;
+}
+
+/* J-14: минимум верхнего рейла участвует в высоте строки, иначе оценки выходят под календарь. */
+#rail-top {
+  contain: none;
+}
+
+.column--bounded > .card,
+.column--bounded .card__body {
+  min-height: 0;
+}
+
+/* Своя полоса прокрутки (Figma 3204:3048): overlay-полоса macOS не видна до начала прокрутки, и область не выглядит прокручиваемой (B-13) */
+.scroll-area::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+
+.scroll-area::-webkit-scrollbar-track {
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-sunken);
+}
+
+.scroll-area::-webkit-scrollbar-thumb {
+  border-radius: var(--radius-pill);
+  background: var(--color-border-strong);
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  .scroll-area {
+    scrollbar-color: var(--color-border-strong) var(--color-surface-sunken);
+    scrollbar-width: thin;
+  }
+}
+
+/* Большая карточка к малой — 1.4 : 1, а не 356 : 216 макета: малым — больше ширины под значение с объёмом в строку, большой хватает меньшей доли (B-09) */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr));
+  gap: var(--gap-tile);
+  align-items: stretch;
+}
+
+/*
+  Две строки метрик: VOC-карточки и счётчики (D-15, V-10a). Большая карточка
+  занимает обе строки — композиция расширенного варианта макета
+*/
+.card--metric-big {
+  grid-row: 1 / span 2;
+}
+
+.card--metric-plan-days {
+  grid-column: span 2;
+}
+
+/* ── Карточка ──────────────────────────────────────────────────────── */
+
+/*
+  Карточки в колонке растягиваются по контейнеру, поэтому внутри одной колонки
+  они одной ширины (V-03)
+*/
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--card-padding);
+  border: var(--hairline) solid var(--color-card-border);
+  border-radius: var(--radius-card);
+  background: var(--card-surface);
+  box-shadow: var(--card-shadow);
+  transition: border-color var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard);
+}
+
+.card__head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+/* Точка перед заголовком (Figma 3030:3045) стоит по центру его первой строки и ближе к нему, чем слоты справа */
+.card__marker {
+  display: flex;
+  align-items: center;
+  min-height: var(--space-6);
+  margin-inline-end: calc(var(--space-2) - var(--space-3));
+}
+
+.card__marker:empty {
+  display: none;
+}
+
+/* J-143: пояснение у заголовка — в его строке; пустой слот места не занимает */
+.card__help:empty {
+  display: none;
+}
+
+/*
+  Заголовок тянется на высоту слотов и стоит по их центру; перенос растёт вниз.
+  Строки выравниваются по длине, слово рвётся только если не помещается целиком
+  в сжатую слотами шапку — без автопереносов (docs/ui-system.md §7)
+*/
+.card__title {
+  display: flex;
+  align-self: stretch;
+  align-items: center;
+  min-height: var(--space-6);
+  margin: 0;
+  color: var(--color-text-secondary);
+  font: var(--type-title);
+  letter-spacing: var(--tracking-title);
+  text-wrap: balance;
+  overflow-wrap: break-word;
+}
+
+/* J-176: карточка без подложки — верхняя карточка отчёта лежит прямо на фоне страницы, отступы прежние */
+.card--bare {
+  border-color: transparent;
+  background: none;
+  box-shadow: none;
+}
+
+/* J-169: карточка с портретом в слоте метки (роль) — заголовок по центру портрета */
+.card--avatar-head .card__head {
+  align-items: center;
+}
+
+.card--avatar-head .card__marker {
+  margin-inline-end: 0;
+}
+
+/* J-168, J-170: карточка-шапка страницы — заголовок страницы крупнее и жирнее заголовка блока */
+.card--page-head .card__title {
+  color: var(--color-text-strong);
+  font: var(--type-page-title);
+}
+
+.card__tools {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2) var(--space-3);
+  min-height: var(--space-6);
+}
+
+.card__note {
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+  white-space: nowrap;
+}
+
+.card__icon {
+  flex: 0 0 auto;
+  width: var(--icon-size);
+  height: var(--icon-size);
+}
+
+.card__period {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-text-strong);
+  font: var(--type-caption);
+  white-space: nowrap;
+}
+
+.card__period .card__icon {
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
+  color: var(--color-text-secondary);
+}
+
+/* Период блока со своим выбором (local period): popover раскрывается у правого края карточки */
+.card__period-picker {
+  position: relative;
+  display: flex;
+}
+
+/* Период блока — текст с иконкой без плашки, как в макете (J-15, Figma 3207:3295); плашка появляется при наведении */
+.card__period--control {
+  padding: var(--space-1) var(--space-2);
+  border: var(--divider-width) solid transparent;
+  border-radius: var(--radius-pill);
+  background: none;
+  cursor: pointer;
+  transition: color var(--motion-fast) var(--ease-standard), background-color var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard);
+}
+
+.card__period--control:hover,
+.card__period--control[aria-expanded='true'] {
+  border-color: transparent;
+}
+
+/* Свой период блока отличается от общего не только цветом: подпись подчёркнута, как применённый фильтр (D-26) */
+.card__period--local {
+  border-color: var(--color-border-strong);
+}
+
+.card__action {
+  display: inline-grid;
+  flex: 0 0 auto;
+  width: var(--action-width);
+  height: var(--space-6);
+  padding: 0;
+  place-items: center;
+  border: var(--hairline) solid var(--color-control-border);
+  border-radius: var(--radius-action);
+  background: var(--control-raised);
+  box-shadow: var(--control-raised-edge);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard);
+}
+
+.card__action:hover,
+.card__action:focus-visible {
+  border-color: var(--color-border-strong);
+  background: var(--control-raised-hover);
+  color: var(--color-text-strong);
+}
+
+.card__ai {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+  white-space: nowrap;
+}
+
+.card__ai-badge {
+  display: inline-grid;
+  width: var(--space-6);
+  height: var(--space-6);
+  place-items: center;
+  border-radius: var(--radius-pill);
+  background: var(--ai-badge-surface);
+  box-shadow: var(--shadow-inset);
+  color: var(--color-text-strong);
+}
+
+.card__ai-badge .card__icon {
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
+}
+
+/* Развёрнутая карточка (D-32) — слой поверх страницы; страница под ней не прокручивается */
+.card.is-expanded {
+  position: fixed;
+  z-index: 20;
+  inset: var(--space-6);
+  overflow-y: auto;
+  /* Слой поверх страницы непрозрачен: сквозь стекло читалась бы страница под ним */
+  background: var(--card-surface-solid);
+}
+
+.has-expanded-card {
+  overflow: hidden;
+}
+
+/*
+  J-40, J-41: группа блоков — одна карточка. Блоки внутри — секции без своей поверхности:
+  рамка, фон и тень у группы, у секций — шапка и содержимое; секции делит линия, а не зазор
+  карточек. Развёрнутый блок снова получает поверхность слоя (D-32)
+*/
+.card--group {
+  gap: var(--space-6);
+}
+
+.card--group .card:not(.is-expanded) {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.card--group .column {
+  gap: var(--space-6);
+}
+
+.card--group .column > .card + .card:not(.is-expanded),
+.card--group .group-section > .card:first-child:not(.is-expanded) {
+  padding-top: var(--space-6);
+  border-top: var(--hairline) solid var(--color-card-border);
+}
+
+/*
+  Строка «график и антидрайверы | календарь»: текст календаря начинается там же, где текст
+  карточек правого рейла выше, текст графика кончается там же, где у метрик; линия — посередине
+  зазора. Высоту строки задают график с антидрайверами (J-49), календарь тянется на всю высоту
+  группы и прокручивается в своей колонке (D-55)
+*/
+.group-row {
+  --group-rail: calc(var(--rail-width) - 2 * var(--card-padding));
+  --group-gap: calc(var(--gap-section) + 2 * var(--card-padding));
+  /* J-148: кнопка календаря — на линии раздела, как у ленты отзывов */
+  --side-toggle-at: calc(100% - var(--group-rail) - var(--group-gap) / 2);
+  --side-toggle-reserve: calc(var(--space-10) * 2 + var(--space-6));
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--group-rail);
+  column-gap: var(--group-gap);
+  align-items: stretch;
+  background-image: linear-gradient(var(--color-card-border), var(--color-card-border));
+  background-repeat: no-repeat;
+  background-size: var(--hairline) 100%;
+  background-position: calc(100% - var(--group-rail) - var(--group-gap) / 2) 0;
+}
+
+/* J-136, J-148: календарь скрыт — график и антидрайверы во всю ширину; линия — у полосы кнопки «События» справа */
+.group-row--no-rail {
+  grid-template-columns: minmax(0, 1fr);
+  background-position: calc(100% - var(--side-toggle-reserve) + var(--space-4)) 0;
+}
+
+.group-row--no-rail > #rail-main {
+  display: none;
+}
+
+.card__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  /* Вертикального скролла внутри карточек нет, растёт страница (design-spec); исключение — колонка D-55 */
+  overflow: visible;
+}
+
+/* ── Служебные состояния (D-34) ────────────────────────────────────── */
+
+.state {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-4) 0;
+}
+
+.state__title {
+  color: var(--color-text-secondary);
+  font: var(--type-text-strong);
+  text-wrap: balance;
+}
+
+.state__detail {
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+}
+
+/* Состояние ошибки несёт текст и знак, а не только цвет (D-26) */
+.state--error .state__title {
+  color: var(--color-negative-ink);
+}
+
+.state--shaped {
+  padding: 0;
+}
+
+/* J-39: в узкой карточке метрики — одна строка подписи у нижнего края, пояснение в подсказке */
+.state--compact {
+  padding: 0;
+  cursor: help;
+}
+
+.state--compact .state__title {
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+}
+
+.state__skeleton {
+  height: var(--space-5);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-sunken);
+}
+
+.state__skeleton + .state__skeleton {
+  margin-top: var(--space-2);
+  width: 60%;
+}
+
+.placeholder {
+  padding: var(--space-4) 0;
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+}
+
+/* ── Шапка ─────────────────────────────────────────────────────────── */
+
+/* Шапка закреплена при скролле: фильтры и период видны у любого блока; слой выше карточек, чтобы popover их перекрывал */
+#header {
+  position: sticky;
+  z-index: 15;
+  top: 0;
+  margin-block: calc(-1 * var(--header-pad));
+  padding-block: var(--header-pad);
+}
+
+/* Стекло шапки — на псевдоэлементе: backdrop-filter на самой шапке ограничил бы размытие её popover'ов её же содержимым */
+#header::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset-block: 0;
+  /* Полоса шире любой страницы, лишнее обрезает .page */
+  inset-inline: calc(-1 * var(--content-max));
+  background: var(--header-fill);
+  -webkit-mask-image: var(--header-fade);
+  mask-image: var(--header-fade);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  pointer-events: none;
+}
+
+.shell-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* Каналы и фильтры — одной строкой (E-01): при нехватке места сжимаются подписи фильтров, а не переносится панель */
+.shell-head__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.shell-head__bar > :first-child {
+  flex-shrink: 0;
+}
+
+/* J-78: переключатель темы — два варианта на общей подложке у правого края строки шапки, выбранный приподнят */
+.theme-toggle {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: var(--hairline);
+  height: var(--space-8);
+  margin-inline-start: auto;
+  padding: calc(var(--space-1) / 2);
+  border: var(--divider-width) solid var(--color-control-border);
+  border-radius: var(--radius-pill);
+  background: var(--glass-control);
+}
+
+.theme-toggle__option {
+  display: inline-grid;
+  place-items: center;
+  width: calc(var(--space-8) - var(--space-1));
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+}
+
+.theme-toggle__option:hover,
+.theme-toggle__option:focus-visible {
+  color: var(--color-text-strong);
+}
+
+.theme-toggle__option[aria-pressed='true'] {
+  background: var(--control-raised);
+  box-shadow: var(--control-raised-edge);
+  color: var(--color-text-strong);
+}
+
+.theme-toggle__icon {
+  width: var(--icon-size);
+  height: var(--icon-size);
+}
+
+/* J-45: подпись переключателя каналов — вровень с ним, тише значения */
+.channel-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.channel-switch__label {
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+}
+
+.shell-head__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+}
+
+/* J-115: «С кэшбеком» — переключатель в строке фильтров; состояние — положением ручки и подписью, не только цветом (D-26) */
+.filters__switch {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  padding-inline: var(--space-2);
+  color: var(--color-text-secondary);
+  font: var(--type-caption);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.filters__switch-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+/* J-122: дорожка 52×28, ручка — стеклянный круг 22×22 со смещением 3 px от края */
+.filters__switch-track {
+  position: relative;
+  flex: none;
+  width: 52px;
+  height: 28px;
+  border: var(--hairline) solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-sunken);
+  transition: background var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard);
+}
+
+.filters__switch-track::after {
+  content: '';
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: 3px;
+  width: 22px;
+  height: 22px;
+  box-sizing: border-box;
+  border: 1.5px solid var(--color-border-strong);
+  border-radius: 50%;
+  background: var(--toggle-knob-off);
+  transform: translateY(-50%);
+  transition:
+    inset-inline-start var(--motion-fast) var(--ease-standard),
+    background var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard),
+    box-shadow var(--motion-fast) var(--ease-standard);
+}
+
+.filters__switch-input:checked + .filters__switch-track {
+  border-color: var(--toggle-track-border);
+  background: var(--toggle-track-on);
+}
+
+.filters__switch-input:checked + .filters__switch-track::after {
+  inset-inline-start: calc(100% - 22px - 3px);
+  border-color: var(--toggle-rim);
+  background: radial-gradient(circle at 50% 50%, var(--toggle-tone) 0%, var(--toggle-tone) 30%, var(--toggle-tone-edge) 100%);
+  box-shadow: 0 0 0 1px var(--toggle-ring), 0 1px 8px var(--toggle-glow);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .filters__switch-track,
+  .filters__switch-track::after {
+    transition: none;
+  }
+}
+
+.filters__switch-input:focus-visible + .filters__switch-track {
+  outline: var(--focus-ring) solid var(--color-text-strong);
+  outline-offset: 2px;
+}
+
+/* J-43, J-44: действия служебной строки — та же кнопка-пилюля, что «Вернуть общий период»; popover — у своей кнопки */
+.shell-head__action {
+  position: relative;
+  display: inline-flex;
+}
+
+.shell-head__action .chart-toggle {
+  margin-inline-end: 0;
+}
+
+.shell-head__action[hidden] {
+  display: none;
+}
+
+/* J-75: загрузка CSV в десктопном приложении — справа в строке шапки, перед темой; вид кнопки темы с подписью */
+.shell-head__bar > .data-import__item {
+  flex-shrink: 0;
+  margin-inline-start: auto;
+}
+
+.data-import__item:not([hidden]) + .theme-toggle {
+  margin-inline-start: 0;
+}
+
+.data-import__trigger {
+  display: inline-flex;
+  align-items: center;
+  height: var(--space-8);
+  padding: 0 var(--space-3);
+  border: var(--divider-width) solid var(--color-control-border);
+  border-radius: var(--radius-pill);
+  background: var(--control-raised);
+  box-shadow: var(--control-raised-edge);
+  color: var(--color-text-secondary);
+  font: var(--type-caption);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.data-import__trigger:hover,
+.data-import__trigger:focus-visible,
+.data-import__trigger[aria-expanded='true'] {
+  border-color: var(--color-border-strong);
+  background: var(--control-raised-hover);
+  color: var(--color-text-strong);
+}
+
+/* Новая версия приложения — строка над шапкой (docs/desktop-app.md, «Обновления») */
+.app-update {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
+  border: var(--divider-width) solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  background: var(--control-raised);
+  color: var(--color-text-strong);
+  font: var(--type-caption);
+}
+
+.app-update[hidden] {
+  display: none;
+}
+
+.app-update__text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.app-update__install {
+  flex-shrink: 0;
+  padding: var(--space-1) var(--space-3);
+  border: var(--divider-width) solid var(--color-text-strong);
+  border-radius: var(--radius-pill);
+  background: var(--color-text-strong);
+  color: var(--color-on-accent);
+  font: var(--type-caption-strong);
+  cursor: pointer;
+}
+
+/* Подвал: обратная связь из приложения */
+.page-footer {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  padding-block: var(--space-4) var(--space-8);
+}
+
+.feedback {
+  position: absolute;
+  z-index: 10;
+  bottom: calc(100% - var(--space-2));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: calc(var(--space-10) * 11);
+  padding: var(--space-4);
+  border-radius: var(--radius-popover);
+  font: var(--type-caption);
+}
+
+.feedback[hidden] {
+  display: none;
+}
+
+.feedback__comment {
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-2);
+  border: var(--divider-width) solid var(--glass-edge);
+  border-radius: var(--radius-control);
+  background: var(--glass-control);
+  color: var(--color-text-strong);
+  font: var(--type-caption);
+}
+
+.feedback__comment {
+  resize: vertical;
+}
+
+.feedback__preview summary {
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.feedback__preview-list {
+  margin: var(--space-2) 0 0;
+  padding-inline-start: var(--space-4);
+  color: var(--color-text-secondary);
+}
+
+.data-import__auto {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  color: var(--color-text-strong);
+  cursor: pointer;
+}
+
+.data-import__note[hidden] {
+  display: none;
+}
+
+.feedback__preview-note,
+.feedback__status,
+.data-import__note,
+.data-import__version {
+  margin: 0;
+  color: var(--color-text-tertiary);
+}
+
+.data-import__source {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: var(--hairline) solid var(--glass-edge);
+}
+
+.data-import__source[hidden],
+.data-import__version[hidden] {
+  display: none;
+}
+
+/* Popover раскрывается влево от правого края кнопки, как «Как считается» */
+.control-popover.data-import {
+  inset-inline-start: auto;
+  inset-inline-end: 0;
+  width: calc(var(--space-10) * 9);
+}
+
+.control-popover.data-import--start {
+  inset-inline: 0 auto;
+}
+
+.data-import__lead,
+.data-import__status-text {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+.data-import__sheets,
+.data-import__issues {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.data-import__sheets {
+  max-height: calc(var(--space-10) * 4);
+  overflow-y: auto;
+}
+
+.data-import__sheet {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-control);
+  background: var(--glass-control);
+}
+
+.data-import__name {
+  overflow: hidden;
+  color: var(--color-text-strong);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.data-import__time,
+.data-import__empty {
+  color: var(--color-text-tertiary);
+}
+
+.data-import__remove {
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--color-text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.data-import__remove:hover,
+.data-import__remove[data-confirm='true'] {
+  color: var(--color-negative-ink);
+}
+
+.data-import__issues {
+  padding-inline-start: var(--space-4);
+  list-style: disc;
+  color: var(--color-text-secondary);
+}
+
+.data-import__status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.data-import__status[hidden] {
+  display: none;
+}
+
+/* Прозрачность недоступного — общее правило :disabled (J-63); здесь только курсор идущей сборки */
+.data-import :disabled {
+  cursor: progress;
+}
+
+/* J-115: кнопка стоит внизу закреплённого бокового меню — popover раскрывается вверх и вправо, на страницу,
+   и не выходит за экран снизу. Двойной класс — правило стоит выше общего .control-popover и иначе проиграло бы ему порядком */
+.control-popover.method-popover {
+  top: auto;
+  bottom: 0;
+  inset-inline-start: calc(100% + var(--space-2));
+  width: calc(var(--space-10) * 11);
+  max-height: calc(100vh - var(--space-8));
+  overflow-y: auto;
+}
+
+.method-popover__list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-2) var(--space-3);
+  margin: 0;
+}
+
+.method-popover__term {
+  color: var(--color-text-strong);
+  font: var(--type-caption-strong);
+}
+
+.method-popover__text {
+  margin: 0;
+  color: var(--color-text-secondary);
+  text-wrap: pretty;
+}
+
+/* Панель — по содержимому, как в макете (design-spec §2), а не до правого края */
+/* Не переносится: вторая строка легла бы на скругление pill; при нехватке места сжимаются подписи фильтров (R-34) */
+.filters {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  /* Поле со всех сторон как зазор сверху: крайние контролы и чип прижаты к краям панели одинаково (R-35, J-05) */
+  padding: var(--space-1);
+  /* Дорожка фильтров — как у переключателей, а не карточка (J-15, Figma 3204:2691) */
+  border: var(--hairline) solid var(--color-control-border);
+  border-radius: var(--radius-pill);
+  background: var(--control-surface);
+}
+
+/* J-61: период — своя дорожка перед фильтрами среза; не сжимается, сжимаются подписи фильтров */
+.filters--period {
+  flex-shrink: 0;
+}
+
+.filters__item {
+  position: relative;
+  display: flex;
+  min-width: var(--filter-min-width);
+}
+
+.filters__item:has(.filters__control--period) {
+  flex-shrink: 0;
+}
+
+.filters__control {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 22ch;
+  min-width: 0;
+  padding: var(--space-1) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--color-text-secondary);
+  font: var(--type-caption);
+  cursor: pointer;
+  transition: color var(--motion-fast) var(--ease-standard), background-color var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard);
+}
+
+/* Открытый фильтр под курсором не меняется: hover и раскрытие — одно правило */
+.filters__control:hover,
+.filters__control[aria-expanded='true'],
+.card__period--control:hover,
+.card__period--control[aria-expanded='true'] {
+  background: var(--control-raised-hover);
+  color: var(--color-text-strong);
+  box-shadow: inset 0 0 0 var(--divider-width) var(--color-border-strong);
+}
+
+.filters__control-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Период — главный элемент шапки (requirements 2.1): белый текст с иконкой без плашки, как в макете (J-15, Figma 3204:2692) */
+.filters__control--period {
+  max-width: none;
+  color: var(--color-text-strong);
+}
+
+.filters__control[data-active='true'] {
+  color: var(--color-text-strong);
+}
+
+/* Выбранный фильтр — чип: значение и крестик в одной плашке; форма, а не только цвет, отличает его (R-34, D-26) */
+.filters__item--chip {
+  align-items: center;
+  border: var(--divider-width) solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--control-raised);
+  box-shadow: var(--control-raised-edge);
+}
+
+.filters__item--chip .filters__control {
+  padding-inline-end: var(--space-1);
+}
+
+.filters__item--chip:hover {
+  border-color: var(--color-text-secondary);
+  background: var(--control-raised-hover);
+}
+
+.filters__item--chip .filters__control:hover,
+.filters__item--chip .filters__control[aria-expanded='true'] {
+  background: none;
+  box-shadow: none;
+}
+
+/* Цель крестика не меньше 24 × 24 (WCAG 2.5.8) */
+.filters__clear {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  padding: calc((var(--tab-height) - var(--icon-size-sm)) / 2);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.filters__clear:hover,
+.filters__clear:focus-visible {
+  background: var(--color-border-strong);
+  color: var(--color-text-strong);
+}
+
+.filters__clear-icon {
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
+}
+
+/* J-128: «Сбросить фильтры» — текстовая кнопка в конце строки фильтров, видна только при выбранном фильтре */
+.filters__reset {
+  flex-shrink: 0;
+  min-height: var(--tab-height);
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--color-text-secondary);
+  font: var(--type-caption);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.filters__reset:hover,
+.filters__reset:focus-visible {
+  background: var(--color-border-strong);
+  color: var(--color-text-strong);
+}
+
+
+/* Подчёркивание держится внутри подписи: она режет выступ ради многоточия, а без линии свой период различался бы только цветом (D-26) */
+.card__period--local .filters__control-label {
+  text-decoration: underline;
+  text-decoration-thickness: var(--divider-width);
+  text-underline-offset: var(--hairline);
+}
+
+/* Иконка периода — общая из icons.js, как у периода в шапке карточки */
+.filters__calendar-icon {
+  flex: 0 0 auto;
+  width: var(--icon-size);
+  height: var(--icon-size);
+  color: var(--color-text-secondary);
+}
+
+/* Разделитель декоративный: без содержимого и без имени в a11y-дереве (V-04); точка, как в макете (J-15) */
+.filters__divider {
+  flex: 0 0 auto;
+  width: var(--filter-dot-size);
+  height: var(--filter-dot-size);
+  border-radius: var(--radius-pill);
+  background: var(--color-text-tertiary);
+}
+
+.control-popover {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + var(--space-2));
+  inset-inline-start: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: calc(var(--space-10) * 7);
+  padding: var(--space-4);
+  border-radius: var(--radius-popover);
+  font: var(--type-caption);
+}
+
+/* Popover проявляется у своего контрола: показ из display: none перезапускает анимацию (D-56) */
+.control-popover:not([hidden]) {
+  animation: popover-in var(--motion-fast) var(--ease-standard);
+}
+
+@keyframes popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(calc(-1 * var(--space-1)));
+  }
+}
+
+.control-popover[hidden] {
+  display: none;
+}
+
+.control-popover--period {
+  width: calc(var(--space-10) * 9);
+}
+
+.control-popover--end {
+  inset-inline: auto 0;
+}
+
+.control-popover__title,
+.control-popover__subtitle {
+  margin: 0;
+  color: var(--color-text-strong);
+}
+
+.control-popover__title,
+.control-popover__subtitle {
+  font: var(--type-caption-strong);
+}
+
+.control-popover__presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.control-popover__preset,
+.control-popover__apply,
+.control-popover__reset {
+  padding: var(--space-2) var(--space-3);
+  border: var(--divider-width) solid var(--glass-edge);
+  border-radius: var(--radius-pill);
+  background: var(--glass-control);
+  color: var(--color-text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+/* Действие popover — белое, а не акцентное: зелёный в дашборде означает «хорошо», а не «нажми» */
+.control-popover__apply {
+  border-color: var(--color-text-strong);
+  background: var(--color-text-strong);
+  color: var(--color-on-accent);
+  font: var(--type-caption-strong);
+}
+
+.control-popover__preset:hover,
+.control-popover__preset[aria-pressed='true'],
+.control-popover__reset:hover {
+  border-color: var(--color-text-strong);
+  color: var(--color-text-strong);
+}
+
+.control-popover__apply:hover {
+  box-shadow: inset 0 0 0 var(--divider-width) var(--color-on-accent);
+}
+
+.control-popover__custom,
+.control-popover__field,
+.control-popover__choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.control-popover__fields,
+.control-popover__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.control-popover__field {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.control-popover__field-label {
+  color: var(--color-text-secondary);
+  font: var(--type-caption);
+}
+
+.control-popover__date {
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-2);
+  border: var(--divider-width) solid var(--glass-edge);
+  border-radius: var(--radius-control);
+  background: var(--glass-control);
+  color: var(--color-text-secondary);
+  color-scheme: var(--color-scheme);
+  font: inherit;
+  cursor: pointer;
+}
+
+.control-popover__date:hover,
+.control-popover__date:focus {
+  border-color: var(--color-text-strong);
+}
+
+.control-popover__date::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+}
+
+.control-popover__choices {
+  max-height: calc(var(--space-10) * 8);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  border: 0;
+}
+
+.control-popover__option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.control-popover__option:hover {
+  color: var(--color-text-strong);
+  text-decoration: underline;
+  text-underline-offset: var(--space-1);
+}
+
+/* Свой вид поверх нативного checkbox: отмеченный — чёрная галочка на белом; input остаётся в DOM и tab order */
+.control-popover__checkbox {
+  flex: 0 0 auto;
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
+  margin: calc((1lh - var(--icon-size-sm)) / 2) 0 0;
+  border: var(--divider-width) solid var(--color-text-tertiary);
+  border-radius: var(--radius-tag);
+  background: var(--color-surface-sunken) center / 100% no-repeat;
+  font: inherit;
+  appearance: none;
+  cursor: pointer;
+}
+
+.control-popover__option:hover .control-popover__checkbox {
+  border-color: var(--color-text-strong);
+}
+
+.control-popover__checkbox:checked {
+  border-color: var(--color-text-strong);
+  background-color: var(--color-text-strong);
+  background-image: var(--icon-check);
+}
+
+.control-popover__actions {
+  justify-content: flex-end;
+}
+
+.control-popover__error {
+  margin: 0;
+  color: var(--color-negative-ink);
+  font: var(--type-caption);
+}
+
+/* ── Жидкое стекло (R-50) ───────────────────────────────────────────── */
+
+/* Поверхность всех всплывающих окон: popover контролов, подсказки графика и heatmap. Рамку, фон и тень задаёт только она */
+.glass {
+  border: var(--divider-width) solid var(--glass-edge);
+  background: var(--glass-sheen), var(--glass-fill);
+  box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: var(--glass-blur) brightness(var(--glass-backdrop-brightness));
+  backdrop-filter: var(--glass-blur) brightness(var(--glass-backdrop-brightness));
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass {
+    background: var(--glass-sheen), var(--glass-fill-solid);
+  }
+
+  #header::before {
+    background: var(--color-bg);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .glass,
+  #header::before {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .glass {
+    background: var(--glass-sheen), var(--glass-fill-solid);
+  }
+
+  #header::before {
+    background: var(--color-bg);
+  }
+
+  .card {
+    background: var(--card-surface-solid);
+  }
+}
+
+/* ── Источник данных ──────────────────────────────────────────────── */
+
+/*
+  Пометка демо-данных обязана быть явной: молчаливый fallback на фикстуру
+  маскирует сломанный pipeline
+*/
+/* Источник — служебная подпись строки, а не pill: в рамке он читался как контрол (D-35) */
+.source-note {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font: var(--type-caption);
+}
+
+.source-note--demo {
+  color: var(--color-negative-ink);
+}
+
+.source-note__mark {
+  font: var(--type-caption-strong);
+}
+
+/* Иконка внутри строки текста — размером со строку */
+.icon-inline {
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.125em;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

@@ -1,0 +1,63 @@
+/* J-21: одна композиция групп триггеров для шапки и фильтров таблицы. */
+.trigger-choices__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.trigger-choices__product {
+  flex: 1;
+  min-width: 0;
+  font: var(--type-caption-strong);
+}
+
+.trigger-choices__product span,
+.trigger-choices__values .control-popover__option span {
+  overflow-wrap: anywhere;
+}
+
+.trigger-choices__toggle {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-1);
+  border: var(--divider-width) solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.trigger-choices__toggle:hover {
+  border-color: var(--color-text-strong);
+  color: var(--color-text-strong);
+}
+
+.trigger-choices__arrow {
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
+  transform: rotate(-90deg);
+}
+
+.trigger-choices__toggle[aria-expanded='true'] .trigger-choices__arrow {
+  transform: none;
+}
+
+.trigger-choices__values {
+  padding-inline-start: calc(var(--icon-size-sm) + var(--space-2));
+}
+
+.trigger-choices__values[hidden] {
+  display: none;
+}
+
+.trigger-choices__product-checkbox:indeterminate {
+  border-color: var(--color-text-strong);
+  background-color: var(--color-text-strong);
+  background-image: linear-gradient(var(--color-on-accent), var(--color-on-accent));
+  background-size: 65% var(--divider-width);
+}
+
+
+

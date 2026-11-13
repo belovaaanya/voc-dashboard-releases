@@ -1,0 +1,143 @@
+/* ── Sparkline (C-05, Figma 3030:3263, 3030:3283) ──────────────────── */
+
+.sparkline {
+  flex: 0 0 auto;
+  width: var(--sparkline-width);
+  height: var(--sparkline-height);
+  overflow: visible;
+}
+
+/* J-151: на ширину колонки — линия полугода в дайджесте; толщина линии не растягивается */
+.sparkline--wide {
+  width: 100%;
+  height: calc(var(--space-10) * 1.5);
+}
+
+.sparkline--wide .sparkline__line {
+  vector-effect: non-scaling-stroke;
+}
+
+/* J-177: точка растянутой линии — HTML-кружок поверх SVG (см. sparkline.js), 6 px как с J-155 */
+.sparkline__marker {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  width: calc(var(--space-1) * 1.5);
+  height: calc(var(--space-1) * 1.5);
+  border-radius: var(--radius-pill);
+  background: var(--tone);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.sparkline__area {
+  stroke: none;
+}
+
+.sparkline__stop {
+  stop-color: var(--tone);
+  stop-opacity: var(--sparkline-fill-opacity);
+}
+
+.sparkline__stop--clear {
+  stop-opacity: 0;
+}
+
+.sparkline__line {
+  fill: none;
+  stroke: var(--tone);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: var(--sparkline-stroke);
+  vector-effect: non-scaling-stroke;
+}
+
+.sparkline__dot {
+  fill: var(--tone);
+}
+
+/* J-160: линия с коридором плана — градиентом зон, как на графике динамики */
+.sparkline__line--zones {
+  stroke: var(--sparkline-zones);
+}
+
+/* J-153: коридор плана — тихой полосой за линией, как полоса плана на графике динамики */
+.sparkline__band {
+  fill: var(--chart-selected-fill);
+}
+
+/* J-157: подписи значений над точками широкой линии; сверху — место под подпись самой высокой точки */
+.sparkline-labels {
+  padding-block-start: var(--space-5);
+  min-width: 0;
+}
+
+.sparkline-labels__plot {
+  position: relative;
+}
+
+.sparkline-labels__plot > .sparkline {
+  display: block;
+}
+
+.sparkline-labels__value {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  transform: translate(-50%, calc(-100% - var(--space-2)));
+  color: var(--color-text-secondary);
+  font: var(--type-axis);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.sparkline-labels__value--start {
+  transform: translate(0, calc(-100% - var(--space-2)));
+}
+
+.sparkline-labels__value--end {
+  transform: translate(-100%, calc(-100% - var(--space-2)));
+}
+
+/* J-163: широкая линия на всю высоту контейнера — подписи и SVG тянутся вместе */
+.sparkline--fill {
+  height: 100%;
+  min-height: calc(var(--space-10) * 1.5);
+}
+
+.sparkline-labels--fill {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+.sparkline-labels--fill > .sparkline-labels__plot {
+  flex: 1 1 auto;
+}
+
+/* J-165: подписи под точками — даты недель; крайние прижаты к краю, как подписи значений */
+.sparkline-labels__axis {
+  position: relative;
+  height: calc(var(--space-1) * 4);
+  margin-block-start: var(--space-2);
+}
+
+.sparkline-labels__tick {
+  position: absolute;
+  bottom: 0;
+  left: var(--x);
+  transform: translateX(-50%);
+  color: var(--color-text-tertiary);
+  font: var(--type-axis);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.sparkline-labels__tick--start {
+  transform: none;
+}
+
+.sparkline-labels__tick--end {
+  transform: translateX(-100%);
+}

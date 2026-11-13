@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Дашборд VOC для PO B2B</title>
+<!-- J-69: тема — до первой отрисовки, иначе светлая страница мигает тёмной; ключ — THEME_KEY в js/shell/theme.js -->
+<script>try { if (localStorage.getItem('voc.theme') === 'light') document.documentElement.dataset.theme = 'light'; } catch (error) { /* без хранилища — тёмная */ }</script>
+<!-- J-115, J-124: боковое меню по умолчанию свёрнуто — до первой отрисовки, иначе страница прыгнет; развёрнутое помнит NAV_KEY в js/shell/side-nav.js -->
+<script>try { if (localStorage.getItem('voc.nav') !== 'expanded') document.documentElement.dataset.nav = 'collapsed'; } catch (error) { document.documentElement.dataset.nav = 'collapsed'; }</script>
+<script type="module" src="js/boot.js" async></script>
+<link rel="preload" href="fonts/manrope-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/manrope-cyrillic.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/shell.css">
+<link rel="stylesheet" href="css/components/segmented.css">
+<link rel="stylesheet" href="css/components/indicators.css">
+<link rel="stylesheet" href="css/components/legend.css">
+<link rel="stylesheet" href="css/components/sparkline.css">
+<link rel="stylesheet" href="css/components/share-pie.css">
+<link rel="stylesheet" href="css/components/focus-chip.css">
+<link rel="stylesheet" href="css/components/trigger-choices.css">
+<link rel="stylesheet" href="css/components/copy-button.css">
+<link rel="stylesheet" href="css/components/side-toggle.css">
+<link rel="stylesheet" href="css/blocks/metrics.css">
+<link rel="stylesheet" href="css/blocks/distribution.css">
+<link rel="stylesheet" href="css/blocks/conclusion.css">
+<link rel="stylesheet" href="css/blocks/dynamics.css">
+<link rel="stylesheet" href="css/blocks/antidrivers.css">
+<link rel="stylesheet" href="css/blocks/insights.css">
+<link rel="stylesheet" href="css/blocks/verbatim.css">
+<link rel="stylesheet" href="css/blocks/digest.css">
+<!-- modulepreload: node tools/module_preload.mjs --write -->
+<link rel="modulepreload" href="js/blocks/antidrivers.js">
+<link rel="modulepreload" href="js/blocks/conclusion.js">
+<link rel="modulepreload" href="js/blocks/digest.js">
+<link rel="modulepreload" href="js/blocks/distribution.js">
+<link rel="modulepreload" href="js/blocks/dynamics.js">
+<link rel="modulepreload" href="js/blocks/insights.js">
+<link rel="modulepreload" href="js/blocks/metric-card.js">
+<link rel="modulepreload" href="js/blocks/plan-days.js">
+<link rel="modulepreload" href="js/blocks/tally.js">
+<link rel="modulepreload" href="js/blocks/verbatim-cards.js">
+<link rel="modulepreload" href="js/blocks/verbatim-table.js">
+<link rel="modulepreload" href="js/blocks/voc-channel.js">
+<link rel="modulepreload" href="js/blocks/voc-segment.js">
+<link rel="modulepreload" href="js/components/badge.js">
+<link rel="modulepreload" href="js/components/chart-timeline.js">
+<link rel="modulepreload" href="js/components/copy-button.js">
+<link rel="modulepreload" href="js/components/delta.js">
+<link rel="modulepreload" href="js/components/detail-event-chip.js">
+<link rel="modulepreload" href="js/components/driver-chip.js">
+<link rel="modulepreload" href="js/components/filter-popover.js">
+<link rel="modulepreload" href="js/components/focus-chip.js">
+<link rel="modulepreload" href="js/components/hover-tooltip.js">
+<link rel="modulepreload" href="js/components/legend.js">
+<link rel="modulepreload" href="js/components/paging.js">
+<link rel="modulepreload" href="js/components/period-picker.js">
+<link rel="modulepreload" href="js/components/scale-tabs.js">
+<link rel="modulepreload" href="js/components/search-field.js">
+<link rel="modulepreload" href="js/components/segmented.js">
+<link rel="modulepreload" href="js/components/share-pie.js">
+<link rel="modulepreload" href="js/components/side-toggle.js">
+<link rel="modulepreload" href="js/components/sparkline.js">
+<link rel="modulepreload" href="js/components/stage-observer.js">
+<link rel="modulepreload" href="js/components/status-dot.js">
+<link rel="modulepreload" href="js/components/status-panel.js">
+<link rel="modulepreload" href="js/components/tag.js">
+<link rel="modulepreload" href="js/components/trigger-choices.js">
+<link rel="modulepreload" href="js/core/analytical-causes.js">
+<link rel="modulepreload" href="js/core/annotations.js">
+<link rel="modulepreload" href="js/core/anomalies.js">
+<link rel="modulepreload" href="js/core/antidrivers.js">
+<link rel="modulepreload" href="js/core/breakdown.js">
+<link rel="modulepreload" href="js/core/calendar-analysis.js">
+<link rel="modulepreload" href="js/core/calendar.js">
+<link rel="modulepreload" href="js/core/cashback.js">
+<link rel="modulepreload" href="js/core/chart-geometry.js">
+<link rel="modulepreload" href="js/core/conclusion-payload.js">
+<link rel="modulepreload" href="js/core/conclusions.js">
+<link rel="modulepreload" href="js/core/critical-drop.js">
+<link rel="modulepreload" href="js/core/dates.js">
+<link rel="modulepreload" href="js/core/digest.js">
+<link rel="modulepreload" href="js/core/dimensions.js">
+<link rel="modulepreload" href="js/core/distribution.js">
+<link rel="modulepreload" href="js/core/export.js">
+<link rel="modulepreload" href="js/core/format.js">
+<link rel="modulepreload" href="js/core/impact.js">
+<link rel="modulepreload" href="js/core/incident-events.js">
+<link rel="modulepreload" href="js/core/insights.js">
+<link rel="modulepreload" href="js/core/labels.js">
+<link rel="modulepreload" href="js/core/methodology.js">
+<link rel="modulepreload" href="js/core/metrics.js">
+<link rel="modulepreload" href="js/core/period.js">
+<link rel="modulepreload" href="js/core/plan.js">
+<link rel="modulepreload" href="js/core/recent.js">
+<link rel="modulepreload" href="js/core/round.js">
+<link rel="modulepreload" href="js/core/sufficiency.js">
+<link rel="modulepreload" href="js/core/timeseries.js">
+<link rel="modulepreload" href="js/core/verbatim.js">
+<link rel="modulepreload" href="js/core/xlsx.js">
+<link rel="modulepreload" href="js/io/desktop.js">
+<link rel="modulepreload" href="js/io/llm-conclusion.js">
+<link rel="modulepreload" href="js/io/loader.js">
+<link rel="modulepreload" href="js/shell/app-update.js">
+<link rel="modulepreload" href="js/shell/block.js">
+<link rel="modulepreload" href="js/shell/data-import.js">
+<link rel="modulepreload" href="js/shell/feedback.js">
+<link rel="modulepreload" href="js/shell/header.js">
+<link rel="modulepreload" href="js/shell/side-nav.js">
+<link rel="modulepreload" href="js/shell/theme.js">
+<link rel="modulepreload" href="js/state/chart-selection.js">
+<link rel="modulepreload" href="js/state/controls.js">
+<link rel="modulepreload" href="js/state/detail-event.js">
+<link rel="modulepreload" href="js/state/driver-pick.js">
+<link rel="modulepreload" href="js/state/event-analysis.js">
+<link rel="modulepreload" href="js/state/focus.js">
+<link rel="modulepreload" href="js/state/resolve-state.js">
+<link rel="modulepreload" href="js/state/selection.js">
+<link rel="modulepreload" href="js/state/url-state.js">
+<link rel="modulepreload" href="js/ui/dom.js">
+<link rel="modulepreload" href="js/ui/download.js">
+<link rel="modulepreload" href="js/ui/icons.js">
+<link rel="modulepreload" href="js/ui/motion.js">
+<link rel="modulepreload" href="js/ui/popover.js">
+<!-- /modulepreload -->
+</head>
+<body>
+  <div class="app">
+  <!-- J-115: боковое меню — страницы дашборда, данные выгрузки и методика; сворачивается до иконок -->
+  <nav class="side-nav" id="side-nav" aria-label="Разделы дашборда"></nav>
+  <div class="page">
+    <div id="header"></div>
+
+    <!-- J-151: страницы дашборда — пункты меню; видна одна, main.js скрывает остальные и не считает их блоки -->
+    <div class="page-view" id="page-voc" data-page="voc">
+    <div class="page-row">
+      <div class="metrics-grid" id="metrics"></div>
+      <div class="column column--bounded" id="rail-top"></div>
+    </div>
+
+    <!-- J-40, J-49: блок аналитики — одна карточка с общим периодом; слева график и антидрайверы под ним,
+         справа события на всю высоту группы; main.js оборачивает слот в карточку группы -->
+    <div class="group-slot" id="analysis">
+      <div class="group-row">
+        <div class="column group-stack">
+          <div class="column" id="main"></div>
+          <div class="column group-section" id="drivers"></div>
+        </div>
+        <div class="column column--bounded" id="rail-main"></div>
+      </div>
+      <!-- J-128: топ проблем с лентой — под графиком и календарём; лента шириной календаря -->
+      <div class="column group-section" id="problems"></div>
+    </div>
+
+    </div>
+
+    <!-- J-151: «Обратная связь» — таблица прямой речи (с J-128 была отдельной карточкой внизу главной) -->
+    <div class="page-view" id="page-feedback" data-page="feedback" hidden>
+    <div class="group-slot" id="verbatim">
+      <div class="column" id="full"></div>
+    </div>
+    </div>
+
+    <!-- J-151, J-154: «VOC-дайджест» — строки одной высоты: итог месяца; три сегмента; антидрайверы ДКО на всю ширину;
+         стабильность и детализация рядом (треть и две трети) -->
+    <div class="page-view digest" id="page-digest" data-page="digest" hidden>
+      <div class="digest__top" id="digest-top"></div>
+      <div class="digest__segments" id="digest-segments"></div>
+      <div class="digest__dko" id="digest-dko"></div>
+      <div class="digest__pair" id="digest-side"></div>
+    </div>
+
+    <!-- J-151: «VOC ролей» — страница в работе -->
+    <div class="page-view" id="page-roles" data-page="roles" hidden>
+      <div class="column" id="roles"></div>
+    </div>
+  </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

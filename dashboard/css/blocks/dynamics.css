@@ -1,0 +1,323 @@
+/* ── Динамика VOC (P0 №3–4, D-04, D-22, V-05, V-06, V-11, V-12) ─── */
+
+.card--dynamics .card__body {
+  flex: 1 1 auto;
+}
+
+.chart-toggle {
+  border: 0;
+  color: var(--color-text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.chart-toggle:hover {
+  color: var(--color-text-strong);
+}
+
+.chart {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.chart-legend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-4);
+  min-height: var(--space-5);
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+}
+
+.chart-toggle {
+  margin-inline-end: auto;
+  padding: var(--space-1) var(--space-2);
+  border: var(--divider-width) solid var(--color-control-border);
+  border-radius: var(--radius-pill);
+  background: var(--control-raised);
+  box-shadow: var(--control-raised-edge);
+  font: var(--type-caption);
+  white-space: nowrap;
+}
+
+.chart-toggle:hover {
+  background: var(--control-raised-hover);
+}
+
+.chart-toggle[aria-pressed='true'] {
+  border-color: var(--color-border-strong);
+  color: var(--color-text-secondary);
+}
+
+.chart-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: var(--chart-plot-height);
+  overflow: hidden;
+}
+
+/* Размер svg задаёт скрипт по сцене, поэтому svg не влияет на её высоту */
+.chart-svg {
+  position: absolute;
+  inset: 0;
+  display: block;
+  overflow: visible;
+}
+
+.chart-grid line {
+  stroke: var(--chart-grid);
+  stroke-dasharray: 2 4;
+  stroke-width: var(--divider-width);
+}
+
+.chart-grid .chart-grid__minor {
+  opacity: var(--chart-grid-minor-opacity);
+}
+
+.chart-axis-label {
+  fill: var(--color-text-tertiary);
+  font: var(--type-axis);
+}
+
+.chart-axis-label--y {
+  text-anchor: start;
+}
+
+.chart-axis-label--count {
+  text-anchor: end;
+}
+
+.chart-plot {
+  overflow: hidden;
+}
+
+.chart-plan-band {
+  fill: var(--color-plan-band);
+}
+
+.chart-bars {
+  pointer-events: none;
+}
+
+.chart-gradient--volume {
+  --chart-fill: var(--color-neutral);
+}
+
+/* J-86: столбики урона — форма столбиков оценок, градиент красный */
+.chart-gradient--damage {
+  --chart-fill: var(--color-negative);
+}
+
+.chart--damage .chart-line--default,
+.chart--damage .chart-point {
+  opacity: var(--chart-voc-overlay-opacity);
+}
+
+.chart-legend__lead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-inline-end: auto;
+}
+
+.chart-legend__count {
+  color: var(--color-text-secondary);
+}
+
+.chart-area {
+  stroke: none;
+}
+
+.chart-gradient--positive {
+  --chart-fill: var(--color-positive-fill);
+}
+
+.chart-gradient--negative {
+  --chart-fill: var(--color-negative);
+}
+
+.chart-gradient__strong {
+  stop-color: var(--chart-fill);
+  stop-opacity: var(--chart-fill-opacity);
+}
+
+.chart-gradient__clear {
+  stop-color: var(--chart-fill);
+  stop-opacity: 0;
+}
+
+/* Своя доля объёма у верха столбика: столбик гаснет к оси (R-12) */
+.chart-gradient--volume .chart-gradient__strong {
+  stop-opacity: var(--chart-volume-opacity);
+}
+
+/* Столбики урона — главный ряд режима: плотнее столбиков оценок */
+.chart-gradient--damage .chart-gradient__strong {
+  stop-opacity: var(--chart-damage-opacity);
+}
+
+.chart-line {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: calc(var(--divider-width) * 2);
+}
+
+.chart-line--default,
+.chart-line--previous {
+  stroke: var(--chart-line-neutral);
+}
+
+.chart-zones__stop--above {
+  stop-color: var(--color-positive);
+}
+
+.chart-zones__stop--in-plan {
+  stop-color: var(--chart-line-neutral);
+}
+
+.chart-zones__stop--below {
+  stop-color: var(--color-negative);
+}
+
+/* J-72: линия в коридоре не светится — свечение несёт смысл тона, у нейтрального его нет */
+.chart-zones--glow .chart-zones__stop--in-plan {
+  stop-opacity: 0;
+}
+
+/* Свечение — та же линия тем же градиентом, размытая и приглушённая: светится своим тоном каждый участок */
+.chart-line--glow {
+  opacity: var(--chart-glow-strength);
+  filter: blur(var(--chart-glow-radius));
+  stroke-width: var(--chart-glow-radius);
+}
+
+.chart-line--previous {
+  opacity: var(--chart-previous-opacity);
+  stroke-dasharray: var(--space-1) var(--space-1);
+  stroke-width: var(--divider-width);
+}
+
+/* Мост через пропуск — точками, чтобы не спутать с пунктиром прошлого периода (D-54) */
+.chart-line--gap {
+  stroke: var(--chart-line-neutral);
+  stroke-dasharray: 0 var(--space-2);
+}
+
+/* Точка — мелкая, цвета своей зоны, как в макете; мишень для мыши — прозрачный столбец интервала */
+.chart-point {
+  color: var(--chart-line-neutral);
+  fill: currentColor;
+  cursor: pointer;
+}
+
+.chart-point--above {
+  color: var(--color-positive);
+}
+
+.chart-point--below {
+  color: var(--color-negative);
+}
+
+.chart-point-hit {
+  fill: transparent;
+  cursor: pointer;
+}
+
+/* Ореол цвета фона: подпись экстремума, которой пришлось лечь на линию, читается поверх неё */
+.chart-point-label {
+  font: var(--type-axis);
+  paint-order: stroke;
+  stroke: var(--label-halo-color);
+  stroke-width: var(--label-halo);
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.chart-point-label--above {
+  fill: var(--color-positive);
+}
+
+.chart-point-label--default,
+.chart-point-label--in-plan {
+  fill: var(--color-text-secondary);
+}
+
+.chart-point-label--below {
+  fill: var(--color-negative);
+}
+
+/* J-97: в режиме урона линия VOC — фон: её значения серые, плана и его тонов нет */
+.chart--damage .chart-point-label--default {
+  fill: var(--color-neutral);
+}
+
+.chart-point.is-hovered,
+.chart-point:focus-visible {
+  stroke: var(--color-text-strong);
+  stroke-width: calc(var(--divider-width) * 2);
+  outline: none;
+}
+
+.chart-point.is-selected {
+  fill: var(--color-text-strong);
+  stroke: currentColor;
+  stroke-width: calc(var(--divider-width) * 2);
+  /* J-46: выбранная точка крупнее соседних */
+  r: var(--chart-point-selected-radius);
+}
+
+.chart-selected-column {
+  fill: var(--chart-selected-fill);
+  pointer-events: none;
+}
+
+.chart-tooltip {
+  position: absolute;
+  z-index: 2;
+  inset-inline-start: calc(var(--tooltip-x) + var(--space-2));
+  inset-block-start: calc(var(--tooltip-y) - var(--space-2));
+  transform: translateY(-100%);
+  max-width: var(--chart-tooltip-max);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-tooltip);
+  color: var(--color-text-secondary);
+  font: var(--type-caption);
+  width: max-content;
+  pointer-events: none;
+}
+
+/* J-47: значение и подсказка действия — двумя строками, подсказка тише */
+.chart-tooltip__value,
+.chart-tooltip__hint {
+  display: block;
+}
+
+.chart-tooltip__hint {
+  color: var(--color-text-tertiary);
+}
+
+.chart-tooltip--left {
+  inset-inline-start: calc(var(--tooltip-x) - var(--space-2));
+  transform: translate(-100%, -100%);
+}
+
+.chart-svg, .chart-timeline__svg { touch-action: none; user-select: none; }
+.chart-day-brush { fill: var(--row-selected); stroke: var(--color-border-strong); pointer-events: none; }
+.chart-timeline { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
+.chart-timeline__toolbar { display: flex; align-items: center; gap: var(--space-2); justify-content: space-between; }
+.chart-timeline__caption { color: var(--color-text-tertiary); font: var(--type-caption); }
+.chart-timeline__toolbar .chart-toggle { margin-inline-end: 0; }
+.chart-timeline__stage { position: relative; height: 64px; min-width: 0; }
+/* J-57: подсказка дат шкалы — над шкалой у курсора, одной строкой */
+.chart-timeline__tip { white-space: nowrap; }
+.chart-timeline__tip[hidden] { display: none; }
+.chart-timeline__svg { display: block; cursor: crosshair; }
+.chart-timeline__preview { fill: none; stroke: var(--color-text-tertiary); stroke-width: 1; pointer-events: none; }
+.chart-timeline__window { fill: var(--row-selected); stroke: var(--color-border-strong); cursor: grab; }
+.chart-timeline__handle { fill: var(--color-text-secondary); cursor: ew-resize; }
+.chart-timeline__handle:focus-visible { outline: none; stroke: var(--color-text-strong); stroke-width: 2; }

@@ -1,0 +1,66 @@
+/* ── Легенда (C-05, Figma 3204:2883) ───────────────────────────────── */
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-text-secondary);
+  font: var(--type-caption-strong);
+  white-space: nowrap;
+}
+
+.legend-item__marker {
+  display: inline-grid;
+  flex: 0 0 auto;
+  width: var(--legend-marker-size);
+  height: var(--legend-marker-size);
+  place-items: center;
+}
+
+.legend-list {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--space-3);
+}
+
+.legend-item__dot {
+  width: var(--status-dot-size-sm);
+  height: var(--status-dot-size-sm);
+  border-radius: var(--radius-pill);
+  background: var(--tone);
+}
+
+.legend-item__line,
+.legend-item__zones,
+.legend-item__dash {
+  width: var(--space-4);
+  height: calc(var(--divider-width) * 2);
+  border-radius: var(--radius-pill);
+  background: var(--tone);
+}
+
+/* Линия VOC по зонам коридора: выше плана, в плане, ниже плана */
+.legend-item__zones {
+  background: linear-gradient(90deg, var(--color-positive) 0 33%, var(--color-neutral) 33% 67%, var(--color-negative) 67%);
+}
+
+/* Тот же шаг пунктира, что у линии прошлого периода */
+.legend-item__dash {
+  height: var(--divider-width);
+  background: repeating-linear-gradient(90deg, var(--tone) 0 var(--space-1), transparent var(--space-1) var(--space-2));
+}
+
+/* Столбик урона (J-86): форма столбика графика, тот же тон */
+.legend-item__bar {
+  width: var(--space-1);
+  height: var(--space-3);
+  border-radius: var(--radius-pill);
+  background: linear-gradient(var(--tone), transparent);
+}
+
+.legend-item__band {
+  width: var(--space-4);
+  height: var(--space-2);
+  border: var(--hairline) solid var(--color-control-border);
+  background: var(--tone);
+}

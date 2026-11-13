@@ -1,0 +1,181 @@
+/* ── Индикаторы: дельта, точка статуса, тег, бейдж (C-04) ───────────── */
+
+/*
+  Тон задаёт цвет любого индикатора; смысл дублирован текстом, знаком или стрелкой (D-26).
+  J-70: текст индикатора — `--tone-ink`. Каждый тон объявляет его сам: иначе тег оранжевого
+  тона внутри красной карточки унаследовал бы красный цвет текста
+*/
+[class*='tone--'] {
+  --tone-ink: var(--tone);
+}
+
+.tone--positive {
+  --tone: var(--color-positive);
+  --tone-ink: var(--color-positive-ink);
+}
+
+.tone--negative {
+  --tone: var(--color-negative);
+  --tone-ink: var(--color-negative-ink);
+}
+
+.tone--neutral {
+  --tone: var(--color-neutral);
+}
+
+.tone--orange {
+  --tone: var(--color-orange);
+}
+
+.tone--yellow {
+  --tone: var(--color-yellow);
+}
+
+.tone--purple {
+  --tone: var(--color-purple);
+}
+
+/* Палитра J-20 общая для трёх вкладок, область действия — календарь. */
+.insights .tone--positive { --tone: var(--color-positive); }
+.insights .tone--mint { --tone: var(--calendar-mint); }
+.insights .tone--yellow { --tone: var(--calendar-yellow); }
+.insights .tone--orange { --tone: var(--calendar-orange); }
+.insights .tone--accident { --tone: var(--accident-tone, var(--color-negative)); }
+.insights .tone--negative { --tone: var(--color-negative); }
+
+/*
+  J-69, J-70: в светлой теме точки и заливки календаря — те же чистые цвета, что в тёмной
+  (зелёный и красный — тоны референса); текст тегов — тот же оттенок темнее, иначе светлые
+  мятный и жёлтый на белом не читаются (D-28)
+*/
+/* Точки — знак при подписанном теге (D-26): светлые мятный и жёлтый в светлой теме плотнее */
+:root[data-theme='light'] .insights .tone--mint { --tone-ink: var(--calendar-mint-ink); }
+/* J-71: жёлтый тёмным текстом становится оливковым — тег светлой темы: чистый жёлтый фон плотнее и тёмный текст */
+:root[data-theme='light'] .insights .tone--yellow { --tone-tint: 32%; --tone-ink: var(--color-text-strong); }
+:root[data-theme='light'] .insights .tone--orange { --tone-ink: var(--calendar-orange-ink); }
+/* Цвет аварии считает J-25 по светлой шкале (от светло-жёлтого к красному): в светлой теме тяжесть несёт заливка тега, текст — тёмный */
+:root[data-theme='light'] .insights .tone--accident {
+  /* Светлое начало шкалы J-25 на белом не видно: тон сдвинут к янтарному, тяжесть остаётся различимой */
+  --tone: color-mix(in srgb, var(--accident-tone, var(--color-negative)) 70%, var(--calendar-accident-amber));
+  --tone-tint: 28%;
+  --tone-ink: var(--color-text-strong);
+}
+
+/* Тоны подсветки heatmap: точка легенды того же цвета, что рамка и край ячейки (D-45, D-46, J-15) */
+.tone--heat-bad {
+  --tone: var(--color-negative);
+}
+
+.tone--heat-neutral {
+  --tone: var(--color-heat-neutral);
+}
+
+.tone--heat-good {
+  --tone: var(--color-positive);
+}
+
+.tone--muted {
+  --tone: var(--color-border-strong);
+}
+
+.tone--plan {
+  --tone: var(--color-plan-band);
+}
+
+.delta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--tone-ink, var(--tone));
+  font: var(--type-caption-strong);
+  white-space: nowrap;
+}
+
+.delta__arrow {
+  flex: 0 0 auto;
+  width: var(--icon-size);
+  height: var(--icon-size);
+}
+
+.delta--plain {
+  color: var(--color-text-strong);
+}
+
+.delta--plain .delta__arrow {
+  color: var(--tone-ink, var(--tone));
+}
+
+.delta--lg .delta__arrow {
+  width: var(--icon-size-lg);
+  height: var(--icon-size-lg);
+}
+
+.status-dot {
+  display: inline-block;
+  flex: 0 0 auto;
+  border-radius: var(--radius-pill);
+}
+
+/* Кольцо: тёмная середина, цвет тона к краю (Figma 3204:2746) */
+.status-dot--card {
+  width: var(--status-dot-size);
+  height: var(--status-dot-size);
+  border: var(--hairline) solid color-mix(in srgb, var(--tone) var(--tone-rim), transparent);
+  background: radial-gradient(circle closest-side, transparent, color-mix(in srgb, var(--tone) 50%, transparent) 55%, var(--tone));
+}
+
+.status-dot--row {
+  width: var(--status-dot-size-sm);
+  height: var(--status-dot-size-sm);
+  background: var(--tone);
+  box-shadow: 0 0 var(--space-1) var(--tone);
+}
+
+/* Длинный тег переносится, а не режется многоточием */
+.tag {
+  display: inline-block;
+  max-width: 100%;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-tag);
+  background: color-mix(in srgb, var(--tone) var(--tone-tint), transparent);
+  color: var(--tone-ink, var(--tone));
+  font: var(--type-caption-strong);
+  overflow-wrap: anywhere;
+}
+
+/* Тесная шапка карточки: одна строка, полный текст — в подсказке (R-49) */
+.tag--truncate {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Pill тона (J-15): градиент считается на самом элементе — на :root ещё нет его --tone */
+.tone-pill {
+  --tone-pill: radial-gradient(ellipse var(--pill-rx, var(--tone-pill-rx)) var(--pill-ry, var(--tone-pill-ry)) at 50% 50%, transparent, color-mix(in srgb, var(--tone) calc(var(--pill-edge, 100%) / 2), transparent) 50%, color-mix(in srgb, var(--tone) var(--pill-edge, 100%), transparent));
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--badge-min-width);
+  padding: 0 var(--space-4);
+  border: var(--hairline) solid color-mix(in srgb, var(--tone) var(--tone-rim), transparent);
+  border-radius: var(--radius-pill);
+  /* Текст бейджа — цвет тона на его же градиенте: край приглушён до --tone-glow, иначе AA не проходит (D-28, V-40) */
+  --pill-edge: var(--tone-glow);
+  background: var(--tone-pill);
+  color: var(--tone-ink, var(--tone));
+  height: var(--space-6);
+  font: var(--type-caption-strong);
+  white-space: nowrap;
+}
+
+/* J-29: заливка тега следует фактическому числу строк, без пустой второй строки. */
+.verbatim-card__head > .tag {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
