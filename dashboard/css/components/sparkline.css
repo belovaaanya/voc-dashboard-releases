@@ -84,6 +84,17 @@
   filter: blur(calc(var(--space-1) / 4));
 }
 
+.sparkline__band--crisp {
+  filter: none;
+}
+
+/* Границы коридора — линиями на шкале: видно, где план, при любом растяжении полосы */
+.sparkline__band-edge {
+  stroke: color-mix(in srgb, var(--color-positive) var(--tone-rim), transparent);
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
+}
+
 .sparkline__band-stop {
   --sparkline-band-strength: calc(var(--tone-rim) / 3);
   stop-color: color-mix(in srgb, var(--color-positive) var(--sparkline-band-strength), transparent);
@@ -113,10 +124,11 @@
 }
 
 .sparkline-labels__value {
+  --label-shift: calc(-100% - var(--space-2));
   position: absolute;
   left: var(--x);
   top: var(--y);
-  transform: translate(-50%, calc(-100% - var(--space-2)));
+  transform: translate(-50%, var(--label-shift));
   color: var(--color-text-secondary);
   font: var(--type-axis);
   white-space: nowrap;
@@ -124,11 +136,20 @@
 }
 
 .sparkline-labels__value--start {
-  transform: translate(0, calc(-100% - var(--space-2)));
+  transform: translate(0, var(--label-shift));
 }
 
 .sparkline-labels__value--end {
-  transform: translate(-100%, calc(-100% - var(--space-2)));
+  transform: translate(-100%, var(--label-shift));
+}
+
+/* Подпись под точкой — у нижней из двух линий одной сцены; снизу — место под неё */
+.sparkline-labels__value--below {
+  --label-shift: var(--space-2);
+}
+
+.sparkline-labels--below > .sparkline-labels__plot {
+  margin-block-end: var(--space-5);
 }
 
 /* J-163: широкая линия на всю высоту контейнера — подписи и SVG тянутся вместе */

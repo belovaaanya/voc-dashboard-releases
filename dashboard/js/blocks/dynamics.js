@@ -305,6 +305,23 @@ function labelBoxes(point, tone, anchor, size) {
   ].map((box) => ({ ...box, width: size.width, height: size.height }));
 }
 
+/* Размер сцены прошлой отрисовки блока: перерисовка на кадре жеста не мерит сцену заново */
+const stageSizes = new WeakMap();
+
+/* Рамка подписи зависит только от класса и текста: на кадрах drag подписи те же, getBBox не перестраивает layout */
+const labelBoxCache = new Map();
+globalThis.document?.fonts?.addEventListener?.('loadingdone', () => labelBoxCache.clear());
+
+function labelBox(node) {
+  const key = `${node.getAttribute('class')}|${node.textContent}`;
+  const known = labelBoxCache.get(key);
+  if (known) return known;
+  const { width, height, y } = node.getBBox();
+  const box = { width, height, y };
+  if (width > 0) labelBoxCache.set(key, box);
+  return box;
+}
+
 /* Подписи измеряются один раз все вместе: замер каждой позиции по отдельности перестраивал layout на каждой точке */
 function placePointLabels(group, series, points, plan, plot) {
   const values = series.map(({ voc }) => voc);
@@ -317,7 +334,7 @@ function placePointLabels(group, series, points, plan, plot) {
     group.append(node);
     return { index, tone, node };
   });
-  const measured = labels.map(({ node }) => node.getBBox());
+  const measured = labels.map(({ node }) => labelBox(node));
   const placed = labels.map(({ index, tone }, at) => {
     const { width, height, y } = measured[at];
     return { boxes: labelBoxes(points[index], tone, edgeAnchor(index, series.length), { width, height }), extreme: extremes.includes(values[index]), middle: y + height / 2 };
@@ -601,7 +618,10 @@ function renderChart(block, context, scale, plan) {
   const timeline = chartTimeline(context, { owner: block, onPreview: (range) => (context.previewPeriod ?? block.previewPeriod)?.(range) });
   chart.append(timeline.node);
   return { chart, model, mode: chartMode(block, context), draw: () => {
-    if (context.slice.length) observeStage(stage, (size) => drawChart(block, context, stage, tooltip, model, size));
+    if (context.slice.length) observeStage(stage, (size) => {
+      stageSizes.set(block, size);
+      drawChart(block, context, stage, tooltip, model, size);
+    }, stageSizes.get(block));
     timeline.draw();
   } };
 }

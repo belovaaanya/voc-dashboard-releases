@@ -45,6 +45,15 @@ export function shiftMonth(month, delta) {
 
 const monthRange = (month) => calendarRange('month', `${month}-01`);
 
+/*
+  Линия полугода начинается с первого месяца, где VOC есть хотя бы у одного ряда: месяцы до начала оценок — не пропуск,
+  а пустая часть графика. Пропуск внутри ряда остаётся разрывом линии
+*/
+export function filledFrom(...series) {
+  const start = series[0].findIndex((_, index) => series.some((values) => values[index] !== null));
+  return start < 0 ? 0 : start;
+}
+
 /** Месяцы, в которых есть оценки канала, по возрастанию. */
 export function monthsOf(rows) {
   const months = new Set();

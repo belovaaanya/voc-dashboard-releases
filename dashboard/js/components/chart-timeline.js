@@ -18,6 +18,8 @@ const STEP_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'Home', 'End']);
 const refocusByOwner = new WeakMap();
 /* Жест применяется на каждом кадре: перерисовка блока берёт ту же шкалу — drag, захват указателя и фокус ручки переживают её */
 const liveByOwner = new WeakMap();
+/* Ширина шкалы прошлой отрисовки: перерисовка на кадре жеста не мерит сцену заново */
+const stageSizes = new WeakMap();
 const DEFAULT_OWNER = {};
 const nextFrame = (callback) => (globalThis.requestAnimationFrame ?? ((run) => setTimeout(run, 16)))(callback);
 const cancelFrame = (id) => (globalThis.cancelAnimationFrame ?? clearTimeout)(id);
@@ -185,7 +187,7 @@ export function chartTimeline(context, { onPreview, owner = DEFAULT_OWNER } = {}
 
     const at = (event) => Math.max(0, Math.min(last, Math.round((event.clientX - svg.getBoundingClientRect().left - INSET) / inner * last)));
     const showTip = (event, text) => {
-      showChartTooltip(tip, { content: text, x: Math.round(event.clientX - svg.getBoundingClientRect().left), y: 0 });
+      showChartTooltip(tip, { content: text, x: Math.round(event.clientX - svg.getBoundingClientRect().left), y: 0, shape: `${width}|${text.replace(/\d/g, '0')}` });
     };
     let drag = null;
     /* Указатель слушает документ: перерисовка блока на каждом кадре переносит SVG, и захват указателя у узла может пропасть */
@@ -223,9 +225,10 @@ export function chartTimeline(context, { onPreview, owner = DEFAULT_OWNER } = {}
         const shift = index - drag.start;
         current = clampWindow({ from: dateAt(drag.initial.from, shift), to: dateAt(drag.initial.to, shift) }, bounds);
       } else current = { from: dateAt(bounds.from, Math.min(index, drag.start)), to: dateAt(bounds.from, Math.max(index, drag.start)) };
+      /* Подсказка мерится до правок шкалы и шапки: иначе её замер перестраивает layout посреди кадра */
+      showTip(event, formatDateRange(current.from, current.to));
       place();
       onPreview?.({ ...current, preset: 'custom' });
-      showTip(event, formatDateRange(current.from, current.to));
       scheduleApply();
     };
     const ours = (event) => drag && (event.pointerId === undefined || event.pointerId === drag.pointerId);
@@ -274,9 +277,10 @@ export function chartTimeline(context, { onPreview, owner = DEFAULT_OWNER } = {}
       liveByOwner.delete(owner);
     },
     draw: () => observeStage(stage, (size) => {
+      stageSizes.set(owner, size);
       width = size.width;
       paint();
-    }),
+    }, stageSizes.get(owner)),
   };
   return instance;
 }

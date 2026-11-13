@@ -328,8 +328,16 @@ function groupContexts(env, resolved, context) {
   return { analysisContext, verbatimContext, contextFor };
 }
 
-/* Догрузка блоков шапки групп не меняет: перерисовка закрыла бы открытый выбор периода */
-function paintGroupHeads({ analysis, verbatimGroup }, { analysisContext, verbatimContext }, paint) {
+/*
+  Догрузка блоков шапки групп не меняет: перерисовка закрыла бы открытый выбор периода. На кадрах жеста шапку,
+  уже нарисованную в этом жесте, держит preview таймлайна; отпускание рисует её заново (`expireLive`)
+*/
+function paintGroupHeads({ analysis, verbatimGroup }, { analysisContext, verbatimContext }, basePaint, live) {
+  const paint = live ? (id, ...rest) => {
+    if (basePaint.isLive(id)) return;
+    basePaint(id, ...rest);
+    basePaint.markLive(id);
+  } : basePaint;
   const analysisRow = analysis.element.querySelector('.group-row');
   paint('#analysis', analysisContext, (watched) => analysis.setHead({ period: { ...watched.period, picker: watched.periodControl } }), { local: periodIds.get(analysisContext) });
   /* Кнопка календаря — в строке группы, одна на строку */
@@ -395,6 +403,7 @@ function createPainter(latest) {
     expire: (id) => inputs.set(id, staleInputs()),
     forget: (id) => inputs.delete(id),
     markLive: (id) => drawnLive.add(id),
+    isLive: (id) => drawnLive.has(id),
     /* Нарисованное на кадре жеста держит шкалу жеста: отпускание того же состояния рисует его заново */
     expireLive: () => {
       for (const id of drawnLive) inputs.set(id, staleInputs());
@@ -417,7 +426,7 @@ function paintPage(env, resolved, context, { only, withHeader, mayDefer, live })
     paint('#header', context, (watched) => renderPageHeader(env, watched));
   }
   const groups = groupContexts(env, resolved, context);
-  if (withHeader) paintGroupHeads(env.cards, groups, paint);
+  if (withHeader) paintGroupHeads(env.cards, groups, paint, live);
   return renderBlocks(env.cards.blocks, { only, mayDefer, page: view, live }, groups.contextFor, context, paint);
 }
 
@@ -518,6 +527,7 @@ function startDashboard(env) {
       failed = true;
       releasePageHeight();
       env.paint.clear();
+      env.paint.expireLive();
       cards.setAll(ERROR, error.message);
     }
   }
@@ -531,6 +541,8 @@ function startDashboard(env) {
   renderSafely(readState());
   onStateChange((state) => {
     gestureFrom = null;
+    /* Back посреди жеста: жест кончился без отпускания — шапки, нарисованные в нём, следующий жест рисует заново */
+    env.paint.expireLive();
     renderSafely(state);
   });
 }

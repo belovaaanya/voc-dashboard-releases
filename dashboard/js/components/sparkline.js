@@ -39,7 +39,11 @@ function appendFill(svg, points) {
   `glow` — широкая линия дайджеста: линия светится своим тоном, заливки под ней нет, точки маленькие, подписи значений —
   над каждой точкой; коридор плана со скруглёнными углами
 */
-export function sparkline(values, { tone, domain, wide = false, fill = false, band = null, zones = true, label = null, axis = null, glow = false }) {
+/*
+  `crispBand` — коридор плана ровной полосой с границами-линиями на шкале, без размытия и скругления: размытие в единицах
+  растянутого viewBox расплывалось в пятно. `labelBelow(index)` — подпись точки под ней; `label` вернул null — без подписи
+*/
+export function sparkline(values, { tone, domain, wide = false, fill = false, band = null, zones = true, label = null, axis = null, glow = false, crispBand = false, labelBelow = null }) {
   const scale = domain ?? rangeOf(band ? [...values, band.min, band.max] : values);
   const points = plotPoints(values.map((voc) => ({ voc })), { ...VIEWBOX, ...scale });
   const svg = svgNode('svg', `sparkline${wide ? ' sparkline--wide' : ''}${wide && fill ? ' sparkline--fill' : ''} tone--${tone}`, {
@@ -54,7 +58,10 @@ export function sparkline(values, { tone, domain, wide = false, fill = false, ba
     const defs = svgNode('defs');
     defs.append(gradient);
     svg.append(defs);
-    svg.append(svgNode('rect', 'sparkline__band', { x: 0, y: y(band.max), width: VIEWBOX.width, height: Math.max(0.5, y(band.min) - y(band.max)), fill: `url(#${id})`, ...(glow ? { rx: BAND_RADIUS, ry: BAND_RADIUS } : {}) }));
+    svg.append(svgNode('rect', `sparkline__band${crispBand ? ' sparkline__band--crisp' : ''}`, { x: 0, y: y(band.max), width: VIEWBOX.width, height: Math.max(0.5, y(band.min) - y(band.max)), fill: `url(#${id})`, ...(glow && !crispBand ? { rx: BAND_RADIUS, ry: BAND_RADIUS } : {}) }));
+    if (crispBand) {
+      for (const edge of [band.max, band.min]) svg.append(svgNode('line', 'sparkline__band-edge', { x1: 0, x2: VIEWBOX.width, y1: y(edge), y2: y(edge) }));
+    }
   }
   if (!glow) appendFill(svg, points);
   /* Точка без соседей — отрезок нулевой длины: её видно только кружком */
@@ -84,11 +91,13 @@ export function sparkline(values, { tone, domain, wide = false, fill = false, ba
   points.forEach(({ x, y }, index) => {
     if (y === null) return;
     plot.append(at(element('span', `sparkline__marker${planTone(values[index]) || ` tone--${tone}`}`), x, y));
-    if (!label) return;
+    const text = label?.(values[index], index);
+    if (text === null || text === undefined) return;
     const edge = index === 0 && points.length > 1 ? ' sparkline-labels__value--start' : index === points.length - 1 && points.length > 1 ? ' sparkline-labels__value--end' : '';
-    plot.append(at(element('span', `sparkline-labels__value${edge}`, label(values[index])), x, y));
+    const below = labelBelow?.(index) ? ' sparkline-labels__value--below' : '';
+    plot.append(at(element('span', `sparkline-labels__value${edge}${below}`, text), x, y));
   });
-  const wrap = element('div', ['sparkline-labels', fill && 'sparkline-labels--fill', glow && 'sparkline-labels--glow'].filter(Boolean).join(' '));
+  const wrap = element('div', ['sparkline-labels', fill && 'sparkline-labels--fill', glow && 'sparkline-labels--glow', labelBelow && 'sparkline-labels--below'].filter(Boolean).join(' '));
   wrap.append(plot);
   if (axis) {
     const row = element('div', 'sparkline-labels__axis');

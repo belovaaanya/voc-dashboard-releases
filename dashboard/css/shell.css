@@ -74,8 +74,19 @@ body::before {
   grid-template-columns: var(--nav-current, var(--nav-width)) minmax(0, 1fr);
   gap: var(--nav-gap);
   align-items: start;
-  /* Меню сужается и расширяется плавно, панель подстраивается — без скачка */
-  transition: grid-template-columns var(--motion-base) var(--ease-standard);
+}
+
+/*
+  Переход меню (nav-motion.js): колонка стоит узкой, панель раскладывается один раз — шире из двух состояний —
+  и едет transform, ширина меню анимируется отдельно. Панель, уехавшая вправо, обрезается краем сетки
+*/
+:root[data-nav-motion] .app {
+  grid-template-columns: var(--nav-width-collapsed) minmax(0, 1fr);
+  overflow-x: clip;
+}
+
+:root[data-nav-motion] .workspace {
+  will-change: transform;
 }
 
 :root {

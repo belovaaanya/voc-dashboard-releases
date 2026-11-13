@@ -12,7 +12,7 @@ import { legendItem, legendList } from '../components/legend.js';
 import { sparkline } from '../components/sparkline.js';
 import { chartDomain } from '../core/chart-geometry.js';
 import { colourScale } from '../core/antidrivers.js';
-import { STABILITY_PLAN, buildDigest, buildPlatforms, buildRoles, buildTriggers, defaultMonth, monthsOf } from '../core/digest.js';
+import { STABILITY_PLAN, buildDigest, filledFrom, buildPlatforms, buildRoles, buildTriggers, defaultMonth, monthsOf } from '../core/digest.js';
 import { element } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { MONTHS, formatBucket, monthName, formatCount, formatImpact, formatRatings, formatShare, formatVoc, plural } from '../core/format.js';
@@ -51,17 +51,19 @@ export function selectedMonth(context) {
   return months.includes(context.state.month) ? context.state.month : defaultMonth(context.channelRows);
 }
 
-/* Линия полугода — sparkline карточек: VOC с поправкой; подпись — первый и последний месяц */
-function trendNode(points) {
+/* Линия полугода — sparkline карточек: VOC с поправкой с первого месяца с оценками; подпись — первый и последний месяц */
+function trendNode(trend) {
+  const points = trend.slice(filledFrom(trend.map(({ voc }) => voc)));
   const wrap = element('div', 'digest-trend');
   wrap.append(sparkline(points.map(({ voc }) => voc), { tone: 'neutral', wide: true, label: vocText, glow: true }),
-    element('span', 'digest-caption', `${monthShort(points[0].month)} — ${monthShort(points.at(-1).month)}`));
+    element('span', 'digest-caption', [...new Set([points[0].month, points.at(-1).month])].map(monthShort).join(' — ')));
   return wrap;
 }
 
-/* J-153: линия сегмента — недели, целиком покрывающие месяц, с коридором плана канала полосой */
+/* J-153: линия сегмента — недели, целиком покрывающие месяц, с первой недели с оценками; коридор плана канала полосой */
 const dayMonth = (iso) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}`;
-function weeklyNode(points, plan) {
+function weeklyNode(weeks, plan) {
+  const points = weeks.slice(filledFrom(weeks.map(({ voc }) => voc)));
   /* Линия недель забирает всю свободную высоту карточки сегмента (`fill`, как на плитках ролей): без пустоты над ней */
   const wrap = element('div', 'digest-trend digest-trend--fill digest-trend--segment');
   const band = plan ? { min: plan.min, max: plan.max } : null;
@@ -362,7 +364,10 @@ export function renderDigestPlatforms(block, context) {
   block.setHead();
   const plan = digest.voc.plan;
   const band = plan ? { min: plan.min, max: plan.max } : null;
-  const domain = chartDomain(points, [], band);
+  const start = filledFrom(...detail.platforms.map(({ months }) => months.map(({ voc: value }) => value)));
+  const months = detail.months.slice(start);
+  const series = detail.platforms.map(({ months: values }) => values.slice(start).map(({ voc: value }) => value));
+  const domain = chartDomain(series.flat().map((value) => ({ voc: value })), [], band);
   const gap = detail.gap === null ? null : roundDelta(detail.gap);
   const before = detail.previousGap === null ? null : roundDelta(detail.previousGap);
   const side = (value) => (value > 0 ? `выше Android на ${formatVoc(value)}` : value < 0 ? `ниже Android на ${formatVoc(-value)}` : 'вровень с Android');
@@ -384,10 +389,21 @@ export function renderDigestPlatforms(block, context) {
     ...detail.platforms.map((platform) => legendItem(legendText(platform), tones[platform.code], 'line')),
     ...(band ? [legendItem(`План ${formatVoc(plan.min)}–${formatVoc(plan.max)}`, 'positive', 'band')] : []),
   ], 'digest-platforms__legend'));
+  /* Подпись нижней линии месяца — под точкой, чтобы подписи двух линий не сталкивались */
+  const rounded = series.map((values) => values.map((value) => (value === null ? null : roundVoc(value))));
+  const below = (own, index) => {
+    const other = rounded[1 - own][index];
+    return other !== null && rounded[own][index] < other;
+  };
+  const label = (own) => (value, index) => {
+    if (value === null) return null;
+    return own === 1 && rounded[0][index] === rounded[1][index] ? null : vocText(value);
+  };
   const chart = element('div', 'digest-platforms__chart');
-  chart.append(...detail.platforms.map((platform, index) => sparkline(platform.months.map(({ voc: value }) => value),
-    { tone: tones[platform.code], wide: true, fill: true, domain, band: index === 0 ? band : null, zones: false, glow: true })));
-  content.append(chart, element('p', 'digest-caption', `${monthShort(detail.months[0])} — ${monthShort(detail.months.at(-1))} · VOC с поправкой`));
+  chart.append(...detail.platforms.map((platform, index) => sparkline(series[index],
+    { tone: tones[platform.code], wide: true, fill: true, domain, band: index === 0 ? band : null, crispBand: true, zones: false, glow: true,
+      label: label(index), labelBelow: (point) => below(index, point), axis: months.map(monthShort) })));
+  content.append(chart, element('p', 'digest-caption', 'VOC с поправкой'));
   block.setContent(content);
 }
 
@@ -462,9 +478,10 @@ export function renderRoles(block, context) {
       for (const [index, tile] of roleTiles) if (tile.block.element.isConnected) digestRole(index)(tile.block, tile.context);
     },
   })] });
+  const start = roleStart(data);
   const span = roleScale === 'months'
-    ? `месяцы ${monthShort(data.months[0])} — ${monthShort(data.months.at(-1))}`
-    : `недели ${dayMonth(data.weeks.from)} — ${dayMonth(data.weeks.to)}`;
+    ? `месяцы ${[...new Set([data.months[start], data.months.at(-1)])].map(monthShort).join(' — ')}`
+    : `недели ${dayMonth(data.roles[0].weekly[start].from)} — ${dayMonth(data.weeks.to)}`;
   block.setContent(element('p', 'digest-caption roles-caption', `Дельты — к прошлому месяцу · ${span}${planText(data.plan)}`));
 }
 
@@ -520,10 +537,14 @@ function roleAvatar(role) {
   return avatar;
 }
 
-/* Линия роли: недели месяца с датами начала недель или месяцы полугода; план — в подписи */
+const roleSeries = (role) => (roleScale === 'months' ? role.monthly : role.weekly);
+/* Плитки ролей — одной шкалой: линии и подпись страницы — с первой точки, где оценки есть хотя бы у одной роли */
+const roleStart = (data) => filledFrom(...data.roles.map((role) => roleSeries(role).map(({ voc }) => voc)));
+
+/* Линия роли: недели месяца или месяцы полугода с общей для плиток первой точки; план — в подписи */
 function roleTrend(role, data) {
   const months = roleScale === 'months';
-  const points = months ? role.monthly : role.weekly;
+  const points = roleSeries(role).slice(roleStart(data));
   const values = points.map(({ voc }) => voc);
   const band = data.plan ? { min: data.plan.min, max: data.plan.max } : null;
   const wrap = element('div', 'digest-trend digest-trend--fill');

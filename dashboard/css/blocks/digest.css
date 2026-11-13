@@ -68,10 +68,10 @@
   }
 }
 
-/* Итог месяца: VOC с поправкой, линия полугода, оценки */
+/* Итог месяца: VOC с поправкой, линия полугода, оценки; колонка оценок — по содержимому: на 1200 число налезало на столбики */
 .digest-summary {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) auto;
   gap: var(--space-6);
   align-items: end;
 }
@@ -717,5 +717,10 @@
 
 .digest-platforms__chart > * {
   grid-area: 1 / 1;
+}
+
+/* Месяцы под сценой есть у обеих линий — так высота сцен и шкала совпадают; видны подписи только первой */
+.digest-platforms__chart > * + * .sparkline-labels__axis {
+  visibility: hidden;
 }
 

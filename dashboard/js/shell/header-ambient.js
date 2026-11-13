@@ -1,5 +1,7 @@
 /* R-50: пятна стекла шапки совпадают с подсветкой страницы без background-attachment: fixed (ui-shell — Стекло) */
 
+import { NAV_MOTION_END, NAV_MOTION_START } from './nav-motion.js';
+
 export function ambientOffset({ windowWidth, windowHeight, headerLeft, headerTop, glassInset }) {
   return {
     '--ambient-attachment': 'scroll',
@@ -34,6 +36,20 @@ export function alignHeaderAmbient(header, win = globalThis) {
   };
   win.addEventListener('scroll', write, { passive: true });
   win.addEventListener('resize', measure);
+  /* Переход меню двигает панель transform, без смены размера: ResizeObserver этого не видит, пятна идут за шапкой покадрово */
+  let frame = null;
+  const follow = () => {
+    write();
+    frame = win.requestAnimationFrame(follow);
+  };
+  win.addEventListener(NAV_MOTION_START, () => {
+    if (frame === null) frame = win.requestAnimationFrame(follow);
+  });
+  win.addEventListener(NAV_MOTION_END, () => {
+    if (frame !== null) win.cancelAnimationFrame(frame);
+    frame = null;
+    measure();
+  });
   /* Сворачивание меню сдвигает шапку без смены размера окна: меняется ширина страницы или, уже --content-min, body; полоса прокрутки меняет html */
   const observer = new win.ResizeObserver(measure);
   observer.observe(header);

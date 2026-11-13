@@ -1,5 +1,6 @@
 /* Размер сцены известен только в документе: график рисуется после вставки, при смене размера и после загрузки шрифта — им мерены подписи */
-export function observeStage(stage, draw) {
+/* `known` — размер прошлой сцены в том же месте: рисуем сразу, без принудительного layout; ResizeObserver поправит до отрисовки кадра */
+export function observeStage(stage, draw, known = null) {
   let drawn = '';
   const redraw = (force = false) => {
     const size = { width: Math.round(stage.clientWidth), height: Math.round(stage.clientHeight) };
@@ -10,6 +11,9 @@ export function observeStage(stage, draw) {
   };
   const observer = new ResizeObserver(() => (stage.isConnected ? redraw() : observer.disconnect()));
   observer.observe(stage);
-  redraw();
+  if (known?.width && known?.height) {
+    drawn = `${known.width}x${known.height}`;
+    draw(known);
+  } else redraw();
   if (document.fonts?.status === 'loading') document.fonts.ready.then(() => stage.isConnected && redraw(true));
 }

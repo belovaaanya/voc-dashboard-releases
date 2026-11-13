@@ -14,6 +14,7 @@ import { SOURCE_FIXTURE } from '../io/loader.js';
 import { methodologyItems } from '../core/methodology.js';
 import { bindPopover, popoverPanel } from '../ui/popover.js';
 import { copyButton } from '../components/copy-button.js';
+import { animateNav } from './nav-motion.js';
 
 export const NAV_KEY = 'voc.nav';
 const COLLAPSED = 'collapsed';
@@ -76,9 +77,11 @@ function toggleButton(nav) {
     button.replaceChildren(icon(collapsed ? 'chevrons-right' : 'chevrons-left', 'side-nav__icon'), navLabel(label));
   };
   button.addEventListener('click', () => {
-    setNavCollapsed(!isNavCollapsed());
-    describe();
-    syncTitles(nav);
+    animateNav(nav, document.querySelector?.('.workspace'), () => {
+      setNavCollapsed(!isNavCollapsed());
+      describe();
+      syncTitles(nav);
+    });
   });
   describe();
   return button;

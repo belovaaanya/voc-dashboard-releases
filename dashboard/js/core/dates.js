@@ -45,9 +45,21 @@ export function dayCount({ from, to }) {
 
 /** Первая и последняя дата оценок; `''` — оценок с датой нет. */
 export function earliestDate(rows) {
-  return rows.reduce((min, { appeal_date: date }) => (typeof date === 'string' && date && (min === '' || date < min) ? date : min), '');
+  return memoized(earliestByRows, rows, () => rows.reduce((min, { appeal_date: date }) => (typeof date === 'string' && date && (min === '' || date < min) ? date : min), ''));
 }
 
 export function latestDate(rows) {
-  return rows.reduce((max, { appeal_date: date }) => (date > max ? date : max), '');
+  return memoized(latestByRows, rows, () => rows.reduce((max, { appeal_date: date }) => (date > max ? date : max), ''));
+}
+
+/* Массив строк после сборки не меняется: границы истории на каждом кадре drag не пересчитываются; длина — страховка */
+const earliestByRows = new WeakMap();
+const latestByRows = new WeakMap();
+
+function memoized(cache, rows, compute) {
+  const known = cache.get(rows);
+  if (known && known.length === rows.length) return known.value;
+  const value = compute();
+  cache.set(rows, { length: rows.length, value });
+  return value;
 }
