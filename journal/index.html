@@ -1,0 +1,733 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Журнал VOC B2B</title>
+</head>
+<body>
+
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700&display=swap">
+<style>
+/* Layout: как дашборд VOC — колонка 1200, стеклянные карточки с радиусом 20, крупные тонкие числа; сверху главное, ниже контекст, схема, структура, журнал недель */
+:root{
+  --bg:#0B0B0D; --surface:#111214; --surface-2:#16171A; --sunken:#0D0D0F;
+  --border:#232427; --border-strong:#34353A;
+  --text:#FFFFFF; --text-2:#C3C3C3; --text-3:rgba(255,255,255,.45);
+  --pos:#2DDA93; --neg:#FF376B; --orange:#FF8A3D; --yellow:#F2C94C; --purple:#B18CFF; --blue:#6FA8FF;
+  --pos-soft:rgba(45,218,147,.12); --neg-soft:rgba(255,55,107,.12); --orange-soft:rgba(255,138,61,.12);
+  --purple-soft:rgba(177,140,255,.13); --blue-soft:rgba(111,168,255,.13);
+  --glow:radial-gradient(120% 140% at 50% 0%, #17181C 0%, #111214 60%);
+  --font:"Manrope","Segoe UI",system-ui,-apple-system,sans-serif;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]){
+  --bg:#EEF0F3; --surface:#FFFFFF; --surface-2:#F6F7F9; --sunken:#F1F2F5;
+  --border:#E1E3E8; --border-strong:#CDD0D7;
+  --text:#0E0F12; --text-2:#3D414A; --text-3:#7A7F8A;
+  --pos:#00A26C; --neg:#E01E5A; --orange:#D9620F; --yellow:#A87A00; --purple:#7A4FD6; --blue:#2F6FDB;
+  --pos-soft:rgba(0,162,108,.10); --neg-soft:rgba(224,30,90,.09); --orange-soft:rgba(217,98,15,.10);
+  --purple-soft:rgba(122,79,214,.10); --blue-soft:rgba(47,111,219,.10);
+  --glow:radial-gradient(120% 140% at 50% 0%, #FFFFFF 0%, #FBFBFC 60%);
+  color-scheme:light}}
+:root[data-theme="light"]{
+  --bg:#EEF0F3; --surface:#FFFFFF; --surface-2:#F6F7F9; --sunken:#F1F2F5;
+  --border:#E1E3E8; --border-strong:#CDD0D7;
+  --text:#0E0F12; --text-2:#3D414A; --text-3:#7A7F8A;
+  --pos:#00A26C; --neg:#E01E5A; --orange:#D9620F; --yellow:#A87A00; --purple:#7A4FD6; --blue:#2F6FDB;
+  --pos-soft:rgba(0,162,108,.10); --neg-soft:rgba(224,30,90,.09); --orange-soft:rgba(217,98,15,.10);
+  --purple-soft:rgba(122,79,214,.10); --blue-soft:rgba(47,111,219,.10);
+  --glow:radial-gradient(120% 140% at 50% 0%, #FFFFFF 0%, #FBFBFC 60%);
+  color-scheme:light}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.page{max-width:1200px;margin:0 auto;padding-block:32px 64px;display:flex;flex-direction:column;gap:16px}
+h1,h2,h3{margin:0;font-weight:400;text-wrap:balance;letter-spacing:-0.01em}
+p{margin:0}
+.card{background:var(--glow);border:1px solid var(--border);border-radius:20px;padding:20px;min-width:0}
+.card-title{font-size:15px;color:var(--text-2);font-weight:400;display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap}
+.hint{font-size:12px;color:var(--text-3)}
+.row{display:grid;gap:16px}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:3px 10px;border-radius:999px;border:1px solid var(--border-strong);color:var(--text-2);white-space:nowrap}
+.dot{width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}
+.t-calc{color:var(--blue)} .t-ui{color:var(--orange)} .t-req{color:var(--purple)} .t-ship{color:var(--pos)}
+.bg-calc{background:var(--blue-soft)} .bg-ui{background:var(--orange-soft)} .bg-req{background:var(--purple-soft)} .bg-ship{background:var(--pos-soft)}
+.num{font-variant-numeric:tabular-nums}
+a{color:inherit}
+
+/* header */
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:999px;padding:3px;background:var(--surface)}
+.seg span{padding:6px 16px;border-radius:999px;font-size:13px;color:var(--text-3)}
+.seg span.on{background:var(--surface-2);color:var(--text);border:1px solid var(--border-strong)}
+.filters{display:flex;gap:6px;flex-wrap:wrap}
+
+/* hero */
+.hero{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr)}
+@media (max-width:900px){.hero{grid-template-columns:1fr}}
+.hero h1{font-size:clamp(26px,3.2vw,36px);line-height:1.15;font-weight:300}
+.hero .lead{color:var(--text-2);font-size:15px;max-width:62ch}
+.hero .card{display:flex;flex-direction:column;gap:16px}
+.ctx{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+@media (max-width:640px){.ctx{grid-template-columns:1fr}}
+.ctx div{background:var(--sunken);border:1px solid var(--border);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:4px}
+.ctx b{font-weight:500;font-size:13px}
+.ctx span{font-size:12.5px;color:var(--text-2)}
+.main-out{display:flex;flex-direction:column;gap:12px}
+.out{display:grid;grid-template-columns:32px minmax(0,1fr);gap:12px;align-items:start}
+.out .ic{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;font-size:16px}
+.out p{font-size:14.5px;line-height:1.45}
+.out p small{display:block;font-size:12.5px;color:var(--text-3);margin-top:2px}
+.ai{font-size:10px;color:var(--text-3);letter-spacing:.04em}
+
+/* metrics */
+.metrics{grid-template-columns:repeat(6,minmax(0,1fr))}
+@media (max-width:1000px){.metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:560px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.metric{display:flex;flex-direction:column;justify-content:space-between;gap:18px;min-height:150px}
+.metric .v{font-size:clamp(34px,4vw,48px);font-weight:300;letter-spacing:-0.03em;line-height:1}
+.metric .d{font-size:12px;color:var(--text-3)}
+.metric .lbl{font-size:13px;color:var(--text-2)}
+
+/* road */
+.road{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;margin-top:14px}
+@media (max-width:760px){.road{grid-template-columns:1fr 1fr;row-gap:16px}}
+.stage{position:relative;padding:18px 14px 0 0;display:flex;flex-direction:column;gap:6px;border-top:2px solid var(--border-strong)}
+.stage::before{content:"";position:absolute;top:-7px;left:0;width:12px;height:12px;border-radius:50%;background:var(--bg);border:2px solid var(--border-strong)}
+.stage.done{border-top-color:var(--pos)} .stage.done::before{background:var(--pos);border-color:var(--pos)}
+.stage.now{border-top-color:var(--orange);border-top-style:dashed} .stage.now::before{background:var(--bg);border-color:var(--orange);box-shadow:0 0 0 4px var(--orange-soft)}
+.stage.goal::before{border-color:var(--neg)}
+.stage b{font-weight:500;font-size:14px}
+.stage span{font-size:12.5px;color:var(--text-2)}
+.stage em{font-style:normal;font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+
+/* areas */
+.areas{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:900px){.areas{grid-template-columns:1fr}}
+.area{display:flex;flex-direction:column;gap:14px}
+.area .big{font-size:40px;font-weight:300;letter-spacing:-0.03em;line-height:1}
+.area ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+.area li{display:grid;grid-template-columns:8px minmax(0,1fr);gap:10px;font-size:13.5px;color:var(--text-2)}
+.area li::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;margin-top:7px;opacity:.9}
+.area li b{color:var(--text);font-weight:500}
+.area .src{font-size:12px;color:var(--text-3);border-top:1px solid var(--border);padding-top:10px;margin-top:auto}
+
+/* flow */
+.flow{display:grid;grid-template-columns:minmax(0,1fr) 22px minmax(0,1.15fr) 22px minmax(0,1.3fr) 22px minmax(0,1fr) 22px minmax(0,1fr);align-items:stretch;margin-top:16px}
+.arrow{display:grid;place-items:center;color:var(--text-3);font-size:16px}
+.node{border:1px solid var(--border-strong);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px;background:var(--surface);min-width:0}
+.node h3{font-size:13px;font-weight:600}
+.node .who{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3)}
+.node ul{margin:0;padding-left:16px;font-size:12.5px;color:var(--text-2);display:flex;flex-direction:column;gap:4px}
+.node.orch{border-color:var(--blue);box-shadow:0 0 0 4px var(--blue-soft)}
+.stack{display:flex;flex-direction:column;gap:10px}
+.node.sub{border-style:dashed}
+.node.gate{border-color:var(--pos)}
+.kb{margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:var(--sunken);font-size:12.5px;color:var(--text-2)}
+.kb b{color:var(--text);font-weight:500}
+@media (max-width:980px){.flow{grid-template-columns:1fr}.arrow{transform:rotate(90deg);height:24px}}
+
+/* structure */
+.struct{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr)}
+@media (max-width:900px){.struct{grid-template-columns:1fr}}
+.tree{font-size:13px;display:flex;flex-direction:column;gap:2px;margin-top:12px}
+.tree .ln{display:grid;grid-template-columns:minmax(0,190px) minmax(0,1fr) auto;gap:12px;padding:7px 10px;border-radius:8px;align-items:baseline}
+.tree .ln:nth-child(odd){background:var(--sunken)}
+.tree code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--text);overflow-wrap:anywhere}
+.tree .ln span{color:var(--text-2)}
+.tree .ln i{font-style:normal;color:var(--text-3);font-size:12px;white-space:nowrap}
+.tree .grp{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3);padding:12px 10px 4px}
+@media (max-width:560px){.tree .ln{grid-template-columns:1fr auto}.tree .ln span{grid-column:1/-1}}
+.cycle{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+.cycle .st{display:grid;grid-template-columns:28px minmax(0,1fr);gap:12px;align-items:start}
+.cycle .st i{font-style:normal;width:28px;height:28px;border-radius:50%;border:1px solid var(--border-strong);display:grid;place-items:center;font-size:12px;color:var(--text-2)}
+.cycle .st p{font-size:13.5px;color:var(--text-2)} .cycle .st p b{color:var(--text);font-weight:500}
+
+/* journal */
+.jhead{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
+.bars{display:flex;align-items:flex-end;gap:6px;height:80px}
+.bars .b{width:34px;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10.5px;color:var(--text-3)}
+.bars .b div{width:100%;border-radius:6px 6px 2px 2px;background:linear-gradient(180deg,var(--pos),rgba(45,218,147,.15))}
+.bars .b.cur div{background:linear-gradient(180deg,var(--orange),rgba(255,138,61,.15))}
+.weeks{display:flex;flex-direction:column;gap:12px;margin-top:16px}
+.week{display:grid;grid-template-columns:200px minmax(0,1fr);gap:20px;padding:16px;border:1px solid var(--border);border-radius:16px;background:var(--surface)}
+@media (max-width:760px){.week{grid-template-columns:1fr}}
+.week .wl{display:flex;flex-direction:column;gap:6px}
+.week .wl b{font-size:13px;font-weight:600}
+.week .wl .wt{font-size:20px;font-weight:300;line-height:1.2}
+.week .wl .wn{font-size:12px;color:var(--text-3)}
+.week .wr{display:flex;flex-direction:column;gap:10px}
+.week .sum{font-size:14px;color:var(--text)}
+.week ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:7px}
+.week li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:baseline;font-size:13px;color:var(--text-2)}
+.tag{font-size:11px;padding:1px 8px;border-radius:999px;white-space:nowrap}
+.week.cur{border-color:var(--orange)}
+.badge{font-size:11px;padding:2px 8px;border-radius:999px;align-self:flex-start}
+.state{padding:20px;border:1px dashed var(--border-strong);border-radius:14px;color:var(--text-2);font-size:13px}
+
+/* open */
+.open{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:900px){.open{grid-template-columns:1fr}}
+.open ul{margin:10px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--text-2)}
+.mock{margin-top:14px;border-radius:14px;overflow:hidden;border:1px solid var(--border)}
+.mock img{display:block;width:100%;height:auto}
+footer{font-size:12px;color:var(--text-3);padding-top:8px}
+/* v2 */
+.sect{display:flex;align-items:baseline;gap:12px;font-size:20px;font-weight:300;margin-top:24px;padding-left:4px}
+.sect span{font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;letter-spacing:.06em}
+.solo{font-size:13.5px;color:var(--text-2);border-top:1px solid var(--border);padding-top:14px}
+.solo b{color:var(--text);font-weight:500}
+.metric.hl{border-color:var(--orange);box-shadow:0 0 0 4px var(--orange-soft) inset}
+.metric.hl .v{color:var(--orange)}
+.load{display:grid;grid-template-columns:3fr 7fr;height:56px;border-radius:14px;overflow:hidden;margin-top:14px;border:1px solid var(--border)}
+.load>div{display:flex;align-items:center;gap:10px;padding:0 16px;min-width:0}
+.load b{font-size:22px;font-weight:300}
+.load span{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.seg-a{background:linear-gradient(90deg,rgba(255,138,61,.38),rgba(255,138,61,.16));color:var(--text)}
+.seg-b{background:repeating-linear-gradient(135deg,var(--sunken) 0 8px,var(--surface-2) 8px 16px);color:var(--text-3)}
+.load-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;margin-top:18px}
+@media (max-width:900px){.load-grid{grid-template-columns:1fr}}
+.lg-col{display:flex;flex-direction:column;gap:10px;min-width:0}
+.par{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px}
+.par li{display:flex;flex-direction:column;gap:2px;padding-left:12px;border-left:2px solid var(--border-strong)}
+.par b{font-weight:500;font-size:13.5px}
+.par span{font-size:12.5px;color:var(--text-2)}
+.roles{display:flex;flex-wrap:wrap;gap:8px}
+.role{font-size:13px;padding:6px 12px;border-radius:999px}
+.trace{display:flex;flex-direction:column;margin-top:14px;position:relative}
+.tr{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:12px;align-items:start;padding-bottom:14px;position:relative}
+.tr:not(:last-child)::after{content:"";position:absolute;left:13px;top:28px;bottom:0;width:2px;background:var(--border-strong)}
+.tr i{font-style:normal;width:28px;height:28px;border-radius:50%;border:1px solid currentColor;display:grid;place-items:center;font-size:12px;background:var(--surface)}
+.tr div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.tr b{font-weight:500;font-size:13.5px}
+.tr span{font-size:12.5px;color:var(--text-2)}
+.tr em{font-style:normal;font-size:12px;color:var(--text-3);white-space:nowrap;padding-top:5px}
+.trace-note{font-size:13px;color:var(--text);padding:12px 14px;border-radius:12px;background:var(--purple-soft);border:1px solid var(--border)}
+@media (prefers-reduced-motion: no-preference){.week{transition:border-color .2s}}
+
+/* architecture: схема каркаса в стиле журнала — те же поверхности, рамки и акцент «оркестратора» */
+.arch{display:flex;flex-direction:column;gap:14px}
+.arch-lead{font-size:13.5px;color:var(--text-2);max-width:78ch}
+.arch-panel{background:var(--sunken);border:1px solid var(--border);border-radius:14px;padding:16px;overflow-x:auto}
+.arch svg{display:block;min-width:600px;width:100%;max-width:820px;height:auto;margin-inline:auto}
+.arch svg text{font:500 13px var(--font);fill:var(--text)}
+.arch svg .arch-muted{font:400 11.5px var(--font);fill:var(--text-3)}
+.arch-zone{fill:none;stroke:var(--border-strong);stroke-dasharray:3 5}
+.arch-box{fill:var(--surface);stroke:var(--border-strong)}
+.arch-box--main{stroke:var(--blue);stroke-width:1.5}
+.arch-box--outside{stroke-dasharray:5 4}
+.arch-wire{stroke:var(--border-strong);stroke-width:1.5;fill:none}
+.arch-wire--back{stroke-dasharray:5 4}
+.arch-arrow{fill:var(--border-strong)}
+.arch-arrow--on{fill:var(--text)}
+.arch-node,.arch-link{cursor:help;outline:none}
+.arch-hit{fill:none;stroke:transparent;stroke-width:16;pointer-events:stroke}
+.arch-node:hover .arch-box,.arch-node:focus-visible .arch-box,.arch-node.is-active .arch-box{stroke:var(--text);stroke-width:2}
+.arch-link:hover .arch-wire,.arch-link:focus-visible .arch-wire,.arch-link.is-active .arch-wire{stroke:var(--text);stroke-width:2.5;marker-end:url(#arch-head-on)}
+.arch-legend{display:flex;flex-wrap:wrap;gap:8px 20px;align-items:center;font-size:12.5px;color:var(--text-2)}
+.arch-legend span{display:inline-flex;align-items:center;gap:8px}
+.arch-key{display:inline-block;width:22px;height:12px;border-radius:4px;border:1.5px solid var(--border-strong);background:var(--surface)}
+.arch-key--main{border-color:var(--blue)}
+.arch-key--out{border-style:dashed}
+.arch-key--back{height:0;border-radius:0;border-width:1.5px 0 0;border-top-style:dashed;background:none}
+.arch-tip[hidden]{display:none}
+.arch-tip{position:fixed;z-index:10;max-width:min(300px,calc(100vw - 32px));display:grid;gap:4px;padding:12px 14px;background:var(--surface);border:1px solid var(--border-strong);border-radius:12px;box-shadow:0 12px 32px -12px rgba(0,0,0,.45);pointer-events:none}
+.arch-tip__title{font-size:13px;font-weight:600;color:var(--text)}
+.arch-tip__text{font-size:12.5px;color:var(--text-2)}
+.arch-layers .ln{grid-template-columns:minmax(0,170px) minmax(0,1fr) minmax(0,260px)}
+.arch-layers .ln i{white-space:normal}
+.arch-rules{grid-template-columns:repeat(4,minmax(0,1fr));margin-top:12px}
+@media (max-width:900px){.arch-rules{grid-template-columns:1fr 1fr}}
+@media (max-width:560px){.arch-rules{grid-template-columns:1fr}}
+@media (max-width:560px){.arch-layers .ln{grid-template-columns:1fr}.arch-layers .ln i{white-space:normal}}
+</style>
+
+<div class="page">
+  <div class="top">
+    <div class="seg" aria-hidden="true"><span class="on">VOC B2B</span><span>НИБ</span><span>АБМ</span></div>
+    <div class="filters">
+      <span class="chip">Период: 1 окт — 13 ноя 2026</span>
+      <span class="chip"><span class="dot t-req"></span>Требования</span>
+      <span class="chip"><span class="dot t-calc"></span>Аналитика</span>
+      <span class="chip"><span class="dot t-ui"></span>Дизайн и удобство</span>
+      <span class="chip"><span class="dot t-ship"></span>Доставка</span>
+    </div>
+  </div>
+
+  <!-- HERO -->
+  <h2 class="sect" style="margin-top:8px"><span>01</span>Главное</h2>
+  <div class="row hero">
+    <section class="card">
+      <span class="hint">Что это за проект</span>
+      <h1>Дашборд VOC для продактов B2B: почему упала оценка клиентов и что с этим делать</h1>
+      <p class="lead">VOC — средняя оценка клиентов 1–5 после операций в каналах НИБ (веб) и АБМ (мобильное приложение). Сейчас её смотрят в 8+ разных отчётах с разными цифрами. Дашборд собирает всё в одно окно: метрики к плану, динамику, причины падения, события в каналах и живые отзывы.</p>
+      <div class="ctx">
+        <div><b>Для кого</b><span>Продакты B2B, бизнес-партнёры каналов, руководители направлений</span></div>
+        <div><b>Откуда данные</b><span>Выгрузки оценок, справочники, план, аварии и раскатки из систем банка</span></div>
+        <div><b>Основа</b><span>Макет в Figma и данные исследования продактов, проведённого во 2 квартале</span></div>
+      </div>
+      <p class="solo"><b>Всё это делает один человек на 30% времени</b> вместе с ИИ-агентами: собирает требования, правит аналитику и методику, проектирует интерфейс и выпускает приложение.</p>
+    </section>
+    <section class="card">
+      <div class="card-title">Главный вывод <span class="ai">за шесть с половиной недель</span></div>
+      <div class="main-out">
+        <div class="out"><div class="ic bg-ship t-ship">↗</div><p>Дашборд работает на реальных данных и уже у пользователей<small>Десктопное приложение с автообновлением и страница скачивания</small></p></div>
+        <div class="out"><div class="ic bg-calc t-calc">↗</div><p>Расчёты объясняют, почему изменился VOC, по методике отчётов ДКО<small>Вклад и урон проблем, главный вывод через LLM банка</small></p></div>
+        <div class="out"><div class="ic bg-ui t-ui">↗</div><p>Интерфейс сверен с макетом и собран в систему<small>12 блоков, VOC-дайджест и VOC ролей, общие компоненты, светлая тема</small></p></div>
+        <div class="out"><div class="ic bg-req t-req">↗</div><p>Каждое решение и правка записаны, ничего не теряется<small>Любую цифру можно проследить до решения, а решение — до просьбы</small></p></div>
+        <div class="out"><div class="ic bg-neg" style="background:var(--neg-soft);color:var(--neg)">↘</div><p>Данные пока загружаются вручную из CSV<small>Следующий шаг — автообновление из базы данных банка</small></p></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- METRICS -->
+  <div class="row metrics">
+    <div class="card metric hl"><span class="lbl">Рабочих дней</span><span class="v num">≈10</span><span class="d">30% времени за 6,5 недели, ~1,5 дня в неделю</span></div>
+    <div class="card metric"><span class="lbl">Коммитов</span><span class="v num">337</span><span class="d">с 1 октября, ~34 на рабочий день</span></div>
+    <div class="card metric"><span class="lbl">Доработок записано</span><span class="v num">236</span><span class="d">52 замечания ревью и 184 записи журнала</span></div>
+    <div class="card metric"><span class="lbl">Документов</span><span class="v num">25</span><span class="d">база знаний для агентов и команды</span></div>
+    <div class="card metric"><span class="lbl">Автотестов</span><span class="v num">978</span><span class="d">прогоняются перед каждым коммитом</span></div>
+    <div class="card metric"><span class="lbl">Решений</span><span class="v num">62</span><span class="d">записаны с обоснованием</span></div>
+  </div>
+
+  <!-- ROAD -->
+  <section class="card">
+    <div class="card-title">Где мы сейчас <span class="hint">путь данных до пользователя</span></div>
+    <div class="road">
+      <div class="stage done"><em class="t-ship">готово · сентябрь</em><b>Макет и прототип</b><span>Веб-страница по макету на синтетических данных</span></div>
+      <div class="stage done"><em class="t-ship">готово · октябрь</em><b>Реальные выгрузки</b><span>Полная выгрузка: 117 колонок, НИБ и АБМ, локально</span></div>
+      <div class="stage now"><em class="t-ui">сейчас · полумера</em><b>Десктопное приложение</b><span>Пользователь сам загружает CSV, приложение обновляется само</span></div>
+      <div class="stage goal"><em style="color:var(--neg)">цель</em><b>Данные из БД банка</b><span>Дашборд обновляется сам, без ручной загрузки файлов</span></div>
+    </div>
+  </section>
+
+  <!-- AREAS -->
+  <h2 class="sect"><span>02</span>Что сделано</h2>
+  <div class="row areas">
+    <section class="card area t-req">
+      <div class="card-title"><span><span class="dot" style="display:inline-block;margin-right:8px"></span>Требования</span><span class="hint">что нужно</span></div>
+      <div><div class="big num" style="color:var(--text)">52</div><span class="hint">замечания заказчика в 4 пакетах, все закрыты</span></div>
+      <ul>
+        <li><span><b>Ревью заказчика → задачи.</b> Каждый пакет разобран на пункты с трактовкой и планом.</span></li>
+        <li><span><b>Журнал «было → стало».</b> Новая просьба сверяется с прежними: видно, что она отменяет.</span></li>
+        <li><span><b>Сверка с отчётами ДКО.</b> Найдены 3 причины расхождения цифр, дашборд перешёл на методику заказчика.</span></li>
+        <li><span><b>Данные исследования Q2</b> (опрос 19 продактов, 5 интервью) легли в приоритеты блоков.</span></li>
+      </ul>
+      <p class="src">17 открытых вопросов закрыты решениями по умолчанию и вынесены на подтверждение</p>
+    </section>
+    <section class="card area t-calc">
+      <div class="card-title"><span><span class="dot" style="display:inline-block;margin-right:8px"></span>Аналитика и расчёты</span><span class="hint">почему изменился VOC</span></div>
+      <div><div class="big num" style="color:var(--text)">66 → 1,5 с</div><span class="hint">повторная сборка большой книги данных</span></div>
+      <ul>
+        <li><span><b>Вклад и урон.</b> Сколько баллов VOC отнимает каждая проблема, триггер, категория ДКО.</span></li>
+        <li><span><b>Главный вывод</b> формулирует внутренняя LLM банка, без неё — расчёт по правилу.</span></li>
+        <li><span><b>Критическое снижение</b> и календарь аварий, раскаток, инцидентов.</span></li>
+        <li><span><b>Достоверность:</b> «Мало оценок», «Доля оценок 1–3», «Дни относительно плана».</span></li>
+      </ul>
+      <p class="src">Методика открыта в интерфейсе через «Как считается»</p>
+    </section>
+    <section class="card area t-ui">
+      <div class="card-title"><span><span class="dot" style="display:inline-block;margin-right:8px"></span>Дизайн и удобство</span><span class="hint">как пользоваться</span></div>
+      <div><div class="big num" style="color:var(--text)">12 / 12</div><span class="hint">блоков сверены с Figma</span></div>
+      <ul>
+        <li><span><b>Система:</b> компоненты, иерархия отступов и скруглений, роли текста, правила набора.</span></li>
+        <li><span><b>Сценарий «VOC упал»</b> проходится сверху вниз: клик по дню сужает события, причины и отзывы.</span></li>
+        <li><span><b>Срез в ссылке,</b> выгрузка в Excel, свой период у группы блоков, светлая тема.</span></li>
+        <li><span><b>Скорость:</b> кэш расчётов, тяжёлые блоки досчитываются после первого кадра.</span></li>
+      </ul>
+      <p class="src">Инструмент визуальной сверки ловит расхождения автоматически</p>
+    </section>
+  </div>
+
+  <!-- WORKLOAD -->
+  <h2 class="sect"><span>03</span>Как устроена работа</h2>
+  <section class="card">
+    <div class="card-title">Дашборд — 30% моего времени <span class="hint">≈1,5 рабочих дня в неделю, остальное параллельно</span></div>
+    <div class="load" role="img" aria-label="30% времени на дашборд, 70% на параллельные задачи">
+      <div class="seg-a"><b class="num">30%</b><span>Дашборд VOC B2B</span></div>
+      <div class="seg-b"><b class="num">70%</b><span>Параллельные задачи</span></div>
+    </div>
+    <div class="load-grid">
+      <div class="lg-col">
+        <span class="hint">Параллельно в те же недели</span>
+        <ul class="par">
+          <li><b>Стратегия VOC 2027</b><span>страт-сессия и лендинг стратегии</span></li>
+          <li><b>Разметка обратной связи АБМ</b><span>второй проход по отзывам</span></li>
+          <li><b>Презентации</b><span>инцидент-менеджмент, редизайн слайдов</span></li>
+          <li><b>Свои инструменты</b><span>правила интерфейсов и презентаций для ИИ-агентов</span></li>
+        </ul>
+      </div>
+      <div class="lg-col">
+        <span class="hint">Как это помещается в 30%</span>
+        <ul class="par">
+          <li><b>Я ставлю задачу и принимаю решения</b><span>говорю с заказчиком, выбираю трактовку, принимаю результат</span></li>
+          <li><b>Агенты пишут и проверяют</b><span>пока я в других задачах, сессии ведут свои ветки в фоне</span></li>
+          <li><b>Проверка без меня</b><span>тесты, намеренные поломки и ревью другим агентом</span></li>
+          <li><b>Контекст не теряется</b><span>агенты начинают с базы знаний, а не с моей памяти</span></li>
+        </ul>
+      </div>
+      <div class="lg-col">
+        <span class="hint">Мои роли в проекте</span>
+        <div class="roles">
+          <span class="role t-req bg-req">Требования</span>
+          <span class="role t-calc bg-calc">Аналитика и методика</span>
+          <span class="role t-ui bg-ui">Дизайн интерфейса</span>
+          <span class="role t-ship bg-ship">Выпуск</span>
+        </div>
+        <p class="hint" style="margin-top:4px">Обычно это работа продакта, аналитика, дизайнера и разработчика.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- FLOW -->
+  <section class="card">
+    <div class="card-title">Схема работы с ИИ-агентами <span class="hint">я ставлю задачи, агенты пишут и проверяют</span></div>
+    <div class="flow">
+      <div class="node">
+        <span class="who">Вход</span><h3>Задача</h3>
+        <ul><li>замечание заказчика</li><li>новая выгрузка</li><li>макет Figma</li><li>данные исследования</li></ul>
+      </div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div class="node orch">
+        <span class="who t-calc">Основная сессия</span><h3>Агент-оркестратор</h3>
+        <ul><li>читает правила и документы по задаче</li><li>сверяет просьбу с журналом решений</li><li>планирует, пишет код</li></ul>
+      </div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div class="stack">
+        <div class="node">
+          <span class="who">Параллельные сессии</span><h3>Отдельные задачи на своих ветках</h3>
+          <ul><li>релиз, разрез «Версии», «Топ проблем»</li><li>Claude Code и Codex</li></ul>
+        </div>
+        <div class="node sub">
+          <span class="who">Субагенты</span><h3>Узкие поручения</h3>
+          <ul><li>независимое ревью кода</li><li>обновление тестов</li><li>поиск по коду и документам</li></ul>
+        </div>
+      </div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div class="node gate">
+        <span class="who t-ship">Гейт слайса</span><h3>Проверка</h3>
+        <ul><li>978 автотестов</li><li>намеренные поломки</li><li>ревью другим агентом</li><li>визуальная сверка</li><li>замер скорости</li></ul>
+      </div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div class="node">
+        <span class="who">Выход</span><h3>Результат</h3>
+        <ul><li>запись в журнале</li><li>выпуск приложения</li><li>веб-демо</li></ul>
+      </div>
+    </div>
+    <div class="kb"><b>База знаний проекта</b> общая для всех агентов: правила работы, 25 документов, 62 решения и журнал из 184 правок. Агенты начинают каждую задачу с неё, поэтому решения не теряются между сессиями.</div>
+  </section>
+
+  <!-- ARCHITECTURE -->
+  <h2 class="sect"><span>04</span>Как устроен дашборд</h2>
+  <section class="card arch">
+    <div class="card-title">Путь данных <span class="hint">от выгрузки до экрана</span></div>
+    <p class="arch-lead">Статическая страница без backend: аналитик правит книгу Excel, сборка превращает её в JSON, браузер считает срез и рисует блоки. Рядом со страницей — небольшой сервер: он ходит в LLM банка за «Главным выводом», а в десктопном приложении ещё и принимает CSV.</p>
+    <div class="arch-panel">
+      <svg viewBox="0 0 764 636" role="group" aria-labelledby="arch-svg-title">
+        <desc id="arch-svg-title">Выгрузка xlsx или CSV проходит проверку и конвертер в JSON; страница загружает JSON, строит срез по состоянию из URL и передаёт один контекст всем блокам; «Главный вывод» запрашивает LLM через сервер страницы, а приложение принимает CSV и пересобирает JSON тем же конвейером.</desc>
+        <defs>
+          <marker id="arch-head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arch-arrow" d="M0 0L10 5L0 10z"/></marker>
+          <marker id="arch-head-on" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arch-arrow arch-arrow--on" d="M0 0L10 5L0 10z"/></marker>
+        </defs>
+
+        <rect class="arch-zone" x="8" y="8" width="748" height="188" rx="12"/>
+        <rect class="arch-zone" x="8" y="212" width="748" height="196" rx="12"/>
+        <rect class="arch-zone" x="8" y="424" width="748" height="204" rx="12"/>
+        <g transform="translate(32 0)">
+        <text class="arch-muted" x="40" y="30">Build — start.sh, CI или импорт в приложении</text>
+        <text class="arch-muted" x="40" y="234">Страница — браузер или окно приложения</text>
+        <text class="arch-muted" x="144" y="358">setState → URL</text>
+        <text class="arch-muted" x="40" y="446">Сервер страницы — local_server.py из start.sh или voc_desktop.py в приложении</text>
+
+        <g class="arch-node" role="button" tabindex="0" data-title="Выгрузка отзывов" data-tip="Исходная книга Excel с оценками и отзывами клиентов — с неё начинается сборка. В приложении вместо книги можно загрузить CSV её листов.">
+          <rect class="arch-box" x="40" y="44" width="188" height="48" rx="8"/>
+          <text x="56" y="66">data/*.xlsx</text>
+          <text class="arch-muted" x="56" y="83">или CSV листов книги</text>
+        </g>
+        <g class="arch-node" role="button" tabindex="0" data-title="Проверка выгрузки" data-tip="Сверяет листы, колонки и значения с ожидаемыми. Если выгрузка сломана, сборка останавливается с понятной ошибкой, и дашборд не показывает неверные цифры.">
+          <rect class="arch-box" x="276" y="44" width="188" height="48" rx="8"/>
+          <text x="292" y="66">check_data.py</text>
+          <text class="arch-muted" x="292" y="83">инварианты выгрузки</text>
+        </g>
+        <g class="arch-node" role="button" tabindex="0" data-title="Конвертер в JSON" data-tip="Превращает книгу в компактные JSON-файлы, которые быстро читает браузер. Тексты отзывов лежат отдельным файлом и грузятся только там, где нужны.">
+          <rect class="arch-box" x="512" y="44" width="188" height="48" rx="8"/>
+          <text x="528" y="66">xlsx_to_json.py</text>
+          <text class="arch-muted" x="528" y="83">конвертер</text>
+        </g>
+        <g class="arch-node" role="button" tabindex="0" data-title="Данные для страницы" data-tip="Готовые файлы данных. В имени каждого — хэш содержимого, а manifest.json перечисляет актуальные: после новой выгрузки браузер не покажет старые данные из кэша.">
+          <rect class="arch-box" x="512" y="132" width="188" height="48" rx="8"/>
+          <text x="528" y="154">site/data/*.json</text>
+          <text class="arch-muted" x="528" y="171">manifest + файлы с хэшем</text>
+        </g>
+        <g class="arch-node" role="button" tabindex="0" data-title="Адрес страницы" data-tip="Всё, что выбрано на экране — период, фильтры, точка на графике, — записано в адресе. Ссылка открывает у коллеги тот же экран.">
+          <rect class="arch-box" x="40" y="248" width="188" height="56" rx="8"/>
+          <text x="56" y="272">URL</text>
+          <text class="arch-muted" x="56" y="290">state/url-state.js</text>
+        </g>
+        <g class="arch-node" role="button" tabindex="0" data-title="Сборщик страницы" data-tip="Главный модуль: читает выбор из адреса, отбирает нужные данные (срез) и раздаёт всем блокам один общий набор. Поэтому цифры в разных блоках не расходятся.">
+          <rect class="arch-box arch-box--main" x="276" y="248" width="188" height="56" rx="8"/>
+          <text x="292" y="272">main.js</text>
+          <text class="arch-muted" x="292" y="290">срез → один контекст</text>
+        </g>
+        <g class="arch-node" role="button" tabindex="0" data-title="Загрузчик данных" data-tip="Начинает скачивать данные ещё до того, как собрана страница, и проверяет manifest. Если данных нет, показывает учебную фикстуру с пометкой об этом; если файл не той формы — ошибку.">
+          <rect class="arch-box" x="512" y="248" width="188" height="56" rx="8"/>
+          <text x="528" y="272">io/loader.js</text>
+          <text class="arch-muted" x="528" y="290">старт загрузки из boot.js</text>
+        </g>
+        <g class="arch-node" role="button" tabindex="0" data-title="Блоки дашборда" data-tip="Метрики, график, антидрайверы, календарь, отзывы, дайджест. Каждый блок рисует себя из общего набора данных и берёт числа только из расчётного ядра.">
+          <rect class="arch-box" x="276" y="344" width="188" height="48" rx="8"/>
+          <text x="292" y="366">blocks/*</text>
+          <text class="arch-muted" x="292" y="383">render(block, context)</text>
+        </g>
+        <g class="arch-node" role="button" tabindex="0" data-title="Запрос «Главного вывода»" data-tip="Собирает сводные цифры среза и просит языковую модель написать вывод. Отправляются только агрегаты — без текстов отзывов и персональных данных.">
+          <rect class="arch-box" x="512" y="344" width="188" height="48" rx="8"/>
+          <text x="528" y="366">io/llm-conclusion.js</text>
+          <text class="arch-muted" x="528" y="383">«Главный вывод», агрегаты</text>
+        </g>
+        <g class="arch-node" role="button" tabindex="0" data-title="Посредник к LLM" data-tip="Небольшой сервер рядом со страницей принимает запрос вывода, добавляет секретный токен и пересылает запрос в шлюз банка.">
+          <rect class="arch-box" x="512" y="460" width="188" height="56" rx="8"/>
+          <text x="528" y="484">api/conclusion</text>
+          <text class="arch-muted" x="528" y="502">llm_gateway.py</text>
+        </g>
+        <g class="arch-node" role="button" tabindex="0" data-title="Шлюз LLM банка" data-tip="Внутренний сервис банка с языковой моделью; находится за пределами репозитория. Токен доступа хранится только на сервере и в браузер не попадает.">
+          <rect class="arch-box arch-box--outside" x="276" y="460" width="188" height="56" rx="8"/>
+          <text x="292" y="484">шлюз LLM банка</text>
+          <text class="arch-muted" x="292" y="502">токен не уходит в браузер</text>
+        </g>
+        <g class="arch-node" role="button" tabindex="0" data-title="Импорт в приложении" data-tip="Есть только в настольном приложении: кнопка импорта на странице отправляет сюда CSV листов, и данные пересобираются тем же конвейером — проверка и конвертер, — что и при обычной сборке.">
+          <rect class="arch-box" x="512" y="556" width="188" height="56" rx="8"/>
+          <text x="528" y="580">api/data</text>
+          <text class="arch-muted" x="528" y="598">импорт CSV в приложении</text>
+        </g>
+
+        <g class="arch-link" role="button" tabindex="0" data-title="Выгрузка → проверка" data-tip="Сначала выгрузку проверяют, и только потом она идёт дальше.">
+          <path class="arch-hit" d="M228 68H272"/>
+          <path class="arch-wire" d="M228 68H272" marker-end="url(#arch-head)"/>
+        </g>
+        <g class="arch-link" role="button" tabindex="0" data-title="Проверка → конвертер" data-tip="Проверенная выгрузка уходит в конвертер.">
+          <path class="arch-hit" d="M464 68H508"/>
+          <path class="arch-wire" d="M464 68H508" marker-end="url(#arch-head)"/>
+        </g>
+        <g class="arch-link" role="button" tabindex="0" data-title="Конвертер → данные" data-tip="Конвертер записывает JSON-файлы и manifest в папку страницы.">
+          <path class="arch-hit" d="M606 92V128"/>
+          <path class="arch-wire" d="M606 92V128" marker-end="url(#arch-head)"/>
+        </g>
+        <g class="arch-link" role="button" tabindex="0" data-title="Данные → загрузчик" data-tip="Браузер скачивает JSON-файлы, которые перечислены в manifest.">
+          <path class="arch-hit" d="M606 180V244"/>
+          <path class="arch-wire" d="M606 180V244" marker-end="url(#arch-head)"/>
+        </g>
+        <g class="arch-link" role="button" tabindex="0" data-title="Адрес → сборщик" data-tip="Сборщик читает из адреса, что сейчас выбрано на экране.">
+          <path class="arch-hit" d="M228 276H272"/>
+          <path class="arch-wire" d="M228 276H272" marker-end="url(#arch-head)"/>
+        </g>
+        <g class="arch-link" role="button" tabindex="0" data-title="Загрузчик → сборщик" data-tip="Скачанные данные передаются сборщику страницы.">
+          <path class="arch-hit" d="M512 276H468"/>
+          <path class="arch-wire" d="M512 276H468" marker-end="url(#arch-head)"/>
+        </g>
+        <g class="arch-link" role="button" tabindex="0" data-title="Сборщик → блоки" data-tip="Все блоки получают один и тот же набор данных и рисуются заново.">
+          <path class="arch-hit" d="M370 304V340"/>
+          <path class="arch-wire" d="M370 304V340" marker-end="url(#arch-head)"/>
+        </g>
+        <g class="arch-link" role="button" tabindex="0" data-title="Действие пользователя → адрес" data-tip="Клик в блоке записывает новый выбор в адрес, и страница перерисовывается из него.">
+          <path class="arch-hit" d="M276 368H134V308"/>
+          <path class="arch-wire arch-wire--back" d="M276 368H134V308" marker-end="url(#arch-head)"/>
+        </g>
+        <g class="arch-link" role="button" tabindex="0" data-title="Блоки → «Главный вывод»" data-tip="Блок «Главный вывод» передаёт срез, а запрос сам собирает из него сводные цифры.">
+          <path class="arch-hit" d="M464 368H508"/>
+          <path class="arch-wire" d="M464 368H508" marker-end="url(#arch-head)"/>
+        </g>
+        <g class="arch-link" role="button" tabindex="0" data-title="Запрос → сервер страницы" data-tip="Запрос вывода уходит на сервер страницы, а не напрямую в шлюз.">
+          <path class="arch-hit" d="M606 392V456"/>
+          <path class="arch-wire" d="M606 392V456" marker-end="url(#arch-head)"/>
+        </g>
+        <g class="arch-link" role="button" tabindex="0" data-title="Сервер → шлюз LLM" data-tip="Сервер добавляет токен и отправляет запрос во внутренний шлюз банка.">
+          <path class="arch-hit" d="M512 488H468"/>
+          <path class="arch-wire" d="M512 488H468" marker-end="url(#arch-head)"/>
+        </g>
+        <g class="arch-link" role="button" tabindex="0" data-title="Импорт → конвейер сборки" data-tip="Загруженные в приложении CSV проходят тот же путь, что и книга: проверка, конвертер, новые JSON-файлы.">
+          <path class="arch-hit" d="M512 584H8V68H36"/>
+          <path class="arch-wire arch-wire--back" d="M512 584H8V68H36" marker-end="url(#arch-head)"/>
+        </g>
+        </g>
+      </svg>
+    </div>
+    <div class="arch-legend">
+      <span><i class="arch-key arch-key--main"></i>точка сборки — main.js</span>
+      <span><i class="arch-key arch-key--out"></i>за пределами репозитория</span>
+      <span><i class="arch-key arch-key--back"></i>обратный путь: клик пишет в адрес, импорт пересобирает данные</span>
+      <span class="hint">Наведите или нажмите на блок или стрелку — появится пояснение</span>
+    </div>
+    <div class="arch-tip" id="arch-tip" role="tooltip" hidden><b class="arch-tip__title"></b><span class="arch-tip__text"></span></div>
+  </section>
+  <div class="row">
+    <section class="card">
+      <div class="card-title">Слои кода <span class="hint">site/js/ — импорт только вниз</span></div>
+      <div class="tree arch-layers">
+        <div class="ln"><code>main.js · boot.js</code><span>Точки входа: реестр блоков, сборка контекста, ранний старт загрузки</span><i>всё</i></div>
+        <div class="ln"><code>blocks/</code><span>По модулю на блок дашборда: метрики, график, антидрайверы, календарь, вывод, отзывы, дайджест</span><i>всё ниже</i></div>
+        <div class="ln"><code>shell/</code><span>Каркас страницы: карточка блока и её состояния, шапка, боковое меню, тема, импорт выгрузки, обратная связь</span><i>components, ui, io, state, core</i></div>
+        <div class="ln"><code>components/</code><span>Общие виджеты: переключатель, выбор периода, sparkline, чипы, подсказки</span><i>ui, state, core</i></div>
+        <div class="ln"><code>ui/</code><span>Примитивы DOM: element(), иконки, popover, анимации</span><i>core</i></div>
+        <div class="ln"><code>io/</code><span>Сеть и среда: загрузка данных, запрос к LLM, мост десктопного приложения</span><i>state, core</i></div>
+        <div class="ln"><code>state/</code><span>Состояние экрана: URL, срез, период и фильтры, выбор на графике, события среза с кэшем</span><i>core</i></div>
+        <div class="ln"><code>core/</code><span>Чистые функции: VOC, план, вклад антидрайверов, аномалии, округление, форматирование, сборка xlsx</span><i>только core; без DOM и сети</i></div>
+      </div>
+      <p class="hint" style="margin-top:12px">Направление проверяет тест архитектуры: импорт вверх по слоям роняет сборку.</p>
+    </section>
+    <section class="card">
+      <div class="card-title">Правила каркаса <span class="hint">почему цифры не расходятся</span></div>
+      <div class="ctx arch-rules">
+        <div><b>Числа — только из ядра</b><span>Блок не считает по оценкам сам: нужная функция добавляется в core/ вместе с тестом.</span></div>
+        <div><b>Один контекст на отрисовку</b><span>Все блоки получают одну ссылку на срез и не могут разойтись в том, что считают.</span></div>
+        <div><b>Состояние живёт в URL</b><span>Ссылка воспроизводит экран; любое действие пишет query и перестраивает дашборд, одинаковые входы берутся из кэша.</span></div>
+        <div><b>Общее уезжает вниз</b><span>Функция нужна двум слоям — она переезжает в нижний, а не импортируется вверх.</span></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- STRUCTURE -->
+  <h2 class="sect"><span>05</span>Где всё записано</h2>
+  <div class="row struct">
+    <section class="card">
+      <div class="card-title">Структура проекта <span class="hint">что где лежит</span></div>
+      <div class="tree">
+        <div class="grp">Как работаем</div>
+        <div class="ln"><code>AGENTS.md</code><span>Правила для всех агентов: порядок работы, проверки, карта документов</span><i>1</i></div>
+        <div class="ln"><code>slice-gate.md</code><span>Гейт слайса: что проверить в коде и дизайне перед закрытием задачи</span><i>1</i></div>
+        <div class="grp">Журналы</div>
+        <div class="ln"><code>change-log.md</code><span>Журнал доработок «было → стало»: что изменилось и что отменено</span><i>184 записи</i></div>
+        <div class="ln"><code>decisions.md</code><span>Решения без ответа заказчика и открытые вопросы к нему — одним списком</span><i>62</i></div>
+        <div class="ln"><code>design-validation.md</code><span>Расхождения макета и как их решили</span><i>56</i></div>
+        <div class="grp">Дизайн-система</div>
+        <div class="ln"><code>visual-style · ui-system</code><span>Цвет, поверхности, отступы, скругления</span><i>2</i></div>
+        <div class="ln"><code>ui-texts</code><span>Словарь интерфейса, заголовки, пустые состояния; роли текста — в ui-system</span><i>1</i></div>
+        <div class="ln"><code>blocks-*.md</code><span>Поведение каждого блока</span><i>8</i></div>
+        <div class="grp">Методика и код</div>
+        <div class="ln"><code>calc-core · data-model</code><span>Формулы, инварианты, структура выгрузки</span><i>2</i></div>
+        <div class="ln"><code>site/</code><span>Дашборд: модули по слоям — ядро, состояние, сеть, компоненты, блоки</span><i>94 модуля</i></div>
+        <div class="ln"><code>tools/ · app/ · test/</code><span>Сборка данных, десктопное приложение, тесты</span><i>9,5k + 12k строк</i></div>
+      </div>
+    </section>
+    <section class="card">
+      <div class="card-title">Ничего не забыто <span class="hint">какой след оставляет одна просьба заказчика</span></div>
+      <div class="trace">
+        <div class="tr"><i class="t-req">1</i><div><b>Просьба разобрана на пункты</b><span>у каждого пункта трактовка и план</span></div><em class="num">52</em></div>
+        <div class="tr"><i class="t-req">2</i><div><b>Сверка с журналом и решениями</b><span>видно, что просьба отменяет; если противоречит — сначала вопрос заказчику</span></div><em class="num">184 · 62</em></div>
+        <div class="tr"><i class="t-ui">3</i><div><b>Расхождение с макетом — своя запись</b><span>а не правка «по вкусу»</span></div><em class="num">56</em></div>
+        <div class="tr"><i class="t-calc">4</i><div><b>Код и документ блока — одним изменением</b><span>поведение описано там же, где код</span></div><em class="num">25 док.</em></div>
+        <div class="tr"><i class="t-ship">5</i><div><b>Проверка без самопроверки</b><span>тесты, намеренные поломки, ревью другим агентом, сверка дизайна</span></div><em class="num">978</em></div>
+        <div class="tr"><i class="t-ship">6</i><div><b>Коммит проходит проверку</b><span>автор, тесты и отсутствие данных клиентов — перед каждым коммитом</span></div><em>git</em></div>
+        <div class="tr"><i class="t-ship">7</i><div><b>Неделя в этом журнале</b><span>каждую пятницу</span></div><em>пт</em></div>
+      </div>
+      <p class="trace-note">Любую цифру на дашборде можно проследить до решения, а решение — до просьбы, которая его вызвала.</p>
+    </section>
+  </div>
+
+  <!-- JOURNAL -->
+  <h2 class="sect"><span>06</span>Журнал по неделям</h2>
+  <section class="card" id="journal">
+    <div class="jhead">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div class="card-title" style="justify-content:flex-start">Что происходило каждую неделю</div>
+        <p class="hint">Копия на 13 ноября 2026. Коммиты в неделе — столбики справа.</p>
+      </div>
+      <div class="bars" id="bars" aria-label="Коммиты по неделям"></div>
+    </div>
+    <div class="weeks" id="weeks"><div class="state" id="wstate">Загружаем журнал…</div></div>
+  </section>
+
+  <!-- OPEN -->
+  <h2 class="sect"><span>07</span>Что дальше</h2>
+  <div class="row open">
+    <section class="card"><div class="card-title">Следующий шаг</div>
+      <ul><li>Автообновление данных из БД банка вместо ручной загрузки CSV: нужны доступ к базе и согласование с ИБ.</li><li>Выводы сегментов в VOC-дайджесте — после архива отчётов за прошлые месяцы.</li><li>Показать продактам связку «антидрайвер → проблемы → отзывы» и собрать обратную связь.</li></ul></section>
+    <section class="card"><div class="card-title">Вопросы заказчику</div>
+      <ul><li>Подтвердить формулу урона ДКО.</li><li>Поведение карточки канала при фильтре «Без сегмента».</li><li>Колонка ID клиента в выгрузке для пинов.</li><li>Источник для «Стабильности», «Конверсии в опрос», «Покрытия».</li></ul></section>
+    <section class="card"><div class="card-title">Не проверено</div>
+      <ul><li>Сборка под Windows выпускается, но не запускалась.</li><li>Экран ДКО на реальных данных ждёт исправленной выгрузки.</li><li>Роли бизнес-партнёра и руководителя пока восстановлены со слов продактов.</li></ul></section>
+  </div>
+
+  <footer>Источники: журнал изменений, решения, история коммитов и сессии работы с агентами. Рабочие дни — оценка по доле времени 30%. Цифры по реальным данным клиентов в отчёт не включены. Адаптив для планшета и телефона не планируется.</footer>
+</div>
+
+<script>
+(function(){
+  var AREA = {req:["Требования","t-req bg-req"], calc:["Аналитика","t-calc bg-calc"], ui:["Дизайн","t-ui bg-ui"], ship:["Доставка","t-ship bg-ship"]};
+  var weeksEl = document.getElementById("weeks");
+  var barsEl = document.getElementById("bars");
+  function el(tag, cls, text){var e=document.createElement(tag); if(cls) e.className=cls; if(text!=null) e.textContent=text; return e;}
+  function setState(msg){weeksEl.textContent=""; weeksEl.appendChild(el("div","state",msg));}
+  function render(docs){
+    var weeks = docs.map(function(d){return d.data()||{};}).filter(function(w){return w.title;});
+    weeks.sort(function(a,b){return (b.order||0)-(a.order||0);});
+    weeksEl.textContent=""; barsEl.textContent="";
+    if(!weeks.length){ setState("Записей пока нет. Первая неделя появится после ближайшего апдейта."); return; }
+    var max = Math.max.apply(null, weeks.map(function(w){return w.commits||0;}).concat([1]));
+    weeks.slice().reverse().forEach(function(w){
+      var b = el("div","b"+(w.status==="current"?" cur":""));
+      var bar = el("div"); bar.style.height = Math.max(3, Math.round(56*(w.commits||0)/max))+"px";
+      b.title = (w.dates||"")+": "+(w.commits||0)+" коммитов";
+      b.appendChild(el("span","num",String(w.commits||0))); b.appendChild(bar); b.appendChild(el("span",null,w.short||""));
+      barsEl.appendChild(b);
+    });
+    weeks.forEach(function(w){
+      var card = el("article","week"+(w.status==="current"?" cur":""));
+      var l = el("div","wl");
+      l.appendChild(el("b",null,w.dates||""));
+      l.appendChild(el("span","wt",w.title));
+      l.appendChild(el("span","wn",(w.commits||0)+" коммитов"+(w.entries?" · "+w.entries:"")));
+      if(w.status==="current"){var bd=el("span","badge bg-ui t-ui","идёт сейчас"); l.appendChild(bd);}
+      var r = el("div","wr");
+      if(w.summary) r.appendChild(el("p","sum",w.summary));
+      var ul = el("ul");
+      (w.items||[]).forEach(function(it){
+        var a = AREA[it.area]||["Прочее",""];
+        var li = el("li"); li.appendChild(el("span","tag "+a[1],a[0])); li.appendChild(el("span",null,it.text)); ul.appendChild(li);
+      });
+      r.appendChild(ul);
+      card.appendChild(l); card.appendChild(r); weeksEl.appendChild(card);
+    });
+  }
+  /* Статичная копия: недели вшиты на дату выгрузки, без базы claude.ai */
+  var WEEKS = [{"commits": 115, "dates": "5–11 октября", "entries": "3 пакета замечаний", "items": [{"area": "ui", "text": "Все 12 блоков сверены с Figma; собраны общие компоненты: карточка, переключатель, индикаторы, легенда."}, {"area": "ui", "text": "Инструмент визуальной сверки ловит наложения, обрезки и шрифт не по роли на трёх ширинах."}, {"area": "req", "text": "Первые три пакета замечаний заказчика (37 пунктов) разобраны и закрыты: шапка, «Мало оценок», свой период у блоков."}, {"area": "calc", "text": "Дневные аномалии VOC и частотности, порог достаточности выборки."}, {"area": "req", "text": "Четвёртый пакет по каналу АБМ разобран на 13 пунктов."}], "order": 41, "short": "5–11 окт", "status": "done", "summary": "Интерфейс приведён к макету, разобраны первые три пакета замечаний заказчика.", "title": "Единый стиль и первые замечания"}, {"commits": 63, "dates": "12–18 октября", "entries": "правки J-01–J-22", "items": [{"area": "calc", "text": "Главный вывод через внутренний LLM-шлюз банка; без него — расчёт по правилу."}, {"area": "calc", "text": "Антидрайверы по ДКО, частотность по всем разрезам, единый план канала."}, {"area": "calc", "text": "Календарь событий: аварии с длительностью и долей затронутых клиентов, раскатки, фильтр «С кэшбеком»."}, {"area": "ui", "text": "Стекло поверхностей, фильтр ОС в шапке, выбор дней на графике."}, {"area": "ship", "text": "Выгрузка текущего среза в Excel."}], "order": 42, "short": "12–18 окт", "status": "done", "summary": "Закрыт пакет замечаний по АБМ, главный вывод формулирует внутренняя LLM банка.", "title": "Канал АБМ и главный вывод через LLM"}, {"commits": 3, "dates": "19–25 октября", "entries": "правки J-23–J-34", "items": [{"area": "ui", "text": "Карточки «Топ проблем» и цитаты с фактической оценкой и датой."}, {"area": "calc", "text": "ДКО: исключены «Клиент отказался говорить» и пустые категории, подстановка группы категорий."}, {"area": "req", "text": "Подтверждено с заказчиком: состав листа НИБ, колонка роли, смысл экспертизы ОСЛК."}], "order": 43, "short": "19–25 окт", "status": "done", "summary": "Неделя крупных правок одним пакетом: мало коммитов, но 12 записей в журнале.", "title": "Прямая речь и правила ДКО"}, {"commits": 4, "dates": "26 октября — 1 ноября", "entries": "правки J-35–J-53", "items": [{"area": "ship", "text": "Реальная выгрузка хранится только локально, хук не даёт закоммитить данные клиентов."}, {"area": "req", "text": "Данные исследования продактов Q2 переданы в проект и легли в приоритеты блоков."}, {"area": "ui", "text": "Блоки объединены в группы «Динамика, события и антидрайверы» и «Прямая речь» со своим периодом."}, {"area": "ui", "text": "Правила набора текста, база сравнения у дельт, документ визуального стиля, шрифты Styrene."}], "order": 44, "short": "26 окт–1 ноя", "status": "done", "summary": "Дашборд впервые собран на реальной выгрузке; страница перестроена вокруг сценария «VOC упал».", "title": "Реальные данные и новая структура"}, {"commits": 53, "dates": "2–8 ноября", "entries": "правки J-54–J-111", "items": [{"area": "ship", "text": "Десктопное приложение для macOS и Windows: загрузка CSV, автообновление, страница скачивания."}, {"area": "ui", "text": "Светлая тема, система отступов и скруглений, новая анатомия карточек метрик."}, {"area": "calc", "text": "Новые метрики: «Доля оценок 1–3», «Дни относительно плана»; правило критического снижения."}, {"area": "calc", "text": "Урон ДКО как доля разрыва VOC до 5, технические категории исключены — как в отчётах заказчика."}, {"area": "ship", "text": "Скорость: кэш расчётов, загрузка частями; сборка книги 66 → 1,5 с."}], "order": 45, "short": "2–8 ноя", "status": "done", "summary": "Дашборд ушёл к пользователям как десктопное приложение с автообновлением.", "title": "Скорость, светлая тема и десктопное приложение"}, {"commits": 99, "dates": "9–15 ноября", "entries": "правки J-112–J-185", "items": [{"area": "ui", "text": "«Топ проблем» встал под антидрайверы: клик по строке или ячейке антидрайвера сужает проблемы, ленту отзывов и детализацию. Поиск по проблеме, динамика по неделям числами."}, {"area": "calc", "text": "Доля негатива по проблеме: размеченные отзывы растянуты на весь негатив, редкие проблемы больше не «нулевые». Доля жалоб — только от кейсов с обратной связью."}, {"area": "calc", "text": "Антидрайверы: режим «Влияние» — тянет элемент VOC вверх или вниз; версии приложения отдельными секциями iOS и Android; ДКО переехал в «Топ проблем»."}, {"area": "ui", "text": "Новые страницы: VOC-дайджест месяца канала по макету ежемесячного слайда и «VOC ролей» с портретами ролей от заказчика."}, {"area": "calc", "text": "Календарь событий: новый тип «Новый срез» — впервые пришли оценки по триггеру или версии; пояснения типов по значку «i»."}, {"area": "ship", "text": "Код разложен по слоям, направление зависимостей и правила блоков проверяют тесты; заготовка нового блока одной командой; схема каркаса."}, {"area": "ship", "text": "Перед каждым коммитом проверяются автор, тесты и отсутствие данных клиентов в репозитории."}, {"area": "req", "text": "Документация перестроена: у каждого факта одно место, вопросы к заказчику — одним списком."}], "order": 46, "short": "9–15 ноя", "status": "current", "summary": "Самая плотная неделя: 74 правки. «Топ проблем» стал инструментом поиска причины падения, появились VOC-дайджест и VOC ролей, код разложен по слоям с автоматической проверкой.", "title": "Поиск причины, новые страницы и порядок в коде"}];
+  render(WEEKS.map(function(w){return {data:function(){return w;}};}));
+})();
+</script>
+
+<script>
+/* Подсказки схемы каркаса: наведение показывает, фокус — с клавиатуры, нажатие закрепляет до клика мимо или Escape */
+(function(){
+  var tip=document.getElementById("arch-tip"); if(!tip) return;
+  var targets=document.querySelectorAll(".arch svg [data-tip]"); var active=null, pinned=false;
+  targets.forEach(function(t){t.setAttribute("aria-label",t.dataset.title+". "+t.dataset.tip);});
+  function show(t){
+    if(active&&active!==t) active.classList.remove("is-active");
+    active=t; t.classList.add("is-active");
+    tip.querySelector(".arch-tip__title").textContent=t.dataset.title;
+    tip.querySelector(".arch-tip__text").textContent=t.dataset.tip;
+    tip.hidden=false;
+    var a=t.getBoundingClientRect(), g=8, w=tip.offsetWidth, h=tip.offsetHeight;
+    tip.style.left=Math.min(Math.max(g,a.left+a.width/2-w/2),innerWidth-w-g)+"px";
+    var below=a.bottom+g; tip.style.top=(below+h<=innerHeight-g?below:Math.max(g,a.top-h-g))+"px";
+  }
+  function hide(){ if(active) active.classList.remove("is-active"); active=null; pinned=false; tip.hidden=true; }
+  targets.forEach(function(t){
+    t.addEventListener("pointerenter",function(e){ if(e.pointerType==="touch") return; pinned=false; show(t); });
+    t.addEventListener("pointerleave",function(e){ if(e.pointerType==="touch"||pinned) return; var f=document.activeElement; if(f!==t&&f&&f.dataset&&f.dataset.tip) show(f); else hide(); });
+    t.addEventListener("focus",function(){ if(pinned&&active!==t) pinned=false; if(!pinned) show(t); });
+    t.addEventListener("blur",function(){ if(!pinned) hide(); });
+    t.addEventListener("click",function(e){ e.stopPropagation(); if(pinned&&active===t) return hide(); show(t); pinned=true; });
+    t.addEventListener("keydown",function(e){ if(e.key!=="Enter"&&e.key!==" ") return; e.preventDefault(); t.dispatchEvent(new MouseEvent("click",{bubbles:true})); });
+  });
+  document.addEventListener("click",function(){ if(pinned) hide(); });
+  document.addEventListener("keydown",function(e){ if(e.key==="Escape") hide(); });
+  addEventListener("scroll",function(){ if(active) show(active); },{passive:true,capture:true});
+  addEventListener("resize",hide);
+})();
+</script>
+
+</body>
+</html>
