@@ -117,7 +117,7 @@ a{color:inherit}
 .area .src{font-size:12px;color:var(--text-3);border-top:1px solid var(--border);padding-top:10px;margin-top:auto}
 
 /* flow */
-.flow{display:grid;grid-template-columns:minmax(0,1fr) 22px minmax(0,1.15fr) 22px minmax(0,1.3fr) 22px minmax(0,1fr) 22px minmax(0,1fr);align-items:stretch;margin-top:16px}
+.flow{display:grid;grid-template-columns:minmax(0,.85fr) 22px minmax(0,1.1fr) 22px minmax(0,1.6fr) 22px minmax(0,1fr) 22px minmax(0,1fr);align-items:stretch;margin-top:16px}
 .arrow{display:grid;place-items:center;color:var(--text-3);font-size:16px}
 .node{border:1px solid var(--border-strong);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px;background:var(--surface);min-width:0}
 .node h3{font-size:13px;font-weight:600}
@@ -130,6 +130,16 @@ a{color:inherit}
 .kb{margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:var(--sunken);font-size:12.5px;color:var(--text-2)}
 .kb b{color:var(--text);font-weight:500}
 @media (max-width:980px){.flow{grid-template-columns:1fr}.arrow{transform:rotate(90deg);height:24px}}
+.zones{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.zone{font-size:12px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:var(--sunken);color:var(--text-2);line-height:1.3}
+.zone b{display:block;color:var(--text);font-weight:500;font-size:12.5px}
+.zone.common{grid-column:1/-1;border-style:dashed}
+.node .cap{font-size:11.5px;color:var(--text-3)}
+.rules3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:14px}
+@media (max-width:900px){.rules3{grid-template-columns:1fr}}
+.rules3 div{padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:var(--sunken);display:flex;flex-direction:column;gap:4px}
+.rules3 b{font-weight:500;font-size:13px}
+.rules3 span{font-size:12.5px;color:var(--text-2)}
 
 /* structure */
 .struct{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr)}
@@ -449,7 +459,7 @@ footer{font-size:12px;color:var(--text-3);padding-top:8px}
         <span class="hint">Как это помещается в 30%</span>
         <ul class="par">
           <li><b>Я ставлю задачу и принимаю решения</b><span>говорю с заказчиком, выбираю трактовку, принимаю результат</span></li>
-          <li><b>Агенты пишут и проверяют</b><span>пока я в других задачах, сессии ведут свои ветки в фоне</span></li>
+          <li><b>Агенты пишут и проверяют</b><span>чаты зон ведут свои ветки в фоне, диспетчер следит за очередью</span></li>
           <li><b>Проверка без меня</b><span>тесты, намеренные поломки и ревью другим агентом</span></li>
           <li><b>Контекст не теряется</b><span>агенты начинают с базы знаний, а не с моей памяти</span></li>
         </ul>
@@ -470,7 +480,7 @@ footer{font-size:12px;color:var(--text-3);padding-top:8px}
 
   <!-- FLOW -->
   <section class="card">
-    <div class="card-title">Схема работы с ИИ-агентами <span class="hint">я ставлю задачи, агенты пишут и проверяют</span></div>
+    <div class="card-title">Схема работы с ИИ-агентами <span class="hint">с 13 ноября: диспетчер и чаты по зонам</span></div>
     <div class="flow">
       <div class="node">
         <span class="who">Вход</span><h3>Задача</h3>
@@ -478,30 +488,44 @@ footer{font-size:12px;color:var(--text-3);padding-top:8px}
       </div>
       <div class="arrow" aria-hidden="true">→</div>
       <div class="node orch">
-        <span class="who t-calc">Основная сессия</span><h3>Агент-оркестратор</h3>
-        <ul><li>читает правила и документы по задаче</li><li>сверяет просьбу с журналом решений</li><li>планирует, пишет код</li></ul>
+        <span class="who t-calc">Один вход</span><h3>Чат-диспетчер</h3>
+        <ul><li>определяет зону, делит просьбу на две зоны</li><li>держит очередь: пишут не больше двух зон</li><li>выдаёт номер записи журнала</li><li>сливает готовые изменения по одному</li></ul>
+        <span class="cap">Код блоков сам не правит</span>
       </div>
       <div class="arrow" aria-hidden="true">→</div>
       <div class="stack">
         <div class="node">
-          <span class="who">Параллельные сессии</span><h3>Отдельные задачи на своих ветках</h3>
-          <ul><li>релиз, разрез «Версии», «Топ проблем»</li><li>Claude Code и Codex</li></ul>
+          <span class="who">Чаты зон · своя ветка у каждого</span><h3>7 зон ответственности</h3>
+          <div class="zones">
+            <div class="zone"><b>Шапка</b>фильтры, метрики, вывод</div>
+            <div class="zone"><b>Динамика</b>график, календарь</div>
+            <div class="zone"><b>Антидрайверы</b>тепловая карта, версии</div>
+            <div class="zone"><b>Топ проблем</b>таблица, прямая речь</div>
+            <div class="zone"><b>Дайджест</b>ДКО, стабильность</div>
+            <div class="zone"><b>Роли</b>страница VOC ролей</div>
+            <div class="zone common"><b>Общее</b>меню, каркас, приложение, релизы — и все общие файлы</div>
+          </div>
         </div>
         <div class="node sub">
           <span class="who">Субагенты</span><h3>Узкие поручения</h3>
-          <ul><li>независимое ревью кода</li><li>обновление тестов</li><li>поиск по коду и документам</li></ul>
+          <ul><li>независимое ревью кода</li><li>поиск по коду и документам</li></ul>
         </div>
       </div>
       <div class="arrow" aria-hidden="true">→</div>
       <div class="node gate">
         <span class="who t-ship">Гейт слайса</span><h3>Проверка</h3>
-        <ul><li>978 автотестов</li><li>намеренные поломки</li><li>ревью другим агентом</li><li>визуальная сверка</li><li>замер скорости</li></ul>
+        <ul><li>978 автотестов</li><li>намеренные поломки</li><li>ревью другим агентом</li><li>визуальная сверка</li><li>CI на изменении</li></ul>
       </div>
       <div class="arrow" aria-hidden="true">→</div>
       <div class="node">
-        <span class="who">Выход</span><h3>Результат</h3>
-        <ul><li>запись в журнале</li><li>выпуск приложения</li><li>веб-демо</li></ul>
+        <span class="who">Выход · по одному</span><h3>Слияние</h3>
+        <ul><li>запись в журнале с номером от диспетчера</li><li>слияние после моего «да»</li><li>выпуск приложения, веб-демо</li></ul>
       </div>
+    </div>
+    <div class="rules3">
+      <div><b>Зона — свой чат и своя ветка</b><span>Чат держит в памяти только свои блоки и их документы, поэтому не перечитывает весь проект.</span></div>
+      <div><b>Общие файлы — только у «Общего»</b><span>Журнал правок раньше меняли больше половины коммитов, и параллельные ветки сталкивались в нём. Теперь запись добавляется последней, при слиянии.</span></div>
+      <div><b>Не больше двух пишущих зон</b><span>Остальные просьбы ждут в очереди: конфликты и перечитывание после них стоят дороже ожидания.</span></div>
     </div>
     <div class="kb"><b>База знаний проекта</b> общая для всех агентов: правила работы, 25 документов, 62 решения и журнал из 184 правок. Агенты начинают каждую задачу с неё, поэтому решения не теряются между сессиями.</div>
   </section>
