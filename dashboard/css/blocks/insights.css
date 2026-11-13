@@ -26,7 +26,9 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  padding: var(--space-1) var(--space-2);
+  /* Ревью 13.11: контролы ленты — одной высоты с остальными контролами страницы (J-192) */
+  height: var(--control-height);
+  padding: 0 var(--space-2);
   border: var(--divider-width) solid var(--color-control-border);
   border-radius: var(--radius-pill);
   background: var(--control-raised);
@@ -219,9 +221,10 @@
   font: var(--type-caption-strong);
 }
 
+/* Ревью 13.11: одна структура у всех строк — текст слева переносится внутри своей колонки, VOC всегда справа */
 .insight-row__detail {
   grid-area: detail;
-  flex-wrap: wrap;
+  align-items: start;
   color: var(--color-text-tertiary);
   font: var(--type-caption);
 }
@@ -230,6 +233,11 @@
   flex: 1 1 auto;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+/* «· 103 оценки» не рвётся посередине: переносится только длинное имя разреза */
+.insight-row__part {
+  white-space: nowrap;
 }
 
 .insight-row__value {
@@ -268,8 +276,8 @@
 .insight-search {
   flex: 1 1 auto;
   min-width: 0;
-  min-height: var(--tab-height);
-  padding: var(--space-1) var(--space-3);
+  height: var(--control-height);
+  padding: 0 var(--space-3);
   border: var(--hairline) solid var(--color-control-border);
   border-radius: var(--radius-pill);
   background: var(--control-surface);

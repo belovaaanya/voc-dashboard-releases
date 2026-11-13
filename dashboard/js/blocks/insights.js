@@ -11,8 +11,11 @@ import { accidentColor } from '../core/incident-events.js';
 import { eventDetail, sameDetailEvent } from '../state/detail-event.js';
 import {
   ANOMALY_EVENT,
+  DATA_LOSS_EVENT,
   INCIDENT_EVENT,
   NEW_SLICE_EVENT,
+  RELEASE_EVENT,
+  RELEASE_LAG_DAYS,
   ROLLOUT_EVENT,
   SUSTAINED_EVENT,
   coversDay,
@@ -33,7 +36,7 @@ import { formatCount, formatDate, formatDayRange, formatDuration, formatEventTim
 import { CRITICAL } from '../core/insights.js';
 import { ABOVE_PLAN, BELOW_PLAN, IN_PLAN } from '../core/plan.js';
 import { roundDelta, roundFrequency, roundShare, roundVoc } from '../core/round.js';
-import { DIMENSION_CAPTION } from '../core/dimensions.js';
+import { DIMENSION_CAPTION, osName } from '../core/dimensions.js';
 import { calendarEventsOf, eventSelectionContext, hasFilters, historyOf } from '../state/event-analysis.js';
 
 const NBSP = ' ';
@@ -46,6 +49,15 @@ const selectedKinds = new WeakMap();
 const feedStatus = new WeakMap();
 /* Запрос поиска — у своего блока, как выбор типов: перерисовка его не сбрасывает */
 const searchQueries = new WeakMap();
+const DAY_FORMS = ['день', 'дня', 'дней'];
+/* Часть строки события, которая не рвётся: «1 234 оценки», «началась до периода» */
+const SHORT_PART = 24;
+const daysCaption = (count) => `${formatCount(count)}${NBSP}${plural(count, DAY_FORMS)}`;
+/* Порог задержки релиза словами: «3 дня» */
+function releaseLag() {
+  return daysCaption(RELEASE_LAG_DAYS);
+}
+
 /*
   J-48: «Аномалии» переименованы в «Критическое снижение» — так снижения называют пользователи.
   J-138: у каждого типа — пояснение, что считается событием. J-143: пояснения — не в чипах, а в окне по значку «i» у
@@ -54,17 +66,28 @@ const searchQueries = new WeakMap();
 export const KINDS = [
   { value: ANOMALY_EVENT, label: 'Критическое снижение', tags: [{ label: 'Снижение VOC ниже плана', color: 'negative' }, { label: 'Снижение VOC', color: 'orange' }],
     hint: 'VOC за день по каналу, сегменту, триггеру, продукту или ОС ниже средней за предыдущие 10 дней на 0,1 и больше, и при таком числе оценок это почти не бывает случайно (вероятность меньше 1 %). Нужно не меньше 100 оценок разреза за период' },
+  { value: DATA_LOSS_EVENT, label: 'Пропажа данных', tags: [{ label: 'Пропажа данных', color: 'data-loss' }],
+    hint: 'Разрез — весь срез, ОС, сегмент, продукт, триггер, роль или версия приложения — обычно получает оценки каждый рабочий день (в среднем от 5 за предыдущие 10 рабочих дней), а в этот день их нет или в три раза меньше, и случайно так почти не бывает (вероятность меньше 1 %). Дни подряд — одна строка' },
   { value: INCIDENT_EVENT, label: 'Авария', tags: [{ label: 'Авария', color: 'negative' }],
     hint: 'Сбой из листа аварий: начало, конец и доля затронутых пользователей. Показываются аварии всех каналов — авария соседнего канала тоже может сдвинуть VOC' },
+  { value: RELEASE_EVENT, label: 'Релизы АБМ', tags: [{ label: 'Релиз АБМ', color: 'neutral' }, { label: 'Релиз без оценок', color: 'data-loss' }, { label: 'Релиз: оценки через 5\u00a0дн', color: 'data-loss' }],
+    hint: `Версия приложения: дата релиза из листа раскаток и день, с которого по ней пошли оценки. Сигнал — оценок нет через ${releaseLag()} после релиза или они пришли позже. Версия, по которой оценки появились, а релиза в листе нет, — без даты релиза` },
   { value: ROLLOUT_EVENT, label: 'Раскатка', tags: [{ label: 'Раскатка', color: 'neutral' }],
-    hint: 'Выпуск фичи из листа раскаток: дата, название, число пинов, версия приложения и ОС' },
+    hint: 'Выпуск фичи без версии приложения из листа раскаток: дата, название, число пинов' },
   { value: SUSTAINED_EVENT, label: 'Инцидент', tags: [{ label: 'Инцидент 3\u00a0дн', color: 'negative' }],
     hint: 'Триггер из топ-15 по числу оценок три рабочих дня подряд и дольше держит VOC ниже нижней границы плана больше чем на 0,05' },
   { value: NEW_SLICE_EVENT, label: 'Новый срез', tags: [{ label: 'Новый срез', color: 'purple' }],
-    hint: 'Начали приходить оценки по триггеру или версии приложения, которых раньше в выгрузке не было. Дата — первый день с такими оценками' },
+    hint: 'Начали приходить оценки по триггеру, роли, сегменту или продукту, которых раньше в выгрузке не было. Дата — первый день с такими оценками. Новые версии приложения — в «Релизах АБМ»' },
 ];
 
-const NEW_SLICE_CAPTION = { trigger: 'Новый триггер', app_version: 'Новая версия приложения' };
+const NEW_SLICE_CAPTION = { trigger: 'Новый триггер', role: 'Новая роль', segment: 'Новый сегмент', product: 'Новый продукт' };
+/* Подпись разреза пропажи данных: весь срез — как у снижения VOC, версия — ключом «iOS 15.1.1» */
+const LOSS_CAPTION = { ...DIMENSION_CAPTION, role: 'Роль', app_version: 'Версия' };
+
+/* Ревью 13.11: «iOS» и «Android» понятны без подписи «ОС:» — у остальных разрезов подпись остаётся */
+function sliceCaption(dimension, name) {
+  return dimension === 'os' ? name : `${DIMENSION_CAPTION[dimension]}: ${name}`;
+}
 
 /** Аномалия или серия словами (R-27, R-43, R-44); состав строки — `docs/blocks-insights.md`. */
 export function insightText(insight, { label, state }) {
@@ -72,7 +95,7 @@ export function insightText(insight, { label, state }) {
   const { label: title, color } = eventType(insight);
   const slice = insight.dimension === 'channel'
     ? (hasFilters(state.filters) ? 'Весь срез' : 'Канал целиком')
-    : `${DIMENSION_CAPTION[insight.dimension]}: ${label(insight.dimension, insight.key)}`;
+    : sliceCaption(insight.dimension, label(insight.dimension, insight.key));
 
   const notes = [];
   /* Серия ниже плана уже названа тегом: вторая строка число дней не повторяет */
@@ -123,7 +146,7 @@ function channelEventText(event, context) {
   const scope = event.channel === null ? ['все каналы'] : [];
   const parts = event.kind === ROLLOUT_EVENT
     ? [event.feature ?? 'Фича без названия', ...(Number.isFinite(event.users) ? [`${formatCount(event.users)}${NBSP}${plural(event.users, ['пин', 'пина', 'пинов'])}`] : []),
-      ...(event.app_version ? [`Версия ${event.app_version}`] : []), ...(event.os ? [`ОС: ${event.os}`] : []), ...scope]
+      ...(event.app_version ? [`Версия ${event.app_version}`] : []), ...(event.os ? [osName(event.os)] : []), ...scope]
     : [effectCaption(event.effect),
       `Канал аварии: ${event.channel ?? 'все каналы'}${event.channel && context?.state?.channel && event.channel !== context.state.channel ? ' (другой канал)' : ''}`,
       ...(event.product ? [`Продукт: ${event.product}`] : []), ...(event.description ? [event.description] : [])];
@@ -142,19 +165,62 @@ function channelEventText(event, context) {
   };
 }
 
+/* J-191: релиз — версия, дата релиза и первые оценки; сигнал — оценок нет или они пришли с задержкой */
+function releaseText(event) {
+  const { label: title, color } = eventType(event);
+  const date = formatDate(event.date);
+  const first = event.firstDate ? formatDate(event.firstDate) : null;
+  const since = {
+    'no-date': `оценки с ${first}, даты релиза в листе нет`,
+    missing: `оценок нет ${daysCaption(event.waited)} после релиза`,
+    pending: 'оценок пока нет',
+    late: `оценки с ${first}, через ${daysCaption(event.lag)} после релиза`,
+    early: `оценки с ${first}, раньше релиза`,
+    ok: event.fromHistoryStart ? `оценки есть с начала выгрузки, ${first}` : `оценки с ${first}`,
+  }[event.status];
+  const parts = [`Версия ${event.key}`, since, ...(event.ratings ? [formatRatings(event.ratings)] : []),
+    ...(event.feature ? [event.feature] : []), ...(event.channel === null ? ['все каналы'] : [])];
+  const value = event.value === null ? null : `VOC ${formatVoc(roundVoc(event.value))}`;
+  const window = event.releaseDate
+    ? `Релиз ${date} из листа rollouts; первые оценки по версии — ${first ?? 'ещё не пришли'}. Сигнал — оценок нет через ${releaseLag()} после релиза или они пришли позже. Оценки и VOC — с первого дня до конца периода`
+    : `Первые оценки по версии — ${first}; строки релиза в листе rollouts нет. Оценки и VOC — с первого дня до конца периода`;
+  const detail = parts.join(' · ');
+  return { date, title, color, comment: null, detail, value, delta: null, deltaTone: 'neutral', window, sentence: `${date}. ${title}. ${parts.join(', ')}.${value ? ` ${value}.` : ''}` };
+}
+
+/* J-191: пропажа данных — разрез, сколько оценок было в день и сколько стало */
+function dataLossText(event, context) {
+  const { label: title, color } = eventType(event);
+  const date = event.streak > 1 ? formatDayRange(event.from, event.date) : formatDate(event.date);
+  const slice = event.dimension === 'channel'
+    ? (hasFilters(context.state?.filters) ? 'Весь срез' : 'Канал целиком')
+    : event.dimension === 'os' ? event.key
+      : `${LOSS_CAPTION[event.dimension]}: ${event.dimension === 'app_version' ? event.key : context.label(event.dimension, event.key)}`;
+  const before = formatNumber(Math.round(event.before));
+  const after = event.full ? 'нет оценок' : `${formatNumber(Math.round(event.after))} в день`;
+  const parts = [slice, `было ≈${before} в день, стало ${after}`, ...(event.startsBeforePeriod ? ['началась до периода'] : []), ...(event.ongoing ? ['продолжается'] : [])];
+  const window = `Продолжительность: ${workingDaysCaption(event.streak)}. Обычный поток — средняя за 10 предыдущих рабочих дней без пропажи; выходные не проверяются`;
+  const detail = parts.join(' · ');
+  return { date, title, color, comment: null, detail, value: null, delta: null, deltaTone: 'neutral', window, sentence: `${date}. ${title}. ${parts.join(', ')}. ${window}` };
+}
+
 /* J-138: новый срез — что появилось, сколько оценок с ним в периоде и их VOC */
 function newSliceText(event, context) {
   const { label: title, color } = eventType(event);
   const date = formatDate(event.date);
-  const name = event.dimension === 'trigger' ? context.label('trigger', event.key) : event.key;
+  const name = context.label(event.dimension, event.key);
   const detail = [`${NEW_SLICE_CAPTION[event.dimension]}: ${name}`, formatRatings(event.ratings)].join(' · ');
   const value = `VOC ${formatVoc(roundVoc(event.value))}`;
-  const window = `Первые оценки — ${date}; раньше в выгрузке ${event.dimension === 'trigger' ? 'этого триггера' : 'этой версии'} не было. Оценки и VOC — с первого дня до конца периода`;
+  const window = `Первые оценки — ${date}; раньше в выгрузке ${NEW_SLICE_SUBJECT[event.dimension]} не было. Оценки и VOC — с первого дня до конца периода`;
   return { date, title, color, comment: null, detail, value, delta: null, deltaTone: 'neutral', window, sentence: `${date}. ${title}. ${detail}. ${value}. ${window}` };
 }
 
+const NEW_SLICE_SUBJECT = { trigger: 'этого триггера', role: 'этой роли', segment: 'этого сегмента', product: 'этого продукта' };
+
 export function eventText(event, context) {
   if (event.kind === NEW_SLICE_EVENT) return newSliceText(event, context);
+  if (event.kind === RELEASE_EVENT) return releaseText(event);
+  if (event.kind === DATA_LOSS_EVENT) return dataLossText(event, context);
   if (event.kind === SUSTAINED_EVENT) {
     const { label: title, color } = eventType(event);
     const date = formatDayRange(event.from, event.date);
@@ -251,8 +317,16 @@ function eventRow(block, context, event, index) {
   const type = element('span', 'insight-row__type');
   type.append(tag(text.title, text.color));
   headline.append(element('span', 'insight-row__date', text.date), type);
+  /*
+    Ревью 13.11: у всех строк одна структура — текст слева, VOC справа в своей колонке. Части строки после первой
+    («103 оценки», «началась до периода») не рвутся: переносится только длинное имя разреза
+  */
   const detail = element('span', 'insight-row__detail');
-  detail.append(element('span', 'insight-row__slice', text.detail));
+  const [lead, ...rest] = text.detail.split(' · ');
+  const slice = element('span', 'insight-row__slice', lead);
+  /* Неразрывны только короткие части (число оценок, «началась до периода»); описание аварии переносится как текст */
+  for (const part of rest) slice.append(' ', part.length <= SHORT_PART ? element('span', 'insight-row__part', `· ${part}`) : `· ${part}`);
+  detail.append(slice);
   if (text.value !== null) {
     const value = element('span', 'insight-row__value', text.value);
     value.title = text.value === 'VOC —'
@@ -297,11 +371,11 @@ export function noDayEventsText(context) {
   const title = `Нет событий за ${formatDate(focus)}`;
   if (focus < context.period.from || focus > context.period.to) return [title, 'События ищутся в периоде блока, а выбранный день лежит вне его.'];
   const history = context.rows.length ? historyOf(context) : [];
-  if (!history.some(({ appeal_date }) => appeal_date === focus)) return [title, 'За выбранный день нет оценок, раскаток и аварий.'];
-  if (!hasEvaluatedSlice(windowParams(context, history, focus))) return [title, `Раскаток и аварий нет; для поиска снижений VOC мало истории — в предыдущем окне нужны два дня и ${formatRatings(CRITICAL_DROP_MIN_WINDOW_RATINGS)}.`];
+  if (!history.some(({ appeal_date }) => appeal_date === focus)) return [title, 'За выбранный день нет оценок, релизов, раскаток и аварий.'];
+  if (!hasEvaluatedSlice(windowParams(context, history, focus))) return [title, `Релизов, раскаток и аварий нет; для поиска снижений VOC мало истории — в предыдущем окне нужны два дня и ${formatRatings(CRITICAL_DROP_MIN_WINDOW_RATINGS)}.`];
   return [title, isWorkingDay(focus)
-    ? 'В этот день VOC не упал значимо к предыдущим 10 рабочим дням, раскаток и аварий нет.'
-    : 'В этот день VOC не упал значимо к предыдущим 10 календарным дням, раскаток и аварий нет.'];
+    ? 'В этот день VOC не упал значимо к предыдущим 10 рабочим дням, релизов, раскаток и аварий нет.'
+    : 'В этот день VOC не упал значимо к предыдущим 10 календарным дням, релизов, раскаток и аварий нет.'];
 }
 
 const resetAction = (text, onClick) => ({ className: 'insight-search__reset', text, onClick });
@@ -326,7 +400,7 @@ export function eventsOfFocus(events, focus) {
 export function noEventsText(context) {
   const [title, detail] = noAnomaliesText(context);
   return title === NO_DROPS
-    ? ['Событий нет', 'За период VOC значимо не падал; раскаток, аварий и инцидентов нет.']
+    ? ['Событий нет', 'За период VOC значимо не падал; релизов, раскаток, аварий, инцидентов и пропаж данных нет.']
     : [title, detail];
 }
 

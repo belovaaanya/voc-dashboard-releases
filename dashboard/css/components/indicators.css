@@ -179,3 +179,6 @@
   white-space: normal;
   overflow-wrap: anywhere;
 }
+
+/* J-191: проблема со сбором оценок — пропажа данных, релиз без оценок или с задержкой: жёлтый «спада числа оценок» */
+.insights .tone--data-loss { --tone: var(--color-yellow); }

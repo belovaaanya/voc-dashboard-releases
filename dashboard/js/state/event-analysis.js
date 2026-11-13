@@ -2,7 +2,8 @@
 import { MIN_EVENT_RATINGS, detectAnomalies, distinctAnomalies, measureEvents } from '../core/anomalies.js';
 import { earliestDate, latestDate } from '../core/dates.js';
 import { calendarAnomalies, detectIncidents } from '../core/calendar-analysis.js';
-import { channelEvents, detectNewSlices } from '../core/calendar.js';
+import { channelEvents, detectNewSlices, detectReleases } from '../core/calendar.js';
+import { detectDataLoss } from '../core/data-loss.js';
 import { selectionDays } from './chart-selection.js';
 import { attachAgentAnswers, describeAnomaly } from '../core/insights.js';
 import { recentCache } from '../core/recent.js';
@@ -71,15 +72,17 @@ export function insightsOf(context) {
   return analysisOf(context).insights;
 }
 
-/** События календаря (R-43 – R-45): серии аномалий одной строкой, раскатки и аварии канала. */
+/** События календаря (R-43 – R-45): серии аномалий одной строкой, раскатки, релизы и аварии канала, пропажи данных. */
 export function calendarEventsOf(context) {
   const { rows, state, period, reference } = context;
   const rankingPeriod = context.rankingPeriod ?? period;
   const minimumRatings = minimumOf(context);
   return calendarCache(rows, calendarKey(context), () => {
     const history = rows.length ? historyOf(context) : [];
-    const params = { rows: history, reference, period, rankingPeriod, channel: state.channel, filters: state.filters, dataEnd: latestDate(rows), minimumRatings };
-    return { reference, events: [...calendarAnomalies(params), ...channelEvents(reference, params), ...detectIncidents(params), ...detectNewSlices(params)] };
+    /* Релизы сверяют версии по всем оценкам канала: сбор оценок по версии от фильтров шапки не зависит (J-191) */
+    const params = { rows: history, allRows: rows, reference, period, rankingPeriod, channel: state.channel, filters: state.filters, dataEnd: latestDate(rows), minimumRatings };
+    return { reference, events: [...calendarAnomalies(params), ...channelEvents(reference, params), ...detectReleases(params),
+      ...detectDataLoss(params), ...detectIncidents(params), ...detectNewSlices(params)] };
   }, sameReference(reference)).events;
 }
 

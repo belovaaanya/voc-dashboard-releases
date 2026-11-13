@@ -54,6 +54,47 @@ const domainProblems = (row, reference) => [...new Set(complaintAnnotations(row,
   .filter((annotation) => textOf(annotation.problem))
   .map((annotation) => pairKey(isPositive(annotation) ? POSITIVE_GROUP : textOf(annotation.domain) ?? NO_DOMAIN, textOf(annotation.problem))))];
 /*
+  Разметка со справочником проблематик: ключ строки — `problem_id`, название — `problem_final` (обычно оно и есть
+  `problem`), группа — итоговая ФО `domain_final`. Свободная формулировка `problem` бывает разной у одной проблематики,
+  а `domain` — у одной проблематики разным: группировка по ним дробила проблематику. Оценка входит в проблематику один
+  раз, сколько бы строк разметки с этим ключом у неё ни было. Метка без `problem_id` — месяц прежней разметки в том же
+  срезе или прошлый период — не пропадает: она встаёт в проблематику с тем же названием (`problem` прежней разметки —
+  это `suggested_replacement`, то есть название проблематики), иначе — прежней парой `domain` и `problem`. В новой
+  разметке у строки без ключа нет и `problem`, поэтому она по-прежнему не считается.
+  Ключ отличается от названия невидимым префиксом — название подставляется в карточке
+*/
+const PROBLEM_ID = '\u001d';
+const problemIdOf = (annotation) => textOf(annotation.problem_id);
+const annotationsOf = (row) => (row.annotations?.length ? row.annotations : [row]);
+export const hasProblemIds = (rows) => rows.some((row) => annotationsOf(row).some(problemIdOf));
+const idKey = (annotation) => `${PROBLEM_ID}${problemIdOf(annotation)}`;
+const keyProblemId = (name) => (name?.startsWith(PROBLEM_ID) ? name.slice(PROBLEM_ID.length) : null);
+const idGroup = (annotation) => (isPositive(annotation) ? POSITIVE_GROUP
+  : textOf(annotation.domain_final) ?? textOf(annotation.domain) ?? NO_DOMAIN);
+/* `byName` — ключ строки проблематики по её названию: метка прежней разметки встаёт в ту же строку */
+const idCut = ({ byName }) => (row, reference) => [...new Set(complaintAnnotations(row, reference).flatMap((annotation) => {
+  if (problemIdOf(annotation)) return [pairKey(idGroup(annotation), idKey(annotation))];
+  const problem = textOf(annotation.problem);
+  if (!problem) return [];
+  return [(!isPositive(annotation) && byName.get(problem)) || pairKey(isPositive(annotation) ? POSITIVE_GROUP : textOf(annotation.domain) ?? NO_DOMAIN, problem)];
+}))];
+/* Название проблематики — первое у ключа; без `problem_final` в выгрузке — `problem` той же строки */
+function problemNames(rows) {
+  const names = new Map();
+  const byName = new Map();
+  for (const row of rows) {
+    for (const annotation of annotationsOf(row)) {
+      const id = problemIdOf(annotation);
+      const name = textOf(annotation.problem_final) ?? textOf(annotation.problem);
+      if (!id || !name) continue;
+      if (!names.has(id)) names.set(id, name);
+      if (!byName.has(name) && !isPositive(annotation)) byName.set(name, pairKey(idGroup(annotation), idKey(annotation)));
+    }
+  }
+  return { names, byName };
+}
+
+/*
   J-128: ДКО топа считается как ДКО антидрайверов: `dko_category` с подстановкой группы (J-33), без «Клиент отказался
   говорить» (J-34) и технических категорий (J-109) — иначе цифры двух блоков разошлись бы
 */
@@ -161,6 +202,14 @@ function osCounts(rows) {
   return counts;
 }
 
+function versionsByOs(rows, items) {
+  const of = (name) => {
+    const platform = rows.filter((row) => osName(row.device_os) === name);
+    return mostFrequent(platform.map((row) => textOf(items[row.voc_ccode]?.app_version)), platform.length);
+  };
+  return { ios: of('iOS'), and: of('Android') };
+}
+
 /* Частое значение и его доля в жалобах проблемы; без значений — null */
 function mostFrequent(values, total) {
   const counts = new Map();
@@ -242,16 +291,29 @@ function peakOf(rows, { weekdays, dates }) {
   return {
     kind: top[0].kind,
     label: top.map(({ label }) => label).join(' · '),
+    /* Закономерности по одной: таблица ставит каждую своей строкой, а не одной строкой через точку */
+    lines: top.map(({ label }) => label),
     title: top.map(({ label, ratio, title }) => `${label}${title ? ` (${title})` : ''}: доля жалоб в ${formatNumber(ratio, 1)} раза выше обычной`).join('; '),
   };
 }
 
-function feedOf(rows, items, reference) {
+/*
+  Лента значения. У разметки со справочником проблематик (`problemId`) текст отзыва — цитата строки разметки этой
+  проблематики (`quotes` в verbatim), а не комментарий обращения: у обращения с несколькими проблемами под каждой — своя
+  цитата, и обращение без комментария клиента (жалоба только в экспертизе) не пропадает. Цитата из экспертизы помечена.
+  Без цитаты — комментарий клиента, как без разметки
+*/
+function feedOf(rows, items, reference, problemId = null) {
   return rows
-    .map((row) => ({ id: row.voc_ccode, date: row.appeal_date, rating: row.mark, segment: segmentOf(row), comment: commentFor(items, row),
+    .map((row) => {
+      const quote = problemId ? items[row.voc_ccode]?.quotes?.[problemId] : null;
+      const text = textOf(quote?.text);
+      return { id: row.voc_ccode, date: row.appeal_date, rating: row.mark, segment: segmentOf(row), comment: text ?? commentFor(items, row),
+        ...(text && quote.expertise ? { expertise: true } : {}),
       products: operationValues(row, reference, 'product'), triggers: row.operations ?? [],
       /* J-114: ОС и версия приложения — сразу у цитаты; версия есть только у АБМ, у других каналов поле пустое */
-      os: row.device_os ? osName(row.device_os) : null, version: textOf(items[row.voc_ccode]?.app_version) }))
+      os: row.device_os ? osName(row.device_os) : null, version: textOf(items[row.voc_ccode]?.app_version) };
+    })
     .filter(({ comment }) => comment)
     .sort((left, right) => right.date.localeCompare(left.date) || left.rating - right.rating || left.id.localeCompare(right.id));
 }
@@ -306,8 +368,9 @@ export function negativeShare(rows, base) {
 export const FEW_COMPLAINTS = 10;
 
 /** Значения разреза у оценки без служебных и скрытых меток (J-27, J-32). */
-function shownCutValues(cut, reference) {
-  const cutValues = PROBLEM_CUTS[cut];
+function shownCutValues(cut, reference, markup = null) {
+  const cutValues = markup ? idCut(markup) : PROBLEM_CUTS[cut];
+  const names = markup?.names;
   if (!cutValues) throw new Error(`Неизвестный разрез топа проблем: ${cut}`);
   const label = createLabels(reference);
   const omitted = emptyTopLabels[cut];
@@ -319,7 +382,9 @@ function shownCutValues(cut, reference) {
   const pair = PAIR_CUTS[cut];
   const shown = (value) => {
     if (!pair) return [value, label(cut, value)].every((text) => allowed(text, omitted));
-    const { group, name } = pairParts(value);
+    const { group, name: key } = pairParts(value);
+    const id = names ? keyProblemId(key) : null;
+    const name = id ? names.get(id) ?? id : key;
     return [name, label(pair.name, name)].every((text) => allowed(text, omitted))
       && [group, label(pair.group, group)].every((text) => allowed(text, null));
   };
@@ -330,7 +395,10 @@ function shownCutValues(cut, reference) {
 export function buildProblemCards(previous, current, period, verbatim, mode = 'frequent', { cut = 'problem', limit = 5, reference = null, buckets = [] } = {}) {
   const items = validateVerbatim(verbatim);
   const pair = PAIR_CUTS[cut];
-  const valuesOf = shownCutValues(cut, reference);
+  /* Выгрузка с ключом проблематики справочника группирует по нему; старая — по `problem` и `domain` */
+  const markup = cut === 'domainProblem' && (hasProblemIds(current) || hasProblemIds(previous)) ? problemNames([...current, ...previous]) : null;
+  const names = markup?.names;
+  const valuesOf = shownCutValues(cut, reference, markup);
   if (!current.length) return [];
 
   const weekdays = weekdayCounts(current);
@@ -351,6 +419,9 @@ export function buildProblemCards(previous, current, period, verbatim, mode = 'f
   const bucketBases = buckets.map(({ from, to }) => negativeBase(current.filter(({ appeal_date: date }) => date >= from && date <= to), valuesOf, positiveKey));
 
   const cards = [...currentGroups.entries()].map(([key, rows]) => {
+    const problemId = names ? keyProblemId(pairParts(key).name) : null;
+    const parts = pair ? pairParts(key) : {};
+    if (problemId) parts.name = names.get(problemId) ?? problemId;
     const previousCount = previousGroups.get(key)?.length ?? 0;
     const currentShare = currentBase ? (inBase(rows, currentBaseRows) / currentBase) * 100 : null;
     /*
@@ -360,19 +431,21 @@ export function buildProblemCards(previous, current, period, verbatim, mode = 'f
     const previousShare = previousBase && previousCount ? (inBase(previousGroups.get(key), previousBaseRows) / previousBase) * 100 : null;
     return {
       /* J-113: лента комментариев проблемы — каждая оценка с текстом, свежие сверху; жалобы по сегментам */
-      feed: feedOf(rows, items, reference),
+      feed: feedOf(rows, items, reference, problemId),
       segments: segmentCounts(rows),
       /* J-114: разрезы строки таблицы — ОС, частая версия и триггер с долей в жалобах проблемы, когда чаще */
       os: osCounts(rows),
-      version: mostFrequent(rows.map((row) => textOf(items[row.voc_ccode]?.app_version)), rows.length),
+      /* J-190: частая версия — у каждой ОС своя, доля — от жалоб проблемы с этой ОС: номера версий iOS и Android не сравнимы */
+      versions: versionsByOs(rows, items),
       trigger: mostFrequent(rows.flatMap((row) => [...new Set(row.operations ?? [])]), rows.length),
       peak: peakOf(rows, { weekdays, dates }),
       rows,
       key,
       /* Пара — группа и значение отдельно; у ФО и проблематики — ещё под их именами (J-119) */
-      ...(pair ? pairParts(key) : {}),
-      ...(cut === 'domainProblem' && pairParts(key).group === POSITIVE_GROUP ? { positive: true } : {}),
-      ...(cut === 'domainProblem' ? { domain: pairParts(key).group, problem: pairParts(key).name } : {}),
+      ...parts,
+      ...(problemId ? { problemId } : {}),
+      ...(cut === 'domainProblem' && parts.group === POSITIVE_GROUP ? { positive: true } : {}),
+      ...(cut === 'domainProblem' ? { domain: parts.group, problem: parts.name } : {}),
       count: rows.length,
       negativeShare: positiveKey(key) ? null : negativeShare(rows, base),
       buckets: buckets.map(({ from, to }, index) => {

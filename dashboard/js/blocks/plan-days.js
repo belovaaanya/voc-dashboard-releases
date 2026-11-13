@@ -1,6 +1,6 @@
 /*
   Плитка второй строки метрик (J-85, композиция J-87): сколько дней периода VOC среза
-  был ниже, выше и в коридоре плана. Слева крупные числа дней с подписями, кольцо справа —
+  был ниже, выше и в коридоре плана. Слева подписи с числами дней, кольцо справа —
   их доли, поэтому цвет здесь не единственный носитель (D-26).
 */
 
@@ -45,9 +45,8 @@ function legendNode(days) {
     const item = element('li', 'plan-days__item');
     const swatch = element('span', `plan-days__swatch plan-days__swatch--${status}`);
     swatch.setAttribute('aria-hidden', 'true');
-    const figure = element('span', 'plan-days__figure');
-    figure.append(swatch, element('span', 'plan-days__count', formatCount(days[status])));
-    item.append(figure, element('span', 'plan-days__caption', caption));
+    /* J-198: точка → подпись → число: числа одной колонкой справа, вровень по правому краю */
+    item.append(swatch, element('span', 'plan-days__caption', caption), element('span', 'plan-days__count', formatCount(days[status])));
     legend.append(item);
   }
   return legend;
@@ -65,6 +64,9 @@ export function renderPlanDays(block, { slice, state, reference }) {
     return;
   }
   const layout = element('div', 'plan-days');
-  layout.append(legendNode(days), ringNode(days));
+  /* Ячейка кольца: её ширину задаёт сетка — остаток после легенды, не больше токена */
+  const slot = element('div', 'plan-days__ring-slot');
+  slot.append(ringNode(days));
+  layout.append(legendNode(days), slot);
   block.setContent(layout);
 }

@@ -10,8 +10,8 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  min-width: var(--space-6);
-  height: var(--space-6);
+  min-width: var(--control-height);
+  height: var(--control-height);
   padding: 0 var(--space-1);
   border: var(--hairline) solid var(--color-control-border);
   border-radius: var(--radius-pill);

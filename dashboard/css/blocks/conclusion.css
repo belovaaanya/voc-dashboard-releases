@@ -1,12 +1,12 @@
 /* ── Главный вывод (D-10, D-33, V-16, Figma 3204:2849) ──────────── */
 
-.card--summary,
-.column--bounded > .card--summary {
+.card--summary {
   min-height: calc(var(--space-10) * 4);
 }
 
-/* Высоту верхней строки задают плитки метрик (D-55): длинный вывод прокручивается в своей карточке */
-.column--bounded > .card--summary .card__body {
+/* Высоту строки задают плитки метрик (D-55): длинный вывод прокручивается в своей карточке */
+.card--summary .card__body {
+  min-height: 0;
   overflow-y: auto;
   /* Поле прокрутки вмещает рамку наведения строки: иначе её срезал бы край области */
   margin-inline: calc(-1 * (var(--space-2) + var(--divider-width)));
@@ -129,17 +129,21 @@
   border-radius: var(--radius-tooltip);
   color: var(--color-text-secondary);
   font: var(--type-caption);
-  overflow-wrap: anywhere;
+  /* J-196: высота — по содержимому: в grid с `anywhere` Safari считал строки по ширине в один
+     символ и разносил их на всю высоту экрана; столбик и `break-word` этого не дают */
+  overflow-wrap: break-word;
 }
 
 .summary-tooltip:popover-open {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: var(--space-1);
 }
 
 .summary-tooltip--portal:not([hidden]) {
   z-index: 100;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: var(--space-1);
 }
 

@@ -77,8 +77,9 @@ function renderComputed(block, context, { llmNote = false } = {}) {
   block.setContent(list);
 }
 
-export const LLM_FALLBACK_NOTE = 'LLM недоступна — вывод посчитан по правилу';
-export const LLM_FALLBACK_LABEL = 'Посчитано по правилу';
+/* J-196: подпись говорит, чем вывод отличается от вывода LLM; подсказка — как он посчитан */
+export const LLM_FALLBACK_NOTE = 'LLM недоступна — драйверы и антидрайверы выбраны по вкладу в изменение VOC, без текста модели';
+export const LLM_FALLBACK_LABEL = 'Вывод без LLM';
 
 function sourceNote() {
   const note = element('span', 'summary-source', LLM_FALLBACK_LABEL);

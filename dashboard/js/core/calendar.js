@@ -1,8 +1,9 @@
 /** События «Календаря событий» (R-43 – R-45); методика — `docs/calc-core.md`, «События календаря». */
 
 import { ABOVE, BELOW, VOC_METRIC, compareAnomalies, isWorkingDay, workingDays } from './anomalies.js';
-import { numberedVersionKey } from './antidrivers.js';
-import { earliestDate, shiftDay } from './dates.js';
+import { numberedVersionKey, splitVersionKey, versionKey } from './antidrivers.js';
+import { earliestDate, daysBetween, shiftDay } from './dates.js';
+import { DIMENSIONS, osName } from './dimensions.js';
 import { formatCompactDuration, plural } from './format.js';
 import { accidentId, incidentSpan, isRetailIncident } from './incident-events.js';
 import { COMPLAINT_SUBJECT, CRITICAL, NEGATIVE, NEUTRAL, POSITIVE, anomalySubject } from './insights.js';
@@ -12,8 +13,14 @@ export const ROLLOUT_EVENT = 'rollout';
 export const INCIDENT_EVENT = 'incident';
 /* Аварии из incidents и расчётные инциденты — разные виды. */
 export const SUSTAINED_EVENT = 'sustained-incident';
-/* J-138: новый срез — впервые пришли оценки по триггеру или версии приложения */
+/* J-138: новый срез — впервые пришли оценки по триггеру, роли, сегменту или продукту; версии с J-191 — у релизов */
 export const NEW_SLICE_EVENT = 'new-slice';
+/* J-191: релиз версии АБМ — дата релиза из листа раскаток против даты первых оценок по версии */
+export const RELEASE_EVENT = 'release';
+/* J-191: пропажа данных — разрез с регулярным потоком оценок перестал их получать или получает в разы меньше */
+export const DATA_LOSS_EVENT = 'data-loss';
+/* Через сколько дней после релиза отсутствие оценок по версии — уже не «ещё не дошли», а сигнал */
+export const RELEASE_LAG_DAYS = 3;
 
 /* Цвет события — тон точки и тега; красный и зелёный — тоны негатива и позитива каркаса */
 export const RED = 'negative';
@@ -21,6 +28,8 @@ export const ORANGE = 'orange';
 export const YELLOW = 'yellow';
 export const PURPLE = 'purple';
 export const GREEN = 'positive';
+/* J-191: проблема со сбором оценок — пропажа данных и релиз без оценок или с задержкой */
+export const DATA_TONE = 'data-loss';
 
 const WORKING_DAY_FORMS = ['рабочий день', 'рабочих дня', 'рабочих дней'];
 
@@ -38,6 +47,12 @@ export function eventType(event) {
   }
   if (event.kind === ROLLOUT_EVENT) return { label: 'Раскатка', color: 'neutral' };
   if (event.kind === NEW_SLICE_EVENT) return { label: 'Новый срез', color: PURPLE };
+  if (event.kind === DATA_LOSS_EVENT) return { label: event.streak > 1 ? `Пропажа данных ${event.streak}\u00a0дн` : 'Пропажа данных', color: DATA_TONE };
+  if (event.kind === RELEASE_EVENT) {
+    if (event.status === 'missing') return { label: 'Релиз без оценок', color: DATA_TONE };
+    if (event.status === 'late') return { label: `Релиз: оценки через ${event.lag}\u00a0дн`, color: DATA_TONE };
+    return { label: 'Релиз АБМ', color: 'neutral' };
+  }
   if (event.calendar) {
     const color = { above: 'mint', in: 'yellow', below: RED }[event.planStatus] ?? ORANGE;
     return { label: event.planStatus === 'below' ? 'Снижение VOC ниже плана' : 'Снижение VOC', color };
@@ -106,10 +121,15 @@ function belowPlanRun(members) {
   return earliest ? last.streak - earliest.streak + 1 : 0;
 }
 
-/** J-22: раскатки текущего/всех каналов; аварии любых каналов, пересекающие период. */
+/* ОС ключа версии «iOS 15.1.1»: подписи ОС — одно слово (iOS, Android) */
+const versionOs = (key) => splitVersionKey(key).os;
+
+const isRelease = (item) => Boolean(String(item.app_version ?? '').trim());
+
+/** J-22: раскатки текущего/всех каналов; аварии любых каналов, пересекающие период. Раскатка с версией — релиз (J-191). */
 export function channelEvents(reference, { channel, period }) {
   const inScope = (item) => (item.channel === null || item.channel === channel) && item.date >= period.from && item.date <= period.to;
-  const rollouts = (reference?.rollouts ?? []).filter(inScope).map((item) => ({
+  const rollouts = (reference?.rollouts ?? []).filter((item) => inScope(item) && !isRelease(item)).map((item) => ({
     kind: ROLLOUT_EVENT, date: item.date, from: item.date, days: [item.date], channel: item.channel,
     users: item.users, feature: item.feature ?? null, tone: NEUTRAL, severity: null,
     app_version: item.app_version ?? null, os: item.os ?? null,
@@ -130,36 +150,45 @@ export function channelEvents(reference, { channel, period }) {
 }
 
 /*
-  J-138: новый срез — значение триггера или версии приложения (платформа и номер, J-128), которого не было ни в одной
-  оценке среза до периода, а в периоде появилось. Дата — первый день с ним. Срез — фильтры шапки по всей истории.
-  Если первый день значения — первый день всей истории среза, новым его не назвать: раньше данных просто нет
+  Первый день и оценки с ним до конца периода: по ним «Новый срез» и «Релиз АБМ» видят, когда значение появилось.
+  Первый день ищется по всей переданной истории, в том числе после периода: релиз, оценки по которому пришли после
+  конца периода, — не «без оценок»
 */
-const NEW_SLICE_CUTS = [
-  { dimension: 'trigger', values: (row) => [...new Set(row.operations ?? [])] },
-  { dimension: 'app_version', values: (row) => { const key = numberedVersionKey(row); return key ? [key] : []; } },
-];
+function firstSeen(rows, values, period) {
+  const seen = new Map();
+  for (const row of rows) {
+    const date = row.appeal_date;
+    if (typeof date !== 'string') continue;
+    for (const key of new Set(values(row))) {
+      if (!key) continue;
+      const found = seen.get(key) ?? { first: date, ids: new Set(), sum: 0 };
+      if (date < found.first) found.first = date;
+      if (date >= period.from && date <= period.to && !found.ids.has(row.voc_ccode)) {
+        found.ids.add(row.voc_ccode);
+        found.sum += row.mark;
+      }
+      seen.set(key, found);
+    }
+  }
+  return seen;
+}
 
-export function detectNewSlices({ rows, period }) {
+/*
+  J-138: новый срез — значение триггера, роли, сегмента или продукта, которого не было ни в одной оценке среза до
+  периода, а в периоде появилось. Дата — первый день с ним. Срез — фильтры шапки по всей истории.
+  Если первый день значения — первый день всей истории среза, новым его не назвать: раньше данных просто нет.
+  J-191: версии приложения ушли в «Релизы АБМ» — там первый день оценок сверяется с датой релиза
+*/
+const NEW_SLICE_CUTS = ['trigger', 'role', 'segment', 'product'].map((key) => DIMENSIONS.find((dimension) => dimension.key === key));
+
+export function detectNewSlices({ rows, reference, period }) {
   const start = earliestDate(rows);
   if (!start) return [];
   const events = [];
-  for (const { dimension, values } of NEW_SLICE_CUTS) {
-    const seen = new Map();
-    for (const row of rows) {
-      const date = row.appeal_date;
-      if (typeof date !== 'string' || date > period.to) continue;
-      for (const key of values(row)) {
-        const found = seen.get(key) ?? { first: date, ids: new Set(), sum: 0 };
-        if (date < found.first) found.first = date;
-        if (date >= period.from && !found.ids.has(row.voc_ccode)) {
-          found.ids.add(row.voc_ccode);
-          found.sum += row.mark;
-        }
-        seen.set(key, found);
-      }
-    }
+  for (const { key: dimension, values } of NEW_SLICE_CUTS) {
+    const seen = firstSeen(rows, (row) => values(row, reference), period);
     for (const [key, { first, ids, sum }] of seen) {
-      if (first <= start || first < period.from || !ids.size) continue;
+      if (first <= start || first < period.from || first > period.to || !ids.size) continue;
       events.push({
         kind: NEW_SLICE_EVENT, dimension, key, date: first, from: first, days: [first],
         ratings: ids.size, value: sum / ids.size, tone: NEUTRAL, severity: null,
@@ -167,6 +196,79 @@ export function detectNewSlices({ rows, period }) {
     }
   }
   return events;
+}
+
+/* Ключ версии из листа раскаток — как у строки тепловой карты (J-128): «iOS 15.1.1»; без ОС — только номер */
+function releaseVersion(item) {
+  const os = osName(item.os);
+  const version = versionKey(item.app_version);
+  return { os, version, key: os ? `${os} ${version}` : version };
+}
+
+/*
+  J-191: «Релизы АБМ». Релиз — строка листа раскаток с версией приложения (и ОС). Рядом — первый день оценок по
+  этой версии в канале: по нему видно релиз, по которому оценки не пришли или пришли с задержкой. Версия, по
+  которой оценки появились в периоде, а строки релиза нет, — тоже релиз, без даты релиза.
+  Оценки — все оценки канала без фильтров шапки: сбор оценок по версии от сегмента или триггера не зависит.
+  Фильтр ОС шапки оставляет релизы своей ОС
+*/
+export function detectReleases({ allRows = [], reference, period, channel, filters = {}, dataEnd }) {
+  const rows = allRows.filter((row) => !channel || row.channel === channel);
+  const start = earliestDate(rows);
+  const versions = firstSeen(rows, (row) => [numberedVersionKey(row)], period);
+  const osFilter = filters.os?.length ? new Set(filters.os) : null;
+  const shown = (os) => !osFilter || !os || osFilter.has(os);
+  const inPeriod = (date) => Boolean(date) && date >= period.from && date <= period.to;
+  const matched = new Set();
+  const events = [];
+  /* Повтор строки одной версии (поэтапная раскатка, строка на каждый канал) — один релиз с самой ранней датой */
+  const releases = new Map();
+  for (const item of reference?.rollouts ?? []) {
+    if (!isRelease(item) || (item.channel !== null && item.channel !== channel)) continue;
+    const version = releaseVersion(item);
+    const known = releases.get(version.key);
+    if (!known) releases.set(version.key, { ...version, item, features: new Set(item.feature ? [item.feature] : []) });
+    else {
+      if (item.feature) known.features.add(item.feature);
+      if (item.date < known.item.date) known.item = { ...item, users: item.users ?? known.item.users };
+    }
+  }
+  for (const { os, version, key, item, features } of releases.values()) {
+    /* Без ОС в строке — версия обеих платформ; фильтр ОС шапки оставляет свою */
+    const keys = os ? [key] : [...versions.keys()].filter((candidate) => candidate.endsWith(` ${version}`) && shown(versionOs(candidate)));
+    keys.forEach((candidate) => matched.add(candidate));
+    const found = keys.map((candidate) => versions.get(candidate)).filter(Boolean);
+    const first = found.length ? found.reduce((min, { first: date }) => (date < min ? date : min), found[0].first) : null;
+    if (!shown(os) || !(inPeriod(item.date) || inPeriod(first))) continue;
+    const ids = new Set(found.flatMap(({ ids: codes }) => [...codes]));
+    const sum = found.reduce((total, { sum: marks }) => total + marks, 0);
+    events.push(releaseEvent({
+      key, os, app_version: item.app_version, feature: features.size ? [...features].join(', ') : null, users: item.users ?? null, channel: item.channel,
+      releaseDate: item.date, first, fromHistoryStart: Boolean(first) && first <= start, ratings: ids.size, sum, dataEnd,
+    }));
+  }
+  for (const [key, { first, ids, sum }] of versions) {
+    const os = versionOs(key);
+    if (matched.has(key) || first <= start || !inPeriod(first) || !ids.size || !shown(os)) continue;
+    events.push(releaseEvent({ key, os, app_version: splitVersionKey(key).version, channel, releaseDate: null, first, ratings: ids.size, sum, dataEnd }));
+  }
+  return events;
+}
+
+function releaseEvent({ releaseDate, first, ratings, sum, dataEnd, fromHistoryStart = false, ...item }) {
+  const lag = releaseDate && first && !fromHistoryStart ? daysBetween(releaseDate, first) : null;
+  const waited = releaseDate && dataEnd ? daysBetween(releaseDate, dataEnd) : 0;
+  const status = !releaseDate ? 'no-date'
+    : !first ? (waited >= RELEASE_LAG_DAYS ? 'missing' : 'pending')
+      : fromHistoryStart ? 'ok'
+        : lag > RELEASE_LAG_DAYS ? 'late' : lag < 0 ? 'early' : 'ok';
+  const date = releaseDate ?? first;
+  const days = [...new Set([releaseDate, first].filter(Boolean))].sort();
+  return {
+    ...item, kind: RELEASE_EVENT, dimension: 'app_version', date, from: date, days, releaseDate, firstDate: first,
+    fromHistoryStart, lag, waited, status, ratings, value: ratings ? sum / ratings : null,
+    tone: status === 'missing' || status === 'late' ? NEGATIVE : NEUTRAL, severity: null,
+  };
 }
 
 export function coversDay(event, focus) {
@@ -178,18 +280,26 @@ function influenceRank(event) {
   if (event.kind === INCIDENT_EVENT) return 0;
   if (event.kind === ROLLOUT_EVENT) return 4;
   if (event.kind === NEW_SLICE_EVENT) return 5;
+  if (event.kind === RELEASE_EVENT) return 4;
+  if (event.kind === DATA_LOSS_EVENT) return 1;
   if (event.severity === CRITICAL) return 1;
   return { [NEGATIVE]: 2, [POSITIVE]: 3, [NEUTRAL]: 5 }[event.tone];
 }
 
 function withinRank(left, right) {
+  /* В одном ранге бывают разные виды (релиз и раскатка, пропажа и снижение): правило вида сравнивает только свой вид */
+  if (left.kind !== right.kind && [RELEASE_EVENT, ROLLOUT_EVENT, DATA_LOSS_EVENT].some((kind) => kind === left.kind || kind === right.kind)) {
+    return KIND_ORDER[left.kind] - KIND_ORDER[right.kind];
+  }
   if (left.kind === INCIDENT_EVENT) return right.effect - left.effect;
   if (left.kind === ROLLOUT_EVENT) return right.users - left.users;
+  if (left.kind === RELEASE_EVENT) return String(left.key).localeCompare(String(right.key), 'ru');
+  if (left.kind === DATA_LOSS_EVENT) return right.before - left.before || String(left.key).localeCompare(String(right.key), 'ru');
   if (left.kind === NEW_SLICE_EVENT) return right.ratings - left.ratings || String(left.key).localeCompare(String(right.key), 'ru');
   return Math.abs(right.deviation ?? 0) - Math.abs(left.deviation ?? 0) || compareAnomalies(left, right);
 }
 
-const KIND_ORDER = { [INCIDENT_EVENT]: 0, [ROLLOUT_EVENT]: 1, [ANOMALY_EVENT]: 2, [SUSTAINED_EVENT]: 3, [NEW_SLICE_EVENT]: 4 };
+const KIND_ORDER = { [INCIDENT_EVENT]: 0, [RELEASE_EVENT]: 1, [ROLLOUT_EVENT]: 2, [DATA_LOSS_EVENT]: 3, [ANOMALY_EVENT]: 4, [SUSTAINED_EVENT]: 5, [NEW_SLICE_EVENT]: 6 };
 
 export function sortEvents(events, mode = 'chronology') {
   const copy = [...events];

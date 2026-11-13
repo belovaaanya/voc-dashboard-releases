@@ -23,7 +23,6 @@ import { renderVerbatimTable } from './blocks/verbatim-table.js';
 import { digestSegment, renderDigestDko, renderDigestStability, renderDigestSummary, renderDigestTopic, renderRoles, digestRole } from './blocks/digest.js';
 import { vocSegment } from './blocks/voc-segment.js';
 import { renderPlanDays } from './blocks/plan-days.js';
-import { tally } from './blocks/tally.js';
 import { channelsOf, metricSegments } from './core/dimensions.js';
 import { renderEmptyHeader, renderHeader } from './shell/header.js';
 import { renderSideNav } from './shell/side-nav.js';
@@ -47,9 +46,8 @@ const BLOCKS = [
   { id: 'voc-segment-2', title: 'VOC сегмента', host: 'metrics', modifier: 'card--metric card--metric-segment', compact: true, render: vocSegment(1) },
   { id: 'voc-segment-3', title: 'VOC сегмента', host: 'metrics', modifier: 'card--metric card--metric-segment', compact: true, render: vocSegment(2) },
   { id: 'plan-days', title: 'Дни относительно плана', host: 'metrics', modifier: 'card--metric card--metric-plan-days', compact: true, render: renderPlanDays },
-  { id: 'share-low', title: 'Доля оценок 1–3', host: 'metrics', modifier: 'card--metric card--metric-tally', compact: true, render: tally('shareLow') },
-  { id: 'summary', title: 'Главный вывод', host: 'rail-top', modifier: 'card--summary', render: renderConclusion, ready: conclusionReady, placeholder: conclusionPlaceholder },
-  { id: 'distribution', title: 'Распределение оценок', host: 'rail-top', modifier: 'card--distribution card--fill', render: renderDistribution },
+  { id: 'distribution', title: 'Распределение оценок', host: 'metrics', modifier: 'card--distribution', render: renderDistribution },
+  { id: 'summary', title: 'Главный вывод', host: 'metrics', modifier: 'card--summary', render: renderConclusion, ready: conclusionReady, placeholder: conclusionPlaceholder },
   { id: 'dynamics', title: 'Динамика VOC', host: 'main', modifier: 'card--dynamics card--fill', render: renderDynamics },
   { id: 'antidrivers', title: 'Антидрайверы', host: 'drivers', modifier: 'card--antidrivers', render: renderAntidrivers },
   { id: 'verbatim-cards', title: 'Топ проблем', host: 'problems', modifier: 'card--verbatim', render: renderVerbatimCards, verbatim: true },
@@ -65,7 +63,7 @@ const BLOCKS = [
   { id: 'digest-stability', title: 'ДКО: стабильность', host: 'digest-side', modifier: 'card--digest-stability', render: renderDigestStability, page: 'digest' },
   { id: 'digest-topic', title: 'Детализация', host: 'digest-side', modifier: 'card--digest-topic', render: renderDigestTopic, page: 'digest' },
   { id: 'roles', title: 'VOC ролей', host: 'roles', modifier: 'card--roles card--page-head', render: renderRoles, page: 'roles' },
-  /* J-162: карточка-строка на роль; слотов — ROLE_SLOTS, лишние скрыты */
+  /* J-197: плитка на роль, сетка 2×2 — по слоту на каждую из ROLE_SLOTS ролей */
   ...Array.from({ length: ROLE_SLOTS }, (_, index) => ({ id: `role-${index + 1}`, title: 'Роль', host: 'roles', modifier: 'card--role card--avatar-head', render: digestRole(index), page: 'roles' })),
 ];
 /* J-151: страница блока; без поля — главная «VOC ЦК» */
@@ -150,7 +148,7 @@ function groupFromSlot(spec) {
 }
 
 
-const HOST_IDS = ['header', 'metrics', 'rail-top', 'main', 'rail-main', 'drivers', 'problems', 'full',
+const HOST_IDS = ['header', 'metrics', 'main', 'rail-main', 'drivers', 'problems', 'full',
   'digest-top', 'digest-segments', 'digest-dko', 'digest-side', 'roles'];
 
 function pageHosts() {
@@ -380,8 +378,26 @@ function startDashboard(env) {
     return verbatimPromise;
   }
 
+  /*
+    J-187: на время перерисовки страница держит прежнюю высоту. Скелет отложенной карточки ниже её содержимого:
+    без scroll anchoring (WebKit — окно приложения, Safari) укоротившаяся страница прижимала прокрутку вверх.
+    Удержание снимается после догрузки; новая перерисовка до неё продлевает текущее
+  */
+  let heightHeld = false;
+  const holdPageHeight = () => {
+    if (heightHeld) return;
+    heightHeld = true;
+    document.documentElement.style.minHeight = `${document.documentElement.scrollHeight}px`;
+  };
+  const releasePageHeight = () => {
+    if (!heightHeld) return;
+    heightHeld = false;
+    document.documentElement.style.minHeight = '';
+  };
+
   /* Изменённые действием карточки мягко проявляются, нетронутые не мигают (D-56); popstate и догрузка — без движения */
   const setState = (next) => {
+    holdPageHeight();
     const before = snapshotCards();
     writeState(next);
     const deferred = renderSafely(next, { reveal: { acted: before.acted } });
@@ -408,11 +424,15 @@ function startDashboard(env) {
       failed = false;
       const scheduled = generation;
       if (deferred.length) afterPaint(() => {
-        if (scheduled === generation) renderRest(deferred, reveal);
+        if (scheduled !== generation) return;
+        renderRest(deferred, reveal);
+        releasePageHeight();
       });
+      else if (mayDefer) releasePageHeight();
       return new Set(deferred.map(bodyOf).filter(Boolean));
     } catch (error) {
       failed = true;
+      releasePageHeight();
       cards.setAll(ERROR, error.message);
       return new Set();
     }

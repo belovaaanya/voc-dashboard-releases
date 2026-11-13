@@ -42,9 +42,10 @@ async function clipboardCopy(text) {
 
 /**
  * `text()` вызывается в момент клика: копируется состояние на этот момент.
- * С `iconName` подпись живёт в `aria-label` и подсказке, без него — текстом кнопки.
+ * С `iconName` подпись живёт в `aria-label` и подсказке, без него — текстом кнопки;
+ * итог у кнопки-иконки виден сменой иконки (галочка или знак ошибки), а не только в подсказке.
  */
-export function copyButton({ label, text, className, iconName = null, done = COPY_DONE, copy = clipboardCopy }) {
+export function copyButton({ label, text, className, iconName = null, iconClass = 'copy-button__icon', done = COPY_DONE, copy = clipboardCopy }) {
   const wrap = element('span', 'copy-button');
   const button = element('button', className);
   button.type = 'button';
@@ -56,16 +57,19 @@ export function copyButton({ label, text, className, iconName = null, done = COP
       button.setAttribute('aria-label', value);
     } else button.textContent = value;
   };
-  if (iconName) button.append(icon(iconName, 'copy-button__icon'));
+  const mark = (name) => button.replaceChildren(icon(name, iconClass));
+  if (iconName) mark(iconName);
   name(label);
 
   let timer = null;
   const show = (value) => {
     name(value);
+    if (iconName) mark(value === COPY_FAILED ? 'alert' : 'check');
     status.textContent = value;
     clearTimeout(timer);
     timer = setTimeout(() => {
       name(label);
+      if (iconName) mark(iconName);
       status.textContent = '';
     }, RESET_MS);
     /* В Node (тесты) таймер не держит процесс; в браузере `unref` нет */

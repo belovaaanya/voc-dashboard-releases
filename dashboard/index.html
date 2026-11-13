@@ -39,7 +39,6 @@
 <link rel="modulepreload" href="js/blocks/insights.js">
 <link rel="modulepreload" href="js/blocks/metric-card.js">
 <link rel="modulepreload" href="js/blocks/plan-days.js">
-<link rel="modulepreload" href="js/blocks/tally.js">
 <link rel="modulepreload" href="js/blocks/verbatim-cards.js">
 <link rel="modulepreload" href="js/blocks/verbatim-table.js">
 <link rel="modulepreload" href="js/blocks/voc-channel.js">
@@ -79,6 +78,7 @@
 <link rel="modulepreload" href="js/core/conclusion-payload.js">
 <link rel="modulepreload" href="js/core/conclusions.js">
 <link rel="modulepreload" href="js/core/critical-drop.js">
+<link rel="modulepreload" href="js/core/data-loss.js">
 <link rel="modulepreload" href="js/core/dates.js">
 <link rel="modulepreload" href="js/core/digest.js">
 <link rel="modulepreload" href="js/core/dimensions.js">
@@ -134,10 +134,8 @@
 
     <!-- J-151: страницы дашборда — пункты меню; видна одна, main.js скрывает остальные и не считает их блоки -->
     <div class="page-view" id="page-voc" data-page="voc">
-    <div class="page-row">
-      <div class="metrics-grid" id="metrics"></div>
-      <div class="column column--bounded" id="rail-top"></div>
-    </div>
+    <!-- J-189: шапка — сетка метрик: VOC канала слева на две строки, справа сегменты, под ними дни плана, распределение и вывод -->
+    <div class="metrics-grid" id="metrics"></div>
 
     <!-- J-40, J-49: блок аналитики — одна карточка с общим периодом; слева график и антидрайверы под ним,
          справа события на всю высоту группы; main.js оборачивает слот в карточку группы -->

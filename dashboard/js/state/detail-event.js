@@ -1,10 +1,11 @@
 /** J-21: отдельный фильтр события меняет только детализацию, не общий срез. */
 import { normalizedDays } from './chart-selection.js';
+import { splitVersionKey } from '../core/antidrivers.js';
 import { DIMENSIONS, osName } from '../core/dimensions.js';
 
 const cuts = new Map(DIMENSIONS.map((dimension) => [dimension.key, dimension]));
-const ALLOWED = new Set(['channel', 'segment', 'trigger', 'product', 'os']);
-const KINDS = new Set(['anomaly', 'sustained-incident', 'rollout', 'incident', 'new-slice']);
+const ALLOWED = new Set(['channel', 'segment', 'trigger', 'product', 'os', 'role']);
+const KINDS = new Set(['anomaly', 'sustained-incident', 'rollout', 'incident', 'new-slice', 'release', 'data-loss']);
 
 export function normalizeDetailEvent(value) {
   if (!value || !ALLOWED.has(value.dimension) || typeof value.key !== 'string' || !value.key.trim()
@@ -20,6 +21,12 @@ export function eventDetail(event, channel) {
   let key = event.key ?? channel;
   if (event.kind === 'rollout' && event.os) { dimension = 'os'; key = osName(event.os); }
   if (event.kind === 'incident' && event.product) { dimension = 'product'; key = event.product; }
+  /* J-191: версии нет среди измерений детализации — релиз и пропажа по версии сужают её до ОС версии */
+  if (event.dimension === 'app_version') {
+    const os = event.os ?? splitVersionKey(event.key ?? '').os;
+    dimension = os ? 'os' : 'channel';
+    key = os ? osName(os) : channel;
+  }
   return normalizeDetailEvent({ channel, dimension, key, days: event.days ?? [event.date], kind: event.kind, id: event.id });
 }
 

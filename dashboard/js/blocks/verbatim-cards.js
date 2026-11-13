@@ -80,6 +80,42 @@ const nameOf = (item) => item.name ?? item.key;
 const GROUP_KEY = '\u001e';
 const groupKey = (group) => `${GROUP_KEY}${group}`;
 
+/*
+  Перерисовка по действию внутри блока не двигает страницу: блок остаётся на том же месте экрана. Без scroll anchoring
+  (WebKit — окно приложения, Safari) замена содержимого и фокус нового таба уносили прокрутку вверх. На время
+  перерисовки страница держит прежнюю высоту, после — блок возвращается на прежнее место
+*/
+/* Удержание общее на вложенные и частые вызовы: высоту до первого возвращает последний */
+const pageHold = { depth: 0, previous: '', held: '' };
+export function keepPagePosition(anchor, action) {
+  const view = anchor?.ownerDocument?.defaultView;
+  const before = anchor?.getBoundingClientRect?.().top;
+  if (!view?.scrollBy || !Number.isFinite(before)) return action();
+  const root = view.document.documentElement;
+  if (pageHold.depth === 0) pageHold.previous = root.style.minHeight;
+  pageHold.depth += 1;
+  pageHold.held = `${Math.max(root.scrollHeight, Number.parseFloat(root.style.minHeight) || 0)}px`;
+  root.style.minHeight = pageHold.held;
+  const settle = () => {
+    if (!anchor.isConnected) return;
+    const shift = anchor.getBoundingClientRect().top - before;
+    if (Math.abs(shift) >= 1) view.scrollBy(0, shift);
+  };
+  const result = action();
+  settle();
+  /* Фокус нового таба ставит переключатель уже после перерисовки — место проверяется ещё раз перед кадром */
+  const release = () => {
+    settle();
+    pageHold.depth -= 1;
+    if (pageHold.depth === 0 && root.style.minHeight === pageHold.held) root.style.minHeight = pageHold.previous;
+  };
+  if (view.requestAnimationFrame) view.requestAnimationFrame(release);
+  else release();
+  return result;
+}
+
+const rerenderInPlace = (block, context) => keepPagePosition(block.element, () => renderVerbatimCards(block, context));
+
 function cutTabs(block, context) {
   return segmented({
     label: 'Разрез топа проблем',
@@ -88,7 +124,7 @@ function cutTabs(block, context) {
     onSelect: (value) => {
       selectedCut = value;
       selectedDynamics = DYNAMICS_DEFAULT[value];
-      renderVerbatimCards(block, context);
+      rerenderInPlace(block, context);
     },
   });
 }
@@ -112,27 +148,33 @@ function dynamicsTabs(block, context) {
     onSelect: (value) => {
       selectedDynamics = value;
       revealSteps = true;
-      renderVerbatimCards(block, context);
+      rerenderInPlace(block, context);
     },
   });
 }
 
-/* J-139: сортировка — по частотности значений или их групп; подпись группы — по разрезу */
+/*
+  J-139: сортировка — по частотности значений или их групп. Подпись слева называет, что сортируется: «Сначала частые:
+  Проблематики / ФО», у ДКО — «Категории / Группы»; поведение то же
+*/
+export const ORDER_LABEL = 'Сначала частые:';
+const ORDER_OPTIONS = { domainProblem: ['Проблематики', 'ФО'], categoryPair: ['Категории', 'Группы'] };
 function orderTabs(block, context) {
-  const group = selectedCut === 'categoryPair' ? 'По группам' : 'По ФО';
-  const value = selectedCut === 'categoryPair' ? 'По категориям' : 'По проблемам';
-  return segmented({
-    label: 'Сортировка топа проблем',
+  const [value, group] = ORDER_OPTIONS[selectedCut];
+  const control = element('div', 'problem-order');
+  control.append(element('span', 'problem-order__label', ORDER_LABEL), segmented({
+    label: `Сортировка топа проблем: ${ORDER_LABEL.slice(0, -1).toLowerCase()}`,
     options: [
-      { value: 'value', label: value, title: `${grouping().nameTitle ?? grouping().nameHead}: по числу жалоб` },
+      { value: 'value', label: value, title: `${grouping().nameTitle ?? grouping().nameHead}: сначала частые, по числу жалоб` },
       { value: 'group', label: group, title: `${grouping().groupTitle}: сначала частые, внутри — по числу жалоб` },
     ],
     selected: selectedOrder,
     onSelect: (next) => {
       selectedOrder = next;
-      renderVerbatimCards(block, context);
+      rerenderInPlace(block, context);
     },
-  });
+  }));
+  return control;
 }
 
 /* J-29: ±0,1 п. п. — нейтральный тон, направление и точные доли сохраняются. */
@@ -183,7 +225,7 @@ function stepTabs(block, context) {
     selected: selectedScale,
     onSelect: (value) => {
       selectedScale = value;
-      renderVerbatimCards(block, context);
+      rerenderInPlace(block, context);
     },
   });
 }
@@ -259,14 +301,30 @@ function bucketCell(bucket, positive, gap, heatMax) {
   return cell;
 }
 
-/* J-120: частая версия — номер и сектор её доли среди жалоб проблемы; процент — в подсказке */
-function versionCell(found, positive = false) {
+/* J-120: частая версия — номер и сектор её доли; процент — в подсказке. J-190: у каждой ОС своя, доля — от жалоб с этой ОС */
+function versionCell(found, os, positive = false) {
   if (!found) return valueCell(null, 'problem-table__version');
   const cell = element('td', 'problem-table__version');
   const body = element('span', 'problem-table__version-body');
-  body.append(element('span', null, found.value), sharePie(found.share, { tone: positive ? 'positive' : 'negative', label: `Версия ${found.value}: ${formatShare(found.share)} ${positive ? 'отзывов' : 'жалоб проблемы'}` }));
+  const label = `${os} ${found.value}: ${formatShare(found.share)} ${positive ? 'отзывов' : 'жалоб'} проблемы с ${os}`;
+  const pie = sharePie(found.share, { tone: positive ? 'positive' : 'negative', label });
+  /* J-195: подсказка — на номере и круге вместе, одна: в маленький круг трудно попасть указателем */
+  pie.removeAttribute('title');
+  body.append(element('span', null, found.value), pie);
+  body.title = `${label}. Закрашенная часть круга — эта доля`;
   cell.append(body);
   return cell;
+}
+
+/* J-195: круг у частой версии читали не все — легенда под таблицей, когда колонки версий есть */
+export const VERSION_LEGEND = 'доля частой версии среди жалоб проблемы с этой ОС';
+function versionLegend() {
+  const legend = element('p', 'problem-table__legend');
+  const pie = sharePie(30);
+  pie.removeAttribute('role');
+  pie.setAttribute('aria-hidden', 'true');
+  legend.append(pie, element('span', null, `— ${VERSION_LEGEND}`));
+  return legend;
 }
 
 function textCell(text, className = 'problem-table__text') {
@@ -284,6 +342,7 @@ function textCell(text, className = 'problem-table__text') {
   сегменты, iOS / Android и частая версия у АБМ, частый триггер и когда чаще
 */
 function problemRow(item, { columns, selected, onSelect, base }) {
+  const { previousPeriod } = columns;
   const trend = shareTrend(item.shareDelta, { positive: item.positive });
   const row = element('tr', `problem-table__row${selected ? ' is-selected' : ''}${item.positive ? ' problem-table__row--positive' : ''}`);
   row.dataset.problemKey = item.key;
@@ -304,23 +363,27 @@ function problemRow(item, { columns, selected, onSelect, base }) {
   button.append(nameOf(item));
   head.append(button);
 
-  const total = element('td', 'problem-table__total');
-  const totalBody = element('div', 'problem-table__total-body');
-  const frequency = element('span', 'verbatim-card__frequency');
+  /*
+    J-195: жалобы, «было» и доля — не одной строкой. Число жалоб крупно, «было N» — тише строкой под ним,
+    период «было» — в подсказке; доля с треугольником — своей колонкой
+  */
+  const total = element('td', 'problem-table__count problem-table__total');
+  const frequency = element('span', 'problem-table__stack');
   frequency.append(element('strong', null, formatCount(item.count)));
   if (Number.isFinite(item.previousCount)) {
-    const previous = element('small', null, `было ${absent ? '—' : formatCount(item.previousCount)}`);
-    if (absent) previous.title = 'В прошлом периоде этого значения не было';
+    const previous = element('small', 'problem-table__was', `было ${absent ? '—' : formatCount(item.previousCount)}`);
+    previous.title = absent ? 'В прошлом периоде этого значения не было' : `${item.positive ? 'Отзывов' : 'Жалоб'} за ${previousPeriod ? formatInterval(previousPeriod) : 'прошлый период'}`;
     frequency.append(previous);
   }
-  total.append(totalBody);
+  total.append(frequency);
+  const share = element('td', 'problem-table__count problem-table__share');
   /* J-136: без сравнения треугольник невидим, но место за ним остаётся — доли строк стоят в одну колонку */
   const arrowless = absent ? 'delta--no-arrow' : undefined;
-  totalBody.append(frequency, delta({ text: formatShare(item.currentShare), direction: trend.direction, tone: trend.tone, caption: absent ? 'в прошлом периоде не было' : trend.label,
+  share.append(delta({ text: formatShare(item.currentShare), direction: trend.direction, tone: trend.tone, caption: absent ? 'в прошлом периоде не было' : trend.label,
     plain: true, triangle: true, className: arrowless }));
 
   const bySegment = new Map(item.segments.map(({ code, count }) => [segmentKey(code), count]));
-  row.append(head, textCell(item.group ?? '—', 'problem-table__text problem-table__group-name'), total);
+  row.append(head, textCell(item.group ?? '—', 'problem-table__text problem-table__group-name'), total, share);
   /*
     J-139, J-142: урон за период — в пунктах VOC со знаком минус, как у антидрайверов; доля негатива — в подсказке.
     J-129: при малом числе жалоб доля неустойчива — предупреждение в подсказке, подписи нет (J-136)
@@ -330,10 +393,19 @@ function problemRow(item, { columns, selected, onSelect, base }) {
     few ? `меньше ${FEW_COMPLAINTS} жалоб — доля неустойчива` : ''].filter(Boolean).join('. ');
   row.append(damageCell);
   row.append(...columns.segments.map((code) => countCell(bySegment.get(code))));
-  if (columns.os) row.append(countCell(item.os.ios), countCell(item.os.and), versionCell(item.version, item.positive));
-  /* J-140: «Когда чаще» — до двух закономерностей; во сколько раз доля жалоб выше обычной — в подсказке */
-  const peak = textCell(item.peak.label, `problem-table__peak problem-table__peak--${item.peak.kind}`);
-  if (item.peak.title) peak.querySelector('span').title = `${item.peak.label}. ${item.peak.title}`;
+  if (columns.os) {
+    row.append(countCell(item.os.ios), versionCell(item.versions.ios, 'iOS', item.positive),
+      countCell(item.os.and), versionCell(item.versions.and, 'Android', item.positive));
+  }
+  /*
+    J-140: «Когда чаще» — до двух закономерностей; во сколько раз доля жалоб выше обычной — в подсказке.
+    J-195: каждая закономерность — своей строкой, колонка по левому краю и отделена от соседней
+  */
+  const peak = element('td', `problem-table__peak problem-table__peak--${item.peak.kind}`);
+  const lines = element('span', 'problem-table__peak-lines');
+  for (const line of item.peak.lines ?? [item.peak.label]) lines.append(element('span', null, line));
+  if (item.peak.title) lines.title = `${item.peak.label}. ${item.peak.title}`;
+  peak.append(lines);
   row.append(peak);
   /* J-142: динамика — после итога за период, правой частью таблицы */
   item.buckets.forEach((bucket, index) => {
@@ -363,22 +435,27 @@ function tableHead(context, columns) {
     cell.colSpan = span;
     return cell;
   };
-  const summarySpan = 2 + 2 + columns.segments.length + (columns.os ? 3 : 0) + 1;
+  /* Название и группа — без подписи части; итог — жалобы, доля, урон, сегменты, ОС с версиями и «Когда чаще» */
+  const summarySpan = 2 + 3 + columns.segments.length + (columns.os ? 4 : 0) + 1;
   parts.append(part('', 2, 'problem-table__part--lead'), part('За период', summarySpan - 2),
     part(`Динамика · ${DYNAMICS[selectedDynamics].label.toLowerCase()} ${selectedScale === 'month' ? 'по месяцам' : 'по неделям'}`, columns.buckets.length, 'problem-table__part--steps'));
   head.append(parts);
   row.append(th(nameHead, nameTitle), th(groupHead, groupTitle));
-  /* J-139: «было» — за какой период, прямо в шапке колонки: число без даты читали как непонятное */
-  const was = columns.previousPeriod ? `было — ${formatInterval(columns.previousPeriod)}` : null;
-  const total = th('Жалоб', `Жалоб за период${was ? `; ${was}` : ''}; доля — от кейсов с обратной связью, где проблема выявлена: без недозвонов, «без категории» и «Невозможно выделить проблему»`);
-  if (was) total.append(element('small', 'problem-table__head-note', was));
-  row.append(total);
+  /* J-139: «было» — за какой период. J-195: период — в подсказке шапки и «было», а не второй строкой шапки */
+  const was = columns.previousPeriod ? `было — за ${formatInterval(columns.previousPeriod)}` : null;
+  row.append(th('Жалоб', `Жалоб за период${was ? `; ${was}` : ''}`),
+    th('Доля', 'Доля жалоб — от кейсов с обратной связью, где проблема выявлена: без недозвонов, «без категории» и «Невозможно выделить проблему». Треугольник — изменение доли к прошлому периоду'));
   const coverage = columns.coverage === null ? '' : `. Размечено ${formatNegative(columns.coverage)} оценок 1–4`;
   row.append(th('Урон', `${DAMAGE_TITLE}${coverage}`));
   for (const code of columns.segments) row.append(th(code, context.label('segment', code)));
-  if (columns.os) row.append(th('iOS'), th('Android'), th('Частая версия', 'Версия приложения, у которой больше всего жалоб, и её доля'));
+  if (columns.os) {
+    const versionHead = (os) => th(`Версия ${os}`, `Частая версия ${os} в жалобах проблемы. Круг — её доля среди жалоб проблемы с ${os}: закрашенная часть — доля`);
+    row.append(th('iOS'), versionHead('iOS'), th('Android'), versionHead('Android'));
+  }
   /* J-139: колонки «Частый триггер» нет — по просьбе заказчика */
-  row.append(th('Когда чаще', `Доля жалоб в день недели, часть месяца или конкретную дату против среза: от ${PEAK_RULE.minComplaints} жалоб, перекос от ${formatNumber(PEAK_RULE.ratio, 1)} раза, у даты — от ${formatNumber(PEAK_RULE.dateRatio, 1)} раза. Времени оценки в выгрузке нет`));
+  const peakHead = th('Когда чаще', `Доля жалоб в день недели, часть месяца или конкретную дату против среза: от ${PEAK_RULE.minComplaints} жалоб, перекос от ${formatNumber(PEAK_RULE.ratio, 1)} раза, у даты — от ${formatNumber(PEAK_RULE.dateRatio, 1)} раза. Времени оценки в выгрузке нет`);
+  peakHead.classList.add('problem-table__peak-head');
+  row.append(peakHead);
   columns.buckets.forEach((bucket, index) => {
     const cell = th(headCaption(bucket), `${DYNAMICS[selectedDynamics].of} за ${bucketCaption(bucket)}`);
     if (index === 0) cell.classList.add('problem-table__step--first');
@@ -388,16 +465,19 @@ function tableHead(context, columns) {
   return head;
 }
 
+/* Отзыв ленты: звёзды, пометка «Фрагмент экспертизы», если цитата разметки взята из экспертизы, а не из комментария клиента */
+export const EXPERTISE_QUOTE = 'Фрагмент экспертизы';
 function feedEntry(entry, label) {
   const node = element('article', 'verbatim-feed__item');
   const text = element('p', 'verbatim-feed__quote', quoted(entry.comment));
+  const badge = entry.expertise ? [element('p', 'verbatim-feed__kind', EXPERTISE_QUOTE)] : [];
   const source = element('p', 'verbatim-feed__source');
   const date = element('time', null, formatDate(entry.date));
   date.setAttribute('datetime', entry.date);
   source.append(date, ' · ', segmentCode(entry.segment, label));
   const device = [entry.os, entry.version && `версия ${entry.version}`].filter(Boolean).join(' ');
   for (const part of [device, entry.products.join(', '), entry.triggers.join(', ')].filter(Boolean)) source.append(' · ', part);
-  node.append(reviewStars(entry.rating), text, source);
+  node.append(reviewStars(entry.rating), ...badge, text, source);
   return node;
 }
 
@@ -595,8 +675,9 @@ function problemTable(context, state, { cards, ordered, columns, base }) {
         paint();
         return buttonOf(items()[firstNew]?.key);
       },
+      /* «Скрыть» убирает строки над кнопкой: кнопка остаётся под указателем, страница не прыгает */
       onCollapse: () => {
-        refilter();
+        keepPagePosition(buttons, refilter);
         return buttons.querySelector('.verbatim-problems__more');
       },
     }));
@@ -631,10 +712,10 @@ function feedToggle(content, feedSlot) {
     label: 'Отзывы',
     controls: FEED_ID,
     isHidden: () => feedHidden,
-    onToggle: () => {
+    onToggle: () => keepPagePosition(content, () => {
       feedHidden = !feedHidden;
       apply();
-    },
+    }),
   });
   if (feedHidden) apply();
   return toggle;
@@ -696,7 +777,7 @@ export function renderVerbatimCards(block, context) {
   const toolbar = element('div', 'problem-toolbar');
   toolbar.append(problemSearch(refilter), cutTabs(block, context), orderTabs(block, context), dynamicsTabs(block, context), stepTabs(block, context));
   const column = element('div', 'verbatim-problems__list');
-  column.append(toolbar, scroll, buttons);
+  column.append(toolbar, scroll, ...(columns.os ? [versionLegend()] : []), buttons);
   const content = element('div', 'verbatim-problems');
   content.append(column, feedSlot, feedToggle(content, feedSlot));
   /* J-147: метки «Сделано с AI» у «Топ проблем» пока нет — по просьбе заказчика; лента отзывов начинается от заголовка */

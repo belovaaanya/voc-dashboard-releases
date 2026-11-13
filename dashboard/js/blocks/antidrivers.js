@@ -19,6 +19,8 @@ import {
 } from '../core/antidrivers.js';
 import { normalizeDriver } from '../state/driver-pick.js';
 import { legendItem, legendList } from '../components/legend.js';
+import { hoverTooltip } from '../components/hover-tooltip.js';
+import { icon } from '../ui/icons.js';
 import { DIMENSIONS, osName } from '../core/dimensions.js';
 import { element, withOverflowTitle } from '../ui/dom.js';
 import { bindShortWords, formatCount, formatDate, formatDelta, formatInterval, formatImpact, formatNumber, formatShare, formatVoc, plural } from '../core/format.js';
@@ -32,6 +34,7 @@ import { pagingButtons } from '../components/paging.js';
 import { periodScaleMemory, scaleTabs } from '../components/scale-tabs.js';
 import { statusPanel } from '../components/status-panel.js';
 import { recommendedScale, SCALE_OPTIONS } from '../core/timeseries.js';
+import { dayCount } from '../core/dates.js';
 
 /* J-31: дирекция скрыта. J-128: `ДКО` переехал в «Топ проблем» — у всех разрезов одни режимы «План» и «Урон» */
 const DIMENSION_KEYS = ['trigger', 'product'];
@@ -58,6 +61,8 @@ const TITLE_WIDTH_KEY = 'voc.antidrivers.titleWidth';
 export const TITLE_WIDTH_MIN = 160;
 export const TITLE_WIDTH_MAX = 480;
 const TITLE_WIDTH_STEP = 16;
+const TITLE_WIDTH_SLACK = 2;
+const TITLE_DRAG_THRESHOLD = 3;
 let titleWidth = readTitleWidth();
 
 function readTitleWidth() {
@@ -84,18 +89,29 @@ export function clampTitleWidth(width, frameWidth) {
   return Math.round(Math.min(ceiling, Math.max(TITLE_WIDTH_MIN, width)));
 }
 
-/** Показанная ширина и предел ручки — по текущей ширине карты: на узком экране подписи не закрывают плитки. */
-function applyTitleWidth(view, resizer, width, frameWidth) {
-  const shown = width === null ? null : clampTitleWidth(width, frameWidth);
-  /* Пустое значение снимает свойство: ширина возвращается к токену */
-  view.style.setProperty('--heatmap-row-title-width', shown === null ? '' : `${shown}px`);
-  const now = shown ?? TITLE_WIDTH_MIN;
-  resizer.setAttribute('aria-valuenow', String(now));
-  resizer.setAttribute('aria-valuemax', String(clampTitleWidth(Infinity, frameWidth)));
-  resizer.setAttribute('aria-valuetext', `${now} пикселей`);
+/**
+  Ширина по умолчанию — под самое длинное название (J-193): к показанной ширине
+  добавляется наибольший срез подписи. Не уже исходной; предел — тот же, что у ручки
+*/
+export function contentTitleWidth(labels, shown) {
+  let overflow = 0;
+  for (const label of labels) overflow = Math.max(overflow, Math.ceil(label.scrollWidth - label.clientWidth) || 0);
+  /* scrollWidth округлён до целых: без запаса текст шире на долю пикселя и снова уходит в многоточие */
+  return Math.max(TITLE_WIDTH_MIN, overflow ? shown + overflow + TITLE_WIDTH_SLACK : shown);
 }
 
-/* Ручка — separator с клавишами: стрелки меняют ширину, Home возвращает исходную, End — наибольшую; двойной клик — исходную */
+/** Показанная ширина и предел ручки — по текущей ширине карты: на узком экране подписи не закрывают плитки. */
+function applyTitleWidth(view, resizer, width, frameWidth) {
+  const shown = clampTitleWidth(width, frameWidth);
+  /* Исходная ширина — токен: пустое значение снимает свойство */
+  view.style.setProperty('--heatmap-row-title-width', shown === TITLE_WIDTH_MIN ? '' : `${shown}px`);
+  resizer.setAttribute('aria-valuenow', String(shown));
+  resizer.setAttribute('aria-valuemax', String(clampTitleWidth(Infinity, frameWidth)));
+  resizer.setAttribute('aria-valuetext', `${shown} пикселей`);
+  return shown;
+}
+
+/* Ручка — separator с клавишами: стрелки меняют ширину, Home и двойной клик возвращают ширину по названиям, End — наибольшую */
 function titleResizer(view, frame, onResize) {
   const resizer = element('div', 'heatmap-resizer');
   resizer.setAttribute('role', 'separator');
@@ -103,9 +119,21 @@ function titleResizer(view, frame, onResize) {
   resizer.setAttribute('aria-label', 'Ширина колонки названий');
   resizer.setAttribute('aria-valuemin', String(TITLE_WIDTH_MIN));
   resizer.setAttribute('tabindex', '0');
-  resizer.title = 'Потяните, чтобы увидеть названия длиннее. Двойной клик — исходная ширина';
+  resizer.title = 'Потяните, чтобы увидеть названия длиннее. Двойной клик — по длине названий';
   const frameWidth = () => frame.getBoundingClientRect?.().width ?? 0;
-  const fit = () => applyTitleWidth(view, resizer, titleWidth, frameWidth());
+  /*
+    Без ручного выбора — ширина под самое длинное название: подписи меряются при исходной ширине, иначе после
+    широкой ручной ширины Home и двойной клик не сузили бы колонку обратно
+  */
+  let shown = TITLE_WIDTH_MIN;
+  const autoWidth = (width) => {
+    applyTitleWidth(view, resizer, TITLE_WIDTH_MIN, width);
+    return contentTitleWidth(view.querySelectorAll?.('.heatmap__row-label') ?? [], TITLE_WIDTH_MIN);
+  };
+  const fit = () => {
+    const width = frameWidth();
+    shown = applyTitleWidth(view, resizer, titleWidth ?? autoWidth(width), width);
+  };
   const set = (width) => {
     titleWidth = width === null ? null : clampTitleWidth(width, frameWidth());
     fit();
@@ -115,17 +143,24 @@ function titleResizer(view, frame, onResize) {
     if (event.button !== 0) return;
     event.preventDefault();
     const startX = event.clientX;
-    const startWidth = clampTitleWidth(titleWidth ?? TITLE_WIDTH_MIN, frameWidth());
+    const startWidth = shown;
     resizer.setPointerCapture?.(event.pointerId);
     resizer.dataset.dragging = '';
-    const move = (moveEvent) => set(startWidth + moveEvent.clientX - startX);
+    /* Дрожь указателя при клике по ручке не фиксирует ручную ширину: иначе ширина по названиям выключилась бы навсегда */
+    let moved = false;
+    const move = (moveEvent) => {
+      const shift = moveEvent.clientX - startX;
+      if (!moved && Math.abs(shift) < TITLE_DRAG_THRESHOLD) return;
+      moved = true;
+      set(startWidth + shift);
+    };
     /* lostpointercapture приходит и после pointerup, и при потере захвата — например, если карта перерисовалась посреди перетаскивания */
     const stop = () => {
       delete resizer.dataset.dragging;
       resizer.removeEventListener('pointermove', move);
       resizer.removeEventListener('lostpointercapture', stop);
       if (resizer.hasPointerCapture?.(event.pointerId)) resizer.releasePointerCapture(event.pointerId);
-      storeTitleWidth(titleWidth);
+      if (moved) storeTitleWidth(titleWidth);
     };
     resizer.addEventListener('pointermove', move);
     resizer.addEventListener('lostpointercapture', stop);
@@ -135,7 +170,7 @@ function titleResizer(view, frame, onResize) {
     storeTitleWidth(null);
   });
   resizer.addEventListener('keydown', (event) => {
-    const current = clampTitleWidth(titleWidth ?? TITLE_WIDTH_MIN, frameWidth());
+    const current = shown;
     const next = { ArrowRight: current + TITLE_WIDTH_STEP, ArrowLeft: current - TITLE_WIDTH_STEP, Home: null, End: TITLE_WIDTH_MAX }[event.key];
     if (next === undefined) return;
     event.preventDefault();
@@ -154,7 +189,7 @@ export function markOverflow(scroll) {
   else delete scroll.dataset.moreEnd;
 }
 
-/* Подсветка не сбрасывает раскрытие; новый срез или разрез начинается с десяти строк (J-11). */
+/* Подсветка не сбрасывает раскрытие; новый срез или разрез начинается с десяти строк (J-11, J-202: порция 20 из J-193 отменена). */
 function pageFor(block, context, variant) {
   const filters = Object.entries(context.state.filters ?? {}).sort(([a], [b]) => a.localeCompare(b))
     .map(([key, values]) => [key, [...values].sort()]);
@@ -316,28 +351,52 @@ function sameCorridor(plans) {
   return rest.every((plan) => plan.min === first.min && plan.max === first.max) ? first : null;
 }
 
-function heatmapLegend(items, note) {
+/*
+  J-193: длинное пояснение легенды — в подсказке значка «i» рядом с пунктами, а не строкой текста.
+  Высота легенды одна во всех режимах, смена режима не сдвигает страницу (J-144). Без пунктов (нет плана) —
+  пояснение видно: это состояние, а не расшифровка цвета
+*/
+function heatmapLegend(items, note, title) {
   const legend = element('div', 'heatmap-legend');
-  if (items.length) legend.append(legendList(items));
-  /* J-144: пояснение — одной строкой, полное — в подсказке: смена режима не меняет высоту и страница не прыгает */
-  const text = element('p', 'heatmap-legend__note', bindShortWords(note));
-  text.title = note;
-  legend.append(text);
+  if (!items.length) {
+    const text = element('p', 'heatmap-legend__note', bindShortWords(note));
+    text.title = note;
+    legend.append(text);
+    return legend;
+  }
+  const hint = element('span', 'heatmap-legend__hint');
+  hint.setAttribute('role', 'img');
+  hint.setAttribute('aria-label', `Что значит цвет: ${title}`);
+  hint.setAttribute('tabindex', '0');
+  hint.append(icon('info', 'heatmap-legend__hint-icon'));
+  hoverTooltip(hint, [title, note]);
+  legend.append(legendList(items), hint);
   return legend;
 }
 
-function legendFor(columnPlans) {
+/* Интервал колонки родительным падежом — «средний VOC дня / недели / месяца»; крайние неполные колонки уже, поэтому по самой широкой */
+function intervalOf(columns) {
+  const widest = Math.max(0, ...columns.map(dayCount));
+  if (widest <= 1) return 'дня';
+  return widest <= 7 ? 'недели' : 'месяца';
+}
+
+/* J-188: легенды «Влияния» и «Урона» говорят, что значит цвет, а не как он посчитан: расчёт — в подсказке ячейки и в «Как считается» */
+function legendFor(columnPlans, columns) {
+  const interval = intervalOf(columns);
   if (selectedHeatmapHighlight === HIGHLIGHT_INFLUENCE) {
     /* J-144: тянет вверх — драйвер, вниз — антидрайвер; «около нуля» не подписывается — серая ячейка понятна и так */
     return heatmapLegend(
       [legendItem('Драйвер', 'heat-good'), legendItem('Антидрайвер', 'heat-bad')],
-      'VOC интервала минус VOC без оценок с элементом; меньше 0,005 по модулю — серым',
+      `Зелёный тянет средний VOC ${interval} вверх, красный — вниз; серый почти не влияет`,
+    'Влияние',
     );
   }
   if (selectedHeatmapHighlight === HIGHLIGHT_DAMAGE) {
     return heatmapLegend(
       [legendItem('Урон', 'heat-bad')],
-      'на сколько VOC интервала ниже, чем если бы все оценки элемента были 5; чем больше урон, тем краснее',
+      `Сколько VOC ${interval} теряет из-за элемента. Стабильнее «Влияния», но копится и у частых элементов с оценками около среднего`,
+    'Урон',
     );
   }
   if (selectedHeatmapHighlight !== HIGHLIGHT_PLAN) return null;
@@ -349,6 +408,7 @@ function legendFor(columnPlans) {
   return heatmapLegend(
     [legendItem('Ниже плана', 'heat-bad'), legendItem('В плане', 'heat-neutral'), legendItem('Выше плана', 'heat-good')],
     `VOC элемента против ${target}: чем выше плана, тем зеленее; чем ниже плана, тем краснее${gaps}`,
+    'План',
   );
 }
 
@@ -356,7 +416,7 @@ function legendFor(columnPlans) {
   J-149: карта — одна или несколько секций строк. У разреза «Версии» секции — платформы: подзаголовок «iOS» /
   «Android», свои строки по частотности, своя подсветка и своё «Показать ещё»; колонки общие
 */
-function heatmapToolbar(columnPlans, rerender, cutTabs, lead) {
+function heatmapToolbar(columnPlans, columns, rerender, cutTabs, lead) {
   const toolbar = element('div', 'heatmap-toolbar');
   const highlightTabs = segmented({
     label: 'Подсветка тепловой карты',
@@ -367,9 +427,12 @@ function heatmapToolbar(columnPlans, rerender, cutTabs, lead) {
       rerender();
     },
   });
+  /* J-193: режимы — не сортировка, а цвет карты; подпись «Цвет:» говорит это прямо, порядок строк — частотность (J-11) */
+  const highlight = element('div', 'heatmap-mode');
+  highlight.append(element('span', 'heatmap-mode__label', 'Цвет:'), highlightTabs);
   /* J-117 + J-112: разрез, у разреза «Версии» — ОС и схлопывание, затем режим подсветки; гранулярность — в шапке блока */
-  toolbar.append(...[cutTabs, ...lead, highlightTabs].filter(Boolean));
-  const legend = legendFor(columnPlans);
+  toolbar.append(...[cutTabs, ...lead, highlight].filter(Boolean));
+  const legend = legendFor(columnPlans, columns);
   if (legend) toolbar.append(legend);
   return toolbar;
 }
@@ -485,7 +548,7 @@ function heatmapView(context, sections, rerender, cutTabs, lead) {
   const columnPlans = columns.map(({ from, to }) =>
     planFor(context.reference?.plan, { channel: context.state.channel, from, to }),
   );
-  view.append(heatmapToolbar(columnPlans, rerender, cutTabs, lead));
+  view.append(heatmapToolbar(columnPlans, columns, rerender, cutTabs, lead));
   /* Подсказка — вне прокрутки карты: иначе у верхней строки её срезал бы край области прокрутки */
   const tooltip = element('div', 'heatmap-tooltip glass');
   tooltip.setAttribute('aria-hidden', 'true');
@@ -517,16 +580,11 @@ function noElements() {
 }
 
 /* Кнопки порции строк; горизонтальная прокрутка карты сохраняется */
-function moreButtons(block, viewOf, { limit, total, setLimit, rerender, label = '', key = '' }) {
+function moreButtons({ limit, total, setLimit, rerender, label = '', key = '' }) {
   const buttons = element('div', 'heatmap-pagination__actions');
   const keepScroll = (change) => {
-    const scrollLeft = viewOf()?.querySelector('.heatmap-scroll')?.scrollLeft ?? 0;
     change();
-    rerender();
-    const host = block.element;
-    const scroll = host?.querySelector('.heatmap-scroll');
-    if (scroll) scroll.scrollLeft = scrollLeft;
-    return host;
+    return rerender();
   };
   const moreOf = (host) => host?.querySelector(`.heatmap-more[data-section="${key}"]`);
   buttons.append(...pagingButtons({
@@ -546,14 +604,12 @@ function moreButtons(block, viewOf, { limit, total, setLimit, rerender, label = 
   J-11: строки — порциями по десять. J-149: у версий — порции в каждой секции платформы, кнопки — строкой под секцией;
   итог показанного — в подвале карты
 */
-function paginatedView(block, context, parts, page, rerender, cutTabs, lead = []) {
+function paginatedView(context, parts, page, rerender, cutTabs, lead = []) {
   const sectioned = parts.length > 1 || Boolean(parts[0].title);
   page.limits ??= {};
   const limitOf = (key) => page.limits[key] ?? page.limit;
-  let view = null;
-  const viewOf = () => view;
   const sections = parts.map((part) => {
-    const actions = sectioned ? moreButtons(block, viewOf, { limit: limitOf(part.key), total: part.total, label: part.title, key: part.key, rerender,
+    const actions = sectioned ? moreButtons({ limit: limitOf(part.key), total: part.total, label: part.title, key: part.key, rerender,
       setLimit: (limit) => { page.limits[part.key] = limit; } }) : null;
     return {
       ...part,
@@ -563,7 +619,7 @@ function paginatedView(block, context, parts, page, rerender, cutTabs, lead = []
       actions: actions?.children.length ? actions : null,
     };
   });
-  view = heatmapView(context, sections, rerender, cutTabs, lead);
+  const view = heatmapView(context, sections, rerender, cutTabs, lead);
   const footer = element('div', 'heatmap-pagination');
   const shown = sections.map((section) => `${section.title ? `${section.title}: ` : ''}${formatCount(section.heatmap.rows.length)} из ${formatCount(section.total)}`);
   const status = element('p', 'heatmap-pagination__status', `По частотности · ${sectioned ? shown.join(' · ') : `Показано ${shown[0]}`}`);
@@ -571,11 +627,23 @@ function paginatedView(block, context, parts, page, rerender, cutTabs, lead = []
   status.setAttribute('tabindex', '-1');
   footer.append(status);
   if (!sectioned) {
-    const buttons = moreButtons(block, viewOf, { limit: page.limit, total: parts[0].total, rerender, setLimit: (limit) => { page.limit = limit; } });
+    const buttons = moreButtons({ limit: page.limit, total: parts[0].total, rerender, setLimit: (limit) => { page.limit = limit; } });
     if (buttons.children.length) footer.append(buttons);
   }
   view.append(footer);
   return view;
+}
+
+/*
+  Режим цвета, разрез и платформы перерисовывают карту с теми же колонками: горизонтальная прокрутка остаётся на месте,
+  иначе смена «План / Урон / Влияние» уводила карту к первому дню. Масштаб меняет колонки — его перерисовка без этого
+*/
+function keepHeatmapScroll(block, render) {
+  const scrollLeft = block.element?.querySelector('.heatmap-scroll')?.scrollLeft ?? 0;
+  render();
+  const scroll = block.element?.querySelector('.heatmap-scroll');
+  if (scroll) scroll.scrollLeft = scrollLeft;
+  return block.element;
 }
 
 const focusParameters = (context) => (context.state.focus ? [['Выбранная дата', formatDate(context.state.focus)]] : []);
@@ -599,7 +667,7 @@ export function renderAntidrivers(block, context) {
     selected: selectedAntidriverDimension,
     onSelect: (value) => {
       selectedAntidriverDimension = value;
-      renderAntidrivers(block, context);
+      keepHeatmapScroll(block, () => renderAntidrivers(block, context));
     },
   });
   /* J-149: платформы — секциями; сузить до одной — фильтром «Опер. системы» шапки */
@@ -628,7 +696,7 @@ export function renderAntidrivers(block, context) {
     block.setState(EMPTY);
     return;
   }
-  const rerender = () => renderAntidrivers(block, context);
+  const rerender = () => keepHeatmapScroll(block, () => renderAntidrivers(block, context));
   if (isVersion && !found.length) {
     head();
     block.setContent(noVersionOs());
@@ -663,5 +731,5 @@ export function renderAntidrivers(block, context) {
   /* Выгрузка — все строки всех секций, а не раскрытые; ключ строки версии несёт платформу */
   const heatmap = { columns: parts[0].heatmap.columns, rows: parts.flatMap((part) => part.heatmap.rows) };
   head(heatmap);
-  block.setContent(paginatedView(block, viewContext, parts, page, rerender, cutTabs));
+  block.setContent(paginatedView(viewContext, parts, page, rerender, cutTabs));
 }

@@ -291,40 +291,72 @@
 }
 
 /*
-  J-161, J-162: VOC ролей — карточка-строка на роль: портрет → VOC → оценки → линия по неделям → топ проблем.
-  Уже 1100 px линия и проблемы уходят второй строкой, уже 700 px — всё колонкой
+  VOC ролей — плитки четырёх ролей сеткой 2×2 по строкам (слева Предприниматель и Бухгалтер, справа Альфа-Босс и
+  Фин.эксперт); шапка страницы — на всю ширину. Уже 1100 px — плитки колонкой
 */
+.page-view[data-page='roles'] > .column {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+}
+
+.page-view[data-page='roles'] > .column > .card--roles {
+  grid-column: 1 / -1;
+}
+
 .card--role[hidden] {
   display: none;
+}
+
+.card--role > .card__body {
+  flex: 1 1 auto;
 }
 
 .roles-caption {
   margin: 0;
 }
 
+/* Плитка роли: портрет и название — в шапке карточки (J-169); слева VOC внизу плитки, через разделитель справа — линия и топ-3 проблем */
 .role-card {
   display: grid;
-  /* J-169: портрет ушёл в шапку — VOC слева, линия следом, топ проблем шире */
-  grid-template-columns: auto minmax(0, 1.5fr) minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr);
   gap: var(--space-8);
-  /* J-163: колонки — на высоту плитки, линия недель растягивается по ней */
-  align-items: stretch;
+  height: 100%;
 }
 
-.digest-trend--fill {
-  flex: 1 1 auto;
+.role-card__lead {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-width: 0;
 }
 
-.role-card__column {
+/* Разделитель колонок — посередине зазора, как календарь событий и лента отзывов на VOC ЦК (J-175) */
+.role-card__side {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
   min-width: 0;
 }
 
+.role-card__side::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: calc(-1 * var(--space-8) / 2);
+  width: var(--hairline);
+  background: var(--color-card-border);
+}
+
 .role-card__caption {
   color: var(--color-text-tertiary);
   font: var(--type-caption);
+}
+
+.digest-trend--fill {
+  flex: 1 1 auto;
+  min-height: calc(var(--space-10) * 3);
 }
 
 .role-card .metric__figure {
@@ -339,42 +371,17 @@
   white-space: nowrap;
 }
 
-/*
-  J-175: топ проблем отделён от линии серой линией посередине зазора — как календарь событий и лента
-  отзывов на странице VOC ЦК (цвет и толщина — те же). Линия декоративная: псевдоэлемент без содержимого
-*/
-.role-card__column--problems {
-  position: relative;
-}
-
-.role-card__column--problems::before {
-  content: '';
-  position: absolute;
-  inset-block: 0;
-  inset-inline-start: calc(-1 * var(--space-8) / 2);
-  width: var(--hairline);
-  background: var(--color-card-border);
-}
-
-/* J-172: VOC и оценки — одной группой по центру плитки по высоте */
-.role-card__column--center {
-  justify-content: center;
-}
-
-/* Портрет роли — круг; до портретов от заказчика — тихая заглушка с иконкой */
+/* J-169: портрет роли — круг 40 px в слоте метки шапки; до портретов от заказчика — тихая заглушка с иконкой */
 .role-card__avatar {
   display: grid;
   place-items: center;
   flex: none;
   width: var(--space-10);
   aspect-ratio: 1;
+  overflow: hidden;
   border-radius: var(--radius-pill);
   background: var(--chart-selected-fill);
   color: var(--color-text-tertiary);
-}
-
-.role-card__avatar {
-  overflow: hidden;
 }
 
 /* J-167: под портретом нет подложки — угол уходит в фон карточки */
@@ -396,35 +403,37 @@
   height: var(--space-5);
 }
 
+/* J-194: топ-3 проблем — таблица; число жалоб и дельта — столбцами вправо табличными цифрами */
 .role-card__problems {
-  display: flex;
-  flex-direction: column;
-  /* J-164, J-173: проблемы в несколько строк не слипаются — между ними шире, чем между строками одной */
-  gap: var(--space-4);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.role-card__problem {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-3);
-  align-items: baseline;
+  width: 100%;
+  margin-block-start: var(--space-4);
+  border-collapse: collapse;
   color: var(--color-text-strong);
   font: var(--type-caption);
 }
 
-.role-card__problem-name {
-  overflow-wrap: anywhere;
+.role-card__problems th {
+  padding-block-end: var(--space-2);
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+  text-align: start;
 }
 
-.role-card__problem-count {
-  display: inline-flex;
-  gap: var(--space-2);
-  align-items: baseline;
+.role-card__problems td {
+  padding-block: var(--space-2);
+  border-block-start: var(--hairline) solid var(--color-card-border);
+  vertical-align: baseline;
+}
+
+.role-card__problems .role-card__number {
+  padding-inline-start: var(--space-4);
   font-variant-numeric: tabular-nums;
+  text-align: end;
   white-space: nowrap;
+}
+
+.role-card__problem-name {
+  overflow-wrap: anywhere;
 }
 
 .role-card__none {
@@ -434,22 +443,17 @@
 }
 
 @media (max-width: 1100px) {
-  .role-card {
-    grid-template-columns: auto minmax(0, 1fr);
-  }
-
-  .role-card > :nth-child(3) {
-    grid-column: 1 / -1;
-  }
-
-  /* Топ проблем — второй строкой: линия-разделитель уже не между колонками */
-  .role-card__column--problems::before {
-    content: none;
+  .page-view[data-page='roles'] > .column {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
 @media (max-width: 700px) {
   .role-card {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .role-card__side::before {
+    content: none;
   }
 }

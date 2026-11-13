@@ -53,18 +53,25 @@ function navLabel(text) {
   return element('span', 'side-nav__label', text);
 }
 
+/*
+  Кнопка сворачивания — последний пункт меню, в одной точке в обоих состояниях: у логотипа она меняла место
+  при сворачивании. Стрелки показывают, куда двинется край меню; в развёрнутом — с подписью
+*/
 function toggleButton(nav) {
-  const button = element('button', 'side-nav__toggle');
+  const button = element('button', 'side-nav__link side-nav__toggle');
   button.type = 'button';
   button.dataset.action = 'nav-toggle';
   button.setAttribute('aria-controls', 'side-nav');
   const describe = () => {
     const collapsed = isNavCollapsed();
+    const label = collapsed ? 'Развернуть меню' : 'Свернуть меню';
     button.setAttribute('aria-expanded', String(!collapsed));
-    button.setAttribute('aria-label', collapsed ? 'Развернуть меню' : 'Свернуть меню');
-    button.title = button.getAttribute('aria-label');
+    button.setAttribute('aria-label', label);
+    /* Подсказка — только в свёрнутом: в развёрнутом подпись видна, как у остальных пунктов */
+    if (collapsed) button.title = label;
+    else button.removeAttribute('title');
+    button.replaceChildren(icon(collapsed ? 'chevrons-right' : 'chevrons-left', 'side-nav__icon'), navLabel(label));
   };
-  button.append(icon('panel-left', 'side-nav__icon'));
   button.addEventListener('click', () => {
     setNavCollapsed(!isNavCollapsed());
     describe();
@@ -145,7 +152,7 @@ export function renderSideNav(host, context) {
   const brand = element('div', 'side-nav__brand');
   const logo = element('span', 'side-nav__logo');
   logo.append(element('strong', null, 'VOC'), element('span', 'side-nav__label', ' Dashboard'));
-  brand.append(logo, toggleButton(host));
+  brand.append(logo);
 
   const list = element('ul', 'side-nav__list');
   const page = context?.page ?? SECTIONS[0].id;
@@ -173,6 +180,7 @@ export function renderSideNav(host, context) {
 
   const foot = element('div', 'side-nav__foot');
   if (context) foot.append(dataPanel(context), methodControl());
+  foot.append(toggleButton(host));
   host.replaceChildren(brand, list, foot);
   syncTitles(host);
   if (focusedAction) host.querySelector(`[data-action="${focusedAction}"]`)?.focus();

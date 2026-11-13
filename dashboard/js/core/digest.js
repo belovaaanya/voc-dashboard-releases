@@ -242,14 +242,14 @@ export function buildTopic({ rows, month, reference, topic }) {
 }
 
 /*
-  J-161, J-162: VOC ролей — карточка-строка на роль клиента в канале шапки за месяц: VOC с поправкой на кэшбек и
-  дельтой к прошлому месяцу, оценки с дельтой, линия по неделям месяца с коридором плана канала и топ проблем
-  (`problem`) по числу жалоб. Порядок ролей — как в макете заказчика, роли вне списка — следом по числу оценок;
-  оценки без роли не показываются
+  VOC ролей — плитка на роль клиента в канале шапки за месяц: VOC с поправкой на кэшбек и дельтой к прошлому месяцу,
+  оценки с дельтой, линии по неделям месяца и по месяцам полугода с коридором плана канала и топ-3 проблем
+  (`problem`) по числу жалоб. Роли — только четыре из макета заказчика, в его порядке: плитки 2×2 по строкам,
+  слева Предприниматель и Бухгалтер, справа Альфа-Босс и Фин.эксперт
 */
 export const ROLE_ORDER = ['Предприниматель', 'Альфа-Босс', 'Бухгалтер', 'Фин.эксперт'];
-export const ROLE_SLOTS = 6;
-const ROLE_PROBLEMS = 5;
+export const ROLE_SLOTS = ROLE_ORDER.length;
+const ROLE_PROBLEMS = 3;
 
 export function buildRoles({ rows, month, reference, channel }) {
   const previousMonth = shiftMonth(month, -1);
@@ -257,10 +257,11 @@ export function buildRoles({ rows, month, reference, channel }) {
   const previous = inMonth(rows, previousMonth);
   const weeks = monthWeeks(month);
   const weekBuckets = weekBucketsOf(rows, weeks);
-  const counts = new Map();
-  for (const row of rows) if (row.role) counts.set(row.role, (counts.get(row.role) ?? 0) + 1);
-  const roles = [...ROLE_ORDER.filter((role) => counts.has(role)),
-    ...[...counts.keys()].filter((role) => !ROLE_ORDER.includes(role)).sort((left, right) => counts.get(right) - counts.get(left))];
+  /* Линия роли — по неделям месяца или по месяцам полугода, как линия итога дайджеста */
+  const trendMonths = Array.from({ length: TREND_MONTHS }, (_, index) => shiftMonth(month, index - TREND_MONTHS + 1));
+  const byMonth = new Map(trendMonths.map((key) => [key, key === month ? current : key === previousMonth ? previous : inMonth(rows, key)]));
+  /* Четыре роли всегда на своих местах сетки: роль без оценок — плитка «Нет оценок за месяц», а не дыра */
+  const roles = rows.some((row) => ROLE_ORDER.includes(row.role)) ? ROLE_ORDER : [];
   const { from, to } = monthRange(month);
   const problemCounts = (list) => {
     const found = new Map();
@@ -272,6 +273,7 @@ export function buildRoles({ rows, month, reference, channel }) {
     channel,
     month,
     weeks,
+    months: trendMonths,
     plan: planFor(reference?.plan, { channel, from, to }) ?? null,
     roles: roles.map((role) => {
       const pick = (list) => list.filter((row) => row.role === role);
@@ -286,6 +288,7 @@ export function buildRoles({ rows, month, reference, channel }) {
         /* J-172: прошлый месяц без оценок — дельты нет, а не «+всё» от нуля */
         countDelta: was.count ? now.count - was.count : null,
         weekly: weekBuckets.map(({ from: weekFrom, to: weekTo, ratings }) => ({ from: weekFrom, to: weekTo, ...vocPair(pick(ratings), reference) })),
+        monthly: trendMonths.map((key) => ({ month: key, ...vocPair(pick(byMonth.get(key)), reference) })),
         problems: [...problemsNow].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0], 'ru')).slice(0, ROLE_PROBLEMS)
           .map(([name, count]) => ({ name, count, delta: was.count ? count - (problemsBefore.get(name) ?? 0) : null })),
       };

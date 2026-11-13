@@ -60,7 +60,7 @@ body {
 .app {
   display: grid;
   grid-template-columns: var(--nav-current, var(--nav-width)) minmax(0, 1fr);
-  gap: var(--gap-section);
+  gap: var(--nav-gap);
   align-items: start;
 }
 
@@ -72,14 +72,23 @@ body {
   --nav-current: var(--nav-width-collapsed);
 }
 
+/* J-186: слой над шапкой (15): sticky создаёт свой контекст наложения, и без z-index карточки и шапка, идущие позже
+   в DOM, рисовались поверх popover «Как считается». Развёрнутая карточка (20) выше.
+   Меню — своя панель с поверхностью карточки: без неё пункты меню и фильтры шапки читались одной полосой */
 .side-nav {
   position: sticky;
+  z-index: 16;
   top: var(--space-10);
   display: flex;
   min-width: 0;
   height: calc(100vh - 2 * var(--space-10));
   flex-direction: column;
   gap: var(--space-6);
+  padding: var(--nav-padding);
+  border: var(--hairline) solid var(--color-card-border);
+  border-radius: var(--radius-card);
+  background: var(--card-surface);
+  box-shadow: var(--card-shadow);
 }
 
 .side-nav__brand {
@@ -88,7 +97,7 @@ body {
   justify-content: space-between;
   gap: var(--space-2);
   min-height: var(--space-10);
-  padding-inline-start: var(--space-3);
+  padding-inline-start: var(--nav-item-inset);
 }
 
 .side-nav__logo {
@@ -102,7 +111,6 @@ body {
   font: var(--type-caption);
 }
 
-.side-nav__toggle,
 .side-nav__link {
   display: flex;
   align-items: center;
@@ -117,17 +125,12 @@ body {
   cursor: pointer;
 }
 
-.side-nav__toggle {
-  flex: none;
-  padding: var(--space-2);
-}
-
 .side-nav__link {
   width: 100%;
-  padding: var(--space-2) var(--space-3);
+  padding-block: var(--space-2);
+  padding-inline: var(--nav-item-inset) var(--space-3);
 }
 
-.side-nav__toggle:hover,
 .side-nav__link:hover {
   background: var(--control-raised-hover);
   color: var(--color-text-strong);
@@ -143,8 +146,8 @@ body {
 
 .side-nav__icon {
   flex: none;
-  width: var(--icon-size);
-  height: var(--icon-size);
+  width: var(--icon-size-nav);
+  height: var(--icon-size-nav);
 }
 
 /* J-151: страница — та же колонка с зазором секций, что у .page: обёртка не склеивает строки карточек */
@@ -166,7 +169,7 @@ body {
   align-items: center;
   justify-content: center;
   width: auto;
-  min-width: var(--icon-size);
+  min-width: var(--icon-size-nav);
   font: var(--type-caption-strong);
 }
 
@@ -186,8 +189,9 @@ body {
   margin-block-start: auto;
 }
 
+/* Popover методики привязан к панели меню, а не к пункту: низ — у низа меню, высота — до его верха (J-186) */
 .side-nav__method {
-  position: relative;
+  position: static;
 }
 
 .side-nav__data {
@@ -212,9 +216,10 @@ body {
   gap: var(--space-1);
 }
 
-/* Свёрнутое меню: только иконки; подписи остаются для screen reader, название — в подсказке */
+/* Свёрнутое меню: только иконки; подписи остаются для screen reader, название — в подсказке.
+   Иконки пунктов не сдвигаются: поле пункта то же, что в развёрнутом (--nav-item-inset) */
 :root[data-nav='collapsed'] .side-nav__brand {
-  flex-direction: column;
+  justify-content: center;
   padding-inline-start: 0;
 }
 
@@ -226,11 +231,6 @@ body {
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
-}
-
-:root[data-nav='collapsed'] .side-nav__link {
-  justify-content: center;
-  padding-inline: 0;
 }
 
 :root[data-nav='collapsed'] .side-nav__data {
@@ -257,17 +257,6 @@ body {
   gap: var(--gap-section);
 }
 
-/*
-  Обе контентные строки берут ширину рейла из одного токена, поэтому правые
-  края совпадают по построению, а колонки в сумме дают контентную ширину (V-01)
-*/
-.page-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--rail-width);
-  gap: var(--gap-section);
-  align-items: stretch;
-}
-
 .column {
   display: flex;
   flex-direction: column;
@@ -283,11 +272,6 @@ body {
 /* Колонка не задаёт высоту строки, её задаёт соседняя: длинный список прокручивается в своей карточке, а не двигает соседей (D-55) */
 .column--bounded {
   contain: size;
-}
-
-/* J-14: минимум верхнего рейла участвует в высоте строки, иначе оценки выходят под календарь. */
-#rail-top {
-  contain: none;
 }
 
 .column--bounded > .card,
@@ -319,23 +303,28 @@ body {
 }
 
 /* Большая карточка к малой — 1.4 : 1, а не 356 : 216 макета: малым — больше ширины под значение с объёмом в строку, большой хватает меньшей доли (B-09) */
+/*
+  Колонка VOC канала — прежней ширины, как до J-189, когда справа от сетки стоял рейл:
+  1,4 / 4,4 от ширины без рейла, его зазора и трёх зазоров плиток; остальное делят сегменты
+*/
 .metrics-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr));
+  grid-template-columns: calc((100% - var(--rail-width) - var(--gap-section) - 3 * var(--gap-tile)) * 1.4 / 4.4) repeat(3, minmax(0, 1fr));
   gap: var(--gap-tile);
   align-items: stretch;
 }
 
 /*
-  Две строки метрик: VOC-карточки и счётчики (D-15, V-10a). Большая карточка
-  занимает обе строки — композиция расширенного варианта макета
+  J-189: две строки шапки — сегменты ММБ, СБ, КИБ; под ними дни плана, распределение оценок и главный вывод.
+  Большая карточка канала занимает обе строки слева; рейла справа больше нет — сетка на всю ширину
 */
 .card--metric-big {
   grid-row: 1 / span 2;
 }
 
-.card--metric-plan-days {
-  grid-column: span 2;
+/* Высоту второй строки задают дни плана и распределение: длинный вывод прокручивается в своей карточке (D-55) */
+.metrics-grid > .card--summary {
+  contain: size;
 }
 
 /* ── Карточка ──────────────────────────────────────────────────────── */
@@ -465,6 +454,7 @@ body {
 
 /* Период блока — текст с иконкой без плашки, как в макете (J-15, Figma 3207:3295); плашка появляется при наведении */
 .card__period--control {
+  min-height: var(--control-height);
   padding: var(--space-1) var(--space-2);
   border: var(--divider-width) solid transparent;
   border-radius: var(--radius-pill);
@@ -487,7 +477,8 @@ body {
   display: inline-grid;
   flex: 0 0 auto;
   width: var(--action-width);
-  height: var(--space-6);
+  /* Контролы карточки — одной высоты с сегментным переключателем рядом */
+  height: var(--control-height);
   padding: 0;
   place-items: center;
   border: var(--hairline) solid var(--color-control-border);
@@ -720,7 +711,8 @@ body {
   display: inline-flex;
   flex-shrink: 0;
   gap: var(--hairline);
-  height: var(--space-8);
+  /* Управление всей страницей — одной высоты с каналом и фильтрами шапки */
+  height: var(--control-height-lg);
   margin-inline-start: auto;
   padding: calc(var(--space-1) / 2);
   border: var(--divider-width) solid var(--color-control-border);
@@ -731,7 +723,7 @@ body {
 .theme-toggle__option {
   display: inline-grid;
   place-items: center;
-  width: calc(var(--space-8) - var(--space-1));
+  width: calc(var(--control-height-lg) - var(--space-2));
   padding: 0;
   border: 0;
   border-radius: var(--radius-pill);
@@ -797,12 +789,12 @@ body {
   opacity: 0;
 }
 
-/* J-122: дорожка 52×28, ручка — стеклянный круг 22×22 со смещением 3 px от края */
+/* Дорожка 36×20, ручка 16 со смещением 2 px: с J-122 (52×28) переключатель был крупнее фильтров и читался главным действием */
 .filters__switch-track {
   position: relative;
   flex: none;
-  width: 52px;
-  height: 28px;
+  width: var(--switch-width);
+  height: var(--switch-height);
   border: var(--hairline) solid var(--color-border-strong);
   border-radius: var(--radius-pill);
   background: var(--color-surface-sunken);
@@ -813,11 +805,11 @@ body {
   content: '';
   position: absolute;
   inset-block-start: 50%;
-  inset-inline-start: 3px;
-  width: 22px;
-  height: 22px;
+  inset-inline-start: var(--switch-inset);
+  width: var(--switch-knob);
+  height: var(--switch-knob);
   box-sizing: border-box;
-  border: 1.5px solid var(--color-border-strong);
+  border: var(--divider-width) solid var(--color-border-strong);
   border-radius: 50%;
   background: var(--toggle-knob-off);
   transform: translateY(-50%);
@@ -834,7 +826,7 @@ body {
 }
 
 .filters__switch-input:checked + .filters__switch-track::after {
-  inset-inline-start: calc(100% - 22px - 3px);
+  inset-inline-start: calc(100% - var(--switch-knob) - var(--switch-inset));
   border-color: var(--toggle-rim);
   background: radial-gradient(circle at 50% 50%, var(--toggle-tone) 0%, var(--toggle-tone) 30%, var(--toggle-tone-edge) 100%);
   box-shadow: 0 0 0 1px var(--toggle-ring), 0 1px 8px var(--toggle-glow);
@@ -858,8 +850,16 @@ body {
   display: inline-flex;
 }
 
-.shell-head__action .chart-toggle {
-  margin-inline-end: 0;
+/* Ссылка на срез — первая из действий у правого края строки шапки; загрузка и тема идут за ней вплотную */
+.shell-head__bar > .shell-head__link {
+  flex-shrink: 0;
+  margin-inline-start: auto;
+}
+
+/* Специфичность выше правила `.shell-head__bar > .data-import__item` ниже: иначе свободное место делилось бы пополам */
+.shell-head__bar > .shell-head__link ~ .data-import__item,
+.shell-head__bar > .shell-head__link ~ .theme-toggle {
+  margin-inline-start: 0;
 }
 
 .shell-head__action[hidden] {
@@ -876,10 +876,11 @@ body {
   margin-inline-start: 0;
 }
 
-.data-import__trigger {
+.data-import__trigger,
+.shell-head__button {
   display: inline-flex;
   align-items: center;
-  height: var(--space-8);
+  height: var(--control-height-lg);
   padding: 0 var(--space-3);
   border: var(--divider-width) solid var(--color-control-border);
   border-radius: var(--radius-pill);
@@ -891,9 +892,23 @@ body {
   cursor: pointer;
 }
 
+/* J-203: ссылка на срез — квадратная кнопка высотой строки шапки, иконка размера иконок шапки */
+.shell-head__button--icon {
+  justify-content: center;
+  width: var(--control-height-lg);
+  padding: 0;
+}
+
+.shell-head__icon {
+  width: var(--icon-size);
+  height: var(--icon-size);
+}
+
 .data-import__trigger:hover,
 .data-import__trigger:focus-visible,
-.data-import__trigger[aria-expanded='true'] {
+.data-import__trigger[aria-expanded='true'],
+.shell-head__button:hover,
+.shell-head__button:focus-visible {
   border-color: var(--color-border-strong);
   background: var(--control-raised-hover);
   color: var(--color-text-strong);
@@ -1115,7 +1130,8 @@ body {
   bottom: 0;
   inset-inline-start: calc(100% + var(--space-2));
   width: calc(var(--space-10) * 11);
-  max-height: calc(100vh - var(--space-8));
+  /* Низ popover — у низа панели меню (отступ --space-10 от края окна): высота оставляет такой же зазор сверху */
+  max-height: calc(100vh - 2 * var(--space-10));
   overflow-y: auto;
 }
 
@@ -1146,6 +1162,8 @@ body {
   align-items: center;
   gap: var(--space-2);
   min-width: 0;
+  /* Дорожки шапки — одной высоты с переключателем канала: фильтры не разной величины в одной строке */
+  min-height: var(--control-height-lg);
   /* Поле со всех сторон как зазор сверху: крайние контролы и чип прижаты к краям панели одинаково (R-35, J-05) */
   padding: var(--space-1);
   /* Дорожка фильтров — как у переключателей, а не карточка (J-15, Figma 3204:2691) */
@@ -1175,6 +1193,8 @@ body {
   gap: var(--space-2);
   max-width: 22ch;
   min-width: 0;
+  /* Плашка наведения заполняет дорожку по высоте, как выбор в переключателе канала */
+  min-height: calc(var(--control-height-lg) - 2 * var(--space-1) - 2 * var(--hairline));
   padding: var(--space-1) var(--space-3);
   border: 0;
   border-radius: var(--radius-pill);
@@ -1529,7 +1549,8 @@ body {
     background: var(--color-bg);
   }
 
-  .card {
+  .card,
+  .side-nav {
     background: var(--card-surface-solid);
   }
 }

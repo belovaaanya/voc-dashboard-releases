@@ -1,4 +1,5 @@
 import { element, svgNode } from '../ui/dom.js';
+import { icon } from '../ui/icons.js';
 import { formatDate, formatDateRange } from '../core/format.js';
 import { buildTimeSeries, recommendedScale } from '../core/timeseries.js';
 import { chartDomain, linePaths, plotPoints } from '../core/chart-geometry.js';
@@ -28,11 +29,23 @@ function emptyTimeline(node, caption) {
 export function chartTimeline(context, { onPreview, owner = DEFAULT_OWNER } = {}) {
   const node = element('div', 'chart-timeline');
   const toolbar = element('div', 'chart-timeline__toolbar');
-  const caption = element('span', 'chart-timeline__caption', 'Вся история · выделите период');
-  const reset = element('button', 'chart-toggle', 'Вернуть общий период');
+  /*
+    Ревью 13.11: выбранные даты уже в периоде шапки группы — подпись их не повторяет. «Вернуть общий период» —
+    иконка той же кнопки действия, что в шапке карточки; название (J-37) — её имя и подсказка. Без своего окна
+    возвращать нечего — кнопки нет
+  */
+  const caption = element('span', 'chart-timeline__caption', 'Вся история');
+  const reset = element('button', 'card__action chart-timeline__reset');
   reset.type = 'button';
-  reset.disabled = !context.periodControl?.local;
-  reset.addEventListener('click', () => context.periodControl?.onReset?.());
+  reset.setAttribute('aria-label', 'Вернуть общий период');
+  reset.title = 'Вернуть общий период';
+  reset.append(icon('reset', 'card__icon'));
+  reset.hidden = !context.periodControl?.local;
+  /* Кнопка исчезает вместе со своим окном: с клавиатуры (detail 0) фокус переходит на левую ручку новой шкалы, а не на body */
+  reset.addEventListener('click', (event) => {
+    if (!event?.detail) refocusByOwner.set(owner, { edge: 'from', range: null });
+    context.periodControl?.onReset?.();
+  });
   toolbar.append(caption, reset);
   node.append(toolbar);
   if (!context.rows.length) return emptyTimeline(node, caption);
@@ -75,7 +88,7 @@ export function chartTimeline(context, { onPreview, owner = DEFAULT_OWNER } = {}
     cancelActiveDrag?.();
     /* Отложенный refocus не перехватывает фокус, ушедший на другой контрол, и не достаётся шкале другого периода */
     const refocus = refocusByOwner.get(owner);
-    const pending = refocus && focusLost() && sameRange(refocus.range, committed) ? refocus.edge : null;
+    const pending = refocus && focusLost() && (!refocus.range || sameRange(refocus.range, committed)) ? refocus.edge : null;
     const focused = stage.contains(document.activeElement) ? document.activeElement.getAttribute('data-edge') : pending;
     refocusByOwner.delete(owner);
     const inner = Math.max(1, width - 2 * INSET);
@@ -113,7 +126,6 @@ export function chartTimeline(context, { onPreview, owner = DEFAULT_OWNER } = {}
         handle.setAttribute('aria-valuenow', dayIndex(current[edge], bounds.from));
         handle.setAttribute('aria-valuetext', formatDate(current[edge]));
       }
-      caption.textContent = `Вся история · ${formatDateRange(current.from, current.to)}`;
     };
 
     function stepByKey(event, edge) {

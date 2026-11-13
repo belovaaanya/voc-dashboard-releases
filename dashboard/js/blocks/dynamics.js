@@ -18,6 +18,8 @@ import { buildTimeSeries, recommendedScale, withDamage } from '../core/timeserie
 /* График рисуется в пикселях сцены, а не в растянутом viewBox: иначе на узкой странице текст мельче роли (B-17) */
 /* Сверху — место под подпись значения у точки на верхней границе шкалы (B-03) */
 const MARGIN = { top: 26, right: 12, bottom: 28, left: 44 };
+/* Ревью 13.11: названия осей — над шкалами, слева и справа на одной линии, с теми же краями, что их цифры */
+const AXIS_TITLE_Y = 8;
 const POINT_RADIUS = 3;
 /* Запас клипа под маркер с обводкой и под обводку линии на границе шкалы; ряды по x обрезаны точно (B-02, V-05) */
 const PLOT_BLEED = POINT_RADIUS * 2;
@@ -133,6 +135,7 @@ function appendGrid(svg, domain, plot, xs) {
     }
     svg.append(svgText('chart-axis-label chart-axis-label--y', formatVoc(tick), { x: 0, y: plot.y + y, 'dominant-baseline': 'middle' }));
   });
+  svg.append(svgText('chart-axis-label chart-axis-label--y chart-axis-title', 'VOC', { x: 0, y: AXIS_TITLE_Y, 'dominant-baseline': 'middle' }));
   for (const x of xs) grid.append(svgNode('line', 'chart-grid__minor', { x1: x, y1: 0, x2: x, y2: plot.height }));
   svg.append(grid);
 }
@@ -160,7 +163,7 @@ function appendBarGradient(defs, id, tone) {
 
 const barY = (value, { axis, spec }, plot) => plot.height - (value / axis.max) * plot.height * spec.share;
 
-/* Подписи шкалы оценок — справа от области, у верха столбиков: по ним читается высота столбика */
+/* Подписи шкалы оценок — справа от области, у верха столбиков: по ним читается высота столбика; название шкалы — наверху */
 function appendBarsAxis(svg, bars, frame) {
   const { plot } = frame;
   const labels = svgNode('g', 'chart-axis chart-axis--count');
@@ -169,8 +172,8 @@ function appendBarsAxis(svg, bars, frame) {
       x: frame.width, y: plot.y + barY(tick, bars, plot), 'dominant-baseline': 'middle',
     }));
   }
-  labels.append(svgText('chart-axis-label chart-axis-label--count', bars.spec.caption, {
-    x: frame.width, y: plot.y + barY(bars.axis.max, bars, plot) - 14, 'dominant-baseline': 'middle',
+  labels.append(svgText('chart-axis-label chart-axis-label--count chart-axis-title', bars.spec.caption, {
+    x: frame.width, y: AXIS_TITLE_Y, 'dominant-baseline': 'middle',
   }));
   svg.append(labels);
 }
@@ -456,9 +459,11 @@ function appendPoints(block, marks, series, points, tooltip, plan, context, plot
   marks.append(hits, group);
 }
 
-function chartLegend(block, context, { plan, hasPrevious, previous }) {
-  const compared = comparedPeriod(context.previousPeriod, context.rows);
-  const legend = element('div', 'chart-legend');
+/*
+  Ревью 13.11: переключатель «Средний VOC / Урон» и число оценок — в шапке карточки одной строкой с масштабом и
+  действиями, легенда — строкой под ней
+*/
+function chartMode(block, context) {
   const lead = element('div', 'chart-legend__lead');
   lead.append(segmented({
     label: 'Показатель графика',
@@ -469,9 +474,15 @@ function chartLegend(block, context, { plan, hasPrevious, previous }) {
       renderDynamics(block, context);
     },
   }), element('span', 'chart-legend__count', `Оценки: ${formatCount(context.slice.length)}`));
+  return lead;
+}
+
+function chartLegend(context, { plan, hasPrevious, previous }) {
+  const compared = comparedPeriod(context.previousPeriod, context.rows);
+  const legend = element('div', 'chart-legend');
   /* J-85: прошлый период шире неполного текущего, на графике видна только его часть — её и подписываем */
   const shownTo = [previous.at(-1)?.to ?? compared.to, compared.to].sort()[0];
-  legend.append(lead, legendList(selectedMode === MODE_DAMAGE
+  legend.append(legendList(selectedMode === MODE_DAMAGE
     ? [legendItem(DAMAGE_CAPTION, 'negative', 'bar'), legendItem('VOC', 'neutral', 'line')]
     : [
       plan ? legendItem('VOC', null, 'zones') : legendItem('VOC', 'neutral', 'line'),
@@ -565,7 +576,7 @@ function drawChart(block, context, stage, tooltip, model, size) {
 function renderChart(block, context, scale, plan) {
   const model = chartModel(context, scale, plan);
   const chart = element('div', selectedMode === MODE_DAMAGE ? 'chart chart--damage' : 'chart');
-  chart.append(chartLegend(block, context, model));
+  chart.append(chartLegend(context, model));
   const stage = element('div', 'chart-stage');
   const tooltip = element('div', 'chart-tooltip glass');
   tooltip.hidden = true;
@@ -575,25 +586,29 @@ function renderChart(block, context, scale, plan) {
   /* Протягивание таймлайна показывает даты в выборе периода — в шапке группы, если период общий (J-40) */
   const timeline = chartTimeline(context, { owner: block, onPreview: (range) => (context.previewPeriod ?? block.previewPeriod)?.(range) });
   chart.append(timeline.node);
-  return { chart, model, draw: () => {
+  return { chart, model, mode: chartMode(block, context), draw: () => {
     if (context.slice.length) observeStage(stage, (size) => drawChart(block, context, stage, tooltip, model, size));
     timeline.draw();
   } };
 }
 
 export function renderDynamics(block, context) {
-  block.setTitle('Динамика VOC');
+  /* Ревью 13.11: над графиком уже заголовок группы «Динамика, события и антидрайверы» — своё название видно только развёрнутым */
+  block.setTitle('Динамика VOC', undefined, { hidden: !block.isExpanded() });
   /* J-40: общий период блока аналитики выбирается в шапке группы, а не графика */
-  const period = context.periodControl?.shared ? null : { ...context.period, ...(context.periodControl ? { picker: context.periodControl } : {}) };
+  /* Развёрнутая карточка закрывает шапку группы: общий период тогда подписан в своей шапке, без выбора */
+  const period = context.periodControl?.shared
+    ? (block.isExpanded() ? { ...context.period } : null)
+    : { ...context.period, ...(context.periodControl ? { picker: context.periodControl } : {}) };
   const scale = scaleFor(context.period);
   const plan = planFor(context.reference?.plan, {
     channel: context.state.channel,
     from: context.period.from,
     to: context.period.to,
   });
-  const { chart, draw, model } = renderChart(block, context, scale, plan);
+  const { chart, draw, model, mode } = renderChart(block, context, scale, plan);
   const download = downloadAction(() => exportFileName('Динамика VOC', context), () => dynamicsSheets(context, model, scale));
-  block.setHead({ ...(period ? { period } : {}), controls: chartScaleTabs(block, context, scale), actions: [expandAction(block, context), download] });
+  block.setHead({ ...(period ? { period } : {}), controls: [mode, chartScaleTabs(block, context, scale)], actions: [expandAction(block, context), download] });
   block.setContent(chart);
   draw();
 }

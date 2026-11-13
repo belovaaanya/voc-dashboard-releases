@@ -169,17 +169,24 @@ function renderFilters(dimensions, state, label, onFilterChange, reference, onCa
   return bar;
 }
 
-/* J-44: ссылка на срез — текущий адрес: канал, период, фильтры и выбор уже живут в URL (url-state.js) */
+/*
+  J-44: ссылка на срез — текущий адрес: канал, период, фильтры и выбор уже живут в URL (url-state.js).
+  Срез — вся страница, поэтому кнопка — в строке управления шапки справа, вида кнопки «Обновить данные»;
+  под фильтрами у карточек метрик она читалась ссылкой на эти карточки. J-203: квадратная иконка 40×40 —
+  с подписью она отнимала место у фильтров АБМ; действие — в доступном имени и подсказке
+*/
 export function copyLinkControl(copy) {
   const item = copyButton({
     label: 'Скопировать ссылку на срез',
-    done: 'Ссылка скопирована',
-    className: 'chart-toggle',
+    iconName: 'link',
+    iconClass: 'shell-head__icon',
+    className: 'shell-head__button shell-head__button--icon',
     text: () => location.href,
     ...(copy ? { copy } : {}),
   });
-  item.classList.add('shell-head__action');
-  item.querySelector('.chart-toggle').dataset.action = 'copy-link';
+  item.classList.add('shell-head__action', 'shell-head__link');
+  const button = item.querySelector('.shell-head__button');
+  button.dataset.action = 'copy-link';
   return item;
 }
 
@@ -237,6 +244,9 @@ export function renderHeader(host, context) {
     const osFilter = renderFilters(dimensions, state, label, onFilterChange, reference, onCashbackChange, onFiltersReset, { keys: ['os'], cashback: false });
     if (osFilter) bar.append(osFilter);
   }
+  /* Ссылка на срез — справа в строке шапки: она про всю страницу, как переключатели над данными.
+     На странице ролей её нет (J-168): фильтры на страницу не действуют */
+  if (!slim) bar.append(copyLinkControl());
   /* J-75: загрузка CSV — только в десктопном приложении, справа в строке шапки перед темой:
      в служебной строке места нет, она переносилась бы на вторую строку */
   const dataImport = dataImportControl();
@@ -245,11 +255,12 @@ export function renderHeader(host, context) {
   bar.append(themeToggle());
   head.append(bar);
 
-  /* J-65: база дельт всех карточек метрик — одной строкой под фильтрами, а не под каждой дельтой (было J-37); ссылка на срез — справа в той же строке */
-  const meta = element('div', 'shell-head__meta');
-  if (comparedTo && !slim) meta.append(element('span', 'shell-head__compared', bindShortWords(`Изменения в карточках метрик — к ${formatDayRange(comparedTo.from, comparedTo.to)}`)));
-  meta.append(copyLinkControl());
-  if (!slim) head.append(meta);
+  /* J-65: база дельт всех карточек метрик — одной строкой под фильтрами, а не под каждой дельтой (было J-37) */
+  if (comparedTo && !slim) {
+    const meta = element('div', 'shell-head__meta');
+    meta.append(element('span', 'shell-head__compared', bindShortWords(`Изменения в карточках метрик — к ${formatDayRange(comparedTo.from, comparedTo.to)}`)));
+    head.append(meta);
+  }
 
   /* Перерисовка шапки не выбрасывает фокус клавиатуры в начало страницы: он остаётся на фильтре, который менялся */
   const focused = host.contains(document.activeElement) ? document.activeElement : null;

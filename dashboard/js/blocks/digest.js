@@ -6,6 +6,7 @@
 import { EMPTY } from '../shell/block.js';
 import { segmented } from '../components/segmented.js';
 import { sparkline } from '../components/sparkline.js';
+import { chartDomain } from '../core/chart-geometry.js';
 import { buildDigest, buildRoles, buildTopic, defaultMonth, monthsOf } from '../core/digest.js';
 import { element } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
@@ -67,14 +68,9 @@ function trendNode(points) {
 
 /* J-153: линия сегмента — недели, целиком покрывающие месяц, с коридором плана канала полосой */
 const dayMonth = (iso) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}`;
-function weeklyNode(points, plan, { fill = false } = {}) {
-  const wrap = element('div', fill ? 'digest-trend digest-trend--fill' : 'digest-trend');
+function weeklyNode(points, plan) {
+  const wrap = element('div', 'digest-trend');
   const band = plan ? { min: plan.min, max: plan.max } : null;
-  /* J-165: у плитки роли под точками — даты начала недель, план — в подписи колонки */
-  if (fill) {
-    wrap.append(sparkline(points.map(({ voc }) => voc), { tone: 'neutral', wide: true, fill, label: vocText, band, axis: points.map(({ from }) => dayMonth(from)) }));
-    return wrap;
-  }
   wrap.append(sparkline(points.map(({ voc }) => voc), { tone: 'neutral', wide: true, label: vocText, band }),
     element('span', 'digest-caption', `недели ${dayMonth(points[0].from)} — ${dayMonth(points.at(-1).to)}${plan ? ` · план ${formatVoc(plan.min)}–${formatVoc(plan.max)}` : ''}`));
   return wrap;
@@ -242,11 +238,9 @@ export function renderDigestTopic(block, context) {
   block.setContent(content);
 }
 
-/* J-151: «VOC ролей» — страница в работе; макет заказчика — карточки ролей с VOC, оценками и динамикой */
 /*
-  J-161, J-162: VOC ролей — шапка страницы (канал, месяц, база чисел) и карточка-строка на роль: портрет и VOC с
-  дельтой, затем оценки с дельтой, затем линия по неделям месяца с коридором плана, затем топ проблем. Части — те же, что у
-  сегментов дайджеста. Слотов ролей — `ROLE_SLOTS`, лишние скрыты. Портреты придут от заказчика — пока круг с иконкой
+  VOC ролей — шапка страницы (канал, месяц, база чисел, шаг линии) и плитки четырёх ролей сеткой 2×2. Части — те же,
+  что у сегментов дайджеста. Слотов ролей — `ROLE_SLOTS`
 */
 /* J-166: портреты ролей от заказчика; роль без портрета — круг с иконкой */
 const ROLE_PORTRAITS = {
@@ -284,26 +278,41 @@ function rolesOf(context) {
   return roles;
 }
 
+/*
+  Шаг линии ролей — недели месяца или месяцы полугода; переключатель в шапке страницы, выбор живёт до закрытия
+  страницы, как «Урон / Доля» ДКО. Переключение перерисовывает шапку и все плитки ролей
+*/
+const ROLE_SCALES = [
+  { value: 'weeks', label: 'Недели', title: 'VOC по неделям выбранного месяца' },
+  { value: 'months', label: 'Месяцы', title: 'VOC по месяцам: полгода по выбранный месяц' },
+];
+let roleScale = 'weeks';
+const roleTiles = new Map();
+
+function planText(plan) {
+  return plan ? ` · план ${formatVoc(plan.min)}–${formatVoc(plan.max)}` : '';
+}
+
 export function renderRoles(block, context) {
   const data = rolesOf(context);
   const os = context.dimensions?.some(({ key }) => key === 'os') ? context.state.filters?.os ?? [] : [];
   const name = [context.label('channel', context.state.channel), ...(os.length ? [os.join(', ')] : [])].join(' · ');
   block.setTitle(data ? `VOC ролей · ${name} · ${monthTitle(data.month)}` : `VOC ролей · ${name}`);
   if (!data?.roles.length) return unavailable(block);
-  block.setHead();
-  block.setContent(element('p', 'digest-caption roles-caption',
-    `Дельты — к прошлому месяцу · недели ${dayMonth(data.weeks.from)} — ${dayMonth(data.weeks.to)}${data.plan ? ` · план ${formatVoc(data.plan.min)}–${formatVoc(data.plan.max)}` : ''}`));
-}
-
-function roleColumn(caption, ...children) {
-  return roleColumnOf(caption ? 'role-card__column' : 'role-card__column role-card__column--center', caption, ...children);
-}
-
-function roleColumnOf(className, caption, ...children) {
-  const column = element('div', className);
-  if (caption) column.append(element('span', 'role-card__caption', caption));
-  column.append(...children);
-  return column;
+  block.setHead({ controls: [segmented({
+    label: 'Шаг линии ролей',
+    options: ROLE_SCALES,
+    selected: roleScale,
+    onSelect: (value) => {
+      roleScale = value;
+      renderRoles(block, context);
+      for (const [index, tile] of roleTiles) if (tile.block.element.isConnected) digestRole(index)(tile.block, tile.context);
+    },
+  })] });
+  const span = roleScale === 'months'
+    ? `месяцы ${monthShort(data.months[0])} — ${monthShort(data.months.at(-1))}`
+    : `недели ${dayMonth(data.weeks.from)} — ${dayMonth(data.weeks.to)}`;
+  block.setContent(element('p', 'digest-caption roles-caption', `Дельты — к прошлому месяцу · ${span}${planText(data.plan)}`));
 }
 
 /* J-172: дельты нет, потому что в прошлом месяце нет оценок, — тире с пояснением, а не пустое место */
@@ -314,28 +323,35 @@ function roleLead(value, hasPrevious, options) {
   return dash;
 }
 
-function problemList(problems) {
+/* Топ-3 проблем роли — таблицей: название, жалоб, дельта; числа — столбцами вправо (J-194) */
+function problemTable(problems) {
   if (!problems.length) return element('p', 'role-card__none', 'Жалоб с проблемой нет');
-  const list = element('ol', 'role-card__problems');
-  for (const { name, count, delta } of problems) {
-    const item = element('li', 'role-card__problem');
-    const value = element('span', 'role-card__problem-count');
-    value.append(element('span', null, formatCount(count)), roleLead(delta, delta !== null, { shape: DELTA_SHAPES.count, growth: GROWTH.bad }));
-    item.append(element('span', 'role-card__problem-name', name), value);
-    list.append(item);
+  const table = element('table', 'role-card__problems');
+  table.append(element('caption', 'visually-hidden', 'Топ-3 проблем роли по числу жалоб'));
+  const head = element('tr');
+  for (const [text, className] of [['Проблема', null], ['Жалоб', 'role-card__number'], ['Дельта', 'role-card__number']]) {
+    const cell = element('th', className, text);
+    cell.scope = 'col';
+    head.append(cell);
   }
-  return list;
+  const thead = element('thead');
+  thead.append(head);
+  const body = element('tbody');
+  for (const { name, count, delta } of problems) {
+    const row = element('tr');
+    const lead = element('td', 'role-card__number');
+    lead.append(roleLead(delta, delta !== null, { shape: DELTA_SHAPES.count, growth: GROWTH.bad }));
+    row.append(element('td', 'role-card__problem-name', name), element('td', 'role-card__number', formatCount(count)), lead);
+    body.append(row);
+  }
+  table.append(thead, body);
+  return table;
 }
 
-export const digestRole = (index) => (block, context) => {
-  const data = rolesOf(context);
-  const role = data?.roles[index];
-  block.element.hidden = !role;
-  if (!role) return;
-  block.setTitle(role.role);
-  /* J-169: портрет роли — небольшим кругом перед её названием (слот метки шапки) */
+/* Портрет роли — круг; роль без портрета — круг с иконкой (J-166) */
+function roleAvatar(role) {
   const avatar = element('span', 'role-card__avatar');
-  const portrait = ROLE_PORTRAITS[role.role];
+  const portrait = ROLE_PORTRAITS[role];
   if (portrait) {
     avatar.classList.add('role-card__avatar--portrait');
     /* Портрет — оформление: роль уже названа заголовком карточки */
@@ -343,20 +359,50 @@ export const digestRole = (index) => (block, context) => {
     Object.assign(image, { src: portrait, alt: '', loading: 'lazy', decoding: 'async', width: 400, height: 400 });
     avatar.append(image);
   } else avatar.append(icon('users', 'role-card__avatar-icon'));
-  block.setHead({ marker: avatar });
+  return avatar;
+}
+
+/* Линия роли: недели месяца с датами начала недель или месяцы полугода; план — в подписи */
+function roleTrend(role, data) {
+  const months = roleScale === 'months';
+  const points = months ? role.monthly : role.weekly;
+  const values = points.map(({ voc }) => voc);
+  const band = data.plan ? { min: data.plan.min, max: data.plan.max } : null;
+  const wrap = element('div', 'digest-trend digest-trend--fill');
+  /* J-194: шкала круглым шагом, как у графика динамики — коридор плана полосой, а не фоном плитки */
+  wrap.append(sparkline(values, { tone: 'neutral', wide: true, fill: true, label: vocText, band, domain: chartDomain(points, [], band),
+    axis: points.map((point) => (months ? monthShort(point.month) : dayMonth(point.from))) }));
+  return wrap;
+}
+
+/*
+  Плитка роли: в шапке — портрет и название роли (J-169, шапка одна на все карточки — C-02); ниже слева VOC с дельтой
+  и оценки, через разделитель справа — линия VOC с коридором плана и топ-3 проблем таблицей
+*/
+export const digestRole = (index) => (block, context) => {
+  const data = rolesOf(context);
+  const role = data?.roles[index];
+  block.element.hidden = !role;
+  if (!role) return;
+  roleTiles.set(index, { block, context });
+  block.setTitle(role.role);
+  block.setHead({ marker: roleAvatar(role.role) });
   if (!role.count) {
     block.setContent(element('p', 'role-card__none', 'Нет оценок за месяц'));
     return;
   }
+  const lead = element('div', 'role-card__lead');
   const content = element('div', 'role-card');
-  /* J-163, J-165: VOC — крупным числом (72 px, дельта справа не заходит на линию); оценки — мелкой строкой у низа плитки, вровень с датами недель */
+  /* J-163, J-165: VOC — крупным числом 72 px с дельтой справа; оценки — мелкой строкой под ним */
   const vocFigure = element('div', 'metric');
   const hasPrevious = role.countDelta !== null;
   vocFigure.append(figureNode(vocText(role.voc), roleLead(role.delta, hasPrevious)),
     metaRowNode(countNode(role.count), roleLead(role.countDelta, hasPrevious, { shape: DELTA_SHAPES.count, growth: GROWTH.volume })),
     ...(role.raw !== null && roundVoc(role.raw) !== roundVoc(role.voc) ? [metaRowNode(element('span', 'metric__meta', `${vocText(role.raw)} без поправки`))] : []));
-  /* J-172: у VOC нет подписи колонки — число с оценками стоит по центру плитки */
-  content.append(roleColumn(null, vocFigure),
-    roleColumn(`По неделям${data.plan ? ` · план ${formatVoc(data.plan.min)}–${formatVoc(data.plan.max)}` : ''}`, weeklyNode(role.weekly, data.plan, { fill: true })), roleColumnOf('role-card__column role-card__column--problems', 'Топ проблем, жалоб', problemList(role.problems)));
+  lead.append(vocFigure);
+  const side = element('div', 'role-card__side');
+  const trendCaption = `${roleScale === 'months' ? 'По месяцам' : 'По неделям'}${planText(data.plan)}`;
+  side.append(element('span', 'role-card__caption', trendCaption), roleTrend(role, data), problemTable(role.problems));
+  content.append(lead, side);
   block.setContent(content);
 };

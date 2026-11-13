@@ -63,11 +63,7 @@
   background: var(--color-text-secondary);
 }
 
-/* Вывод — по содержимому, остаток высоты рейла забирает распределение: строки оценок расходятся по высоте, а не оставляют пустоту под выводом (D-55, J-09) */
-.column--bounded > .card--distribution {
-  flex-shrink: 0;
-}
-
+/* J-189: строки оценок расходятся на высоту строки сетки, а не оставляют пустоту внизу (J-09) */
 .card--distribution .card__body,
 .card--distribution .distribution {
   flex: 1 1 auto;

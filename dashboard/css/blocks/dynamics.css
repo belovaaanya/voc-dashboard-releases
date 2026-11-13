@@ -34,8 +34,12 @@
 }
 
 .chart-toggle {
+  display: inline-flex;
+  align-items: center;
+  /* Ревью 13.11: одной высоты с остальными контролами страницы (J-192) */
+  height: var(--control-height);
   margin-inline-end: auto;
-  padding: var(--space-1) var(--space-2);
+  padding: 0 var(--space-2);
   border: var(--divider-width) solid var(--color-control-border);
   border-radius: var(--radius-pill);
   background: var(--control-raised);
@@ -117,6 +121,7 @@
   opacity: var(--chart-voc-overlay-opacity);
 }
 
+/* Ревью 13.11: «Средний VOC / Урон» и число оценок — в шапке карточки, слева от масштаба и действий */
 .chart-legend__lead {
   display: flex;
   align-items: center;
@@ -126,6 +131,7 @@
 
 .chart-legend__count {
   color: var(--color-text-secondary);
+  font: var(--type-caption);
 }
 
 .chart-area {
@@ -311,7 +317,7 @@
 .chart-timeline { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
 .chart-timeline__toolbar { display: flex; align-items: center; gap: var(--space-2); justify-content: space-between; }
 .chart-timeline__caption { color: var(--color-text-tertiary); font: var(--type-caption); }
-.chart-timeline__toolbar .chart-toggle { margin-inline-end: 0; }
+.chart-timeline__reset[hidden] { display: none; }
 .chart-timeline__stage { position: relative; height: 64px; min-width: 0; }
 /* J-57: подсказка дат шкалы — над шкалой у курсора, одной строкой */
 .chart-timeline__tip { white-space: nowrap; }

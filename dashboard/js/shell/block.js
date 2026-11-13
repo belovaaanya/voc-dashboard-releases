@@ -174,9 +174,11 @@ export function createBlock({ id, title, modifier, compact = false, level = 2 })
 
   return {
     element: card,
-    setTitle(text, full) {
+    /* `hidden` — заголовок остаётся для screen reader, но не виден: когда его уже назвал заголовок группы над блоком */
+    setTitle(text, full, { hidden = false } = {}) {
       heading.replaceChildren(...withStars(text), help);
       withFullLabel(heading, full);
+      heading.classList.toggle('visually-hidden', hidden);
     },
     previewPeriod(next) { updatePeriodPreview?.(next); },
     isExpanded: () => card.classList.contains('is-expanded'),

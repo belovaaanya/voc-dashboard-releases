@@ -137,6 +137,13 @@
   font: var(--type-quote);
 }
 
+/* «Фрагмент экспертизы» — тихая пометка источника цитаты */
+.verbatim-feed__kind {
+  margin: 0;
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+}
+
 .verbatim-feed__source {
   margin: 0;
   color: var(--color-text-tertiary);
@@ -153,22 +160,22 @@
 
 
 
-.verbatim-card__frequency strong {
+/* J-195: жалобы за период крупно, «было N» — тише строкой под ними; доля — своей колонкой */
+.problem-table__stack {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-1);
+}
+
+.problem-table__stack strong {
   color: var(--color-text-strong);
   font: var(--type-caption-strong);
 }
 
-/* J-51: частотность за период к прошлому — строка итога; мини-графика нет (J-64) */
-.verbatim-card__frequency {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0 var(--space-1);
-}
-
-.verbatim-card__frequency small {
+.problem-table__was {
   color: var(--color-text-tertiary);
-  font: var(--type-caption);
+  font: var(--type-axis);
 }
 
 /* Скелет — те же строки со скрытым содержимым: высота совпадает с загруженной по построению */
@@ -190,8 +197,9 @@
 .verbatim-search__input {
   display: block;
   width: 100%;
-  min-height: var(--space-10);
-  padding: var(--space-2) var(--space-6);
+  /* J-195: высота — как у табов рядом; токен вводит «Общее», до него — то же значение */
+  height: var(--control-height, 29px);
+  padding: 0 var(--space-4);
   border: var(--hairline) solid var(--color-control-border);
   border-radius: var(--radius-pill);
   background: var(--control-surface);
@@ -435,8 +443,9 @@
 
 .problem-table th,
 .problem-table td {
-  /* J-131: строка таблицы — 8 сверху и снизу. J-141: 16 — таблица воздушнее, строки не слипаются */
-  padding: var(--space-4) var(--space-2);
+  /* J-131: строка таблицы — 8 сверху и снизу. J-141: 16 — таблица воздушнее, строки не слипаются.
+     J-195: между колонками 24, а не 16 — числа соседних колонок не сливаются */
+  padding: var(--space-4) var(--space-3);
   border-block-end: var(--hairline) solid var(--color-card-border);
   text-align: end;
   vertical-align: middle;
@@ -492,14 +501,6 @@
   background: linear-gradient(var(--row-selected), var(--row-selected)), var(--color-surface);
 }
 
-/* J-120: жалобы, «было» и доля — одной строкой; обёртка внутри ячейки: ячейка с display: flex перестаёт быть ячейкой */
-.problem-table__total-body {
-  display: flex;
-  align-items: baseline;
-  justify-content: flex-end;
-  gap: var(--space-2);
-}
-
 .problem-table__count {
   color: var(--color-text-strong);
   font-variant-numeric: tabular-nums;
@@ -515,6 +516,19 @@
 
 .problem-table__peak {
   color: var(--color-text-strong);
+}
+
+/* J-195: закономерности — каждая своей строкой; «Когда чаще» отделена от шагов динамики справа */
+.problem-table .problem-table__peak,
+.problem-table .problem-table__peak-head {
+  padding-inline-end: var(--space-6);
+  text-align: start;
+}
+
+.problem-table__peak-lines {
+  display: inline-flex;
+  flex-direction: column;
+  gap: var(--space-1);
 }
 
 .problem-table__peak--none,
@@ -550,12 +564,14 @@
   text-align: start;
 }
 
-/* J-139: период «было» — второй строкой в шапке «Жалоб» */
-.problem-table__head-note {
-  display: block;
+/* J-195: легенда круга частой версии — под таблицей, тише строк */
+.problem-table__legend {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
   color: var(--color-text-tertiary);
-  font: var(--type-axis);
-  white-space: nowrap;
+  font: var(--type-caption);
 }
 
 /* J-136: без сравнения треугольник невидим, но держит место — доли строк в одну колонку */
@@ -572,8 +588,22 @@
 }
 
 .problem-toolbar .problem-search {
-  flex: 1 1 calc(var(--problem-search-width) / 2);
+  /* J-195: поиск не растягивается на свободное место — по размеру соседних контролов */
+  flex: 0 1 calc(var(--problem-search-width) * 0.75);
   min-width: calc(var(--problem-search-width) / 2);
+}
+
+/* Подпись сортировки слева от переключателя: «Сначала частые: Проблематики / ФО» */
+.problem-order {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.problem-order__label {
+  color: var(--color-text-secondary);
+  font: var(--type-caption);
+  white-space: nowrap;
 }
 
 /* J-130: поиск по проблематике — над таблицей топа, не шире колонки названия */

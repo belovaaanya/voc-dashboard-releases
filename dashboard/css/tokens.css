@@ -140,6 +140,12 @@
   /* J-115: боковое меню — развёрнутое с подписями и свёрнутое до иконок */
   --nav-width: 232px;
   --nav-width-collapsed: 64px;
+  /* Меню — своя панель: поле внутри и зазор до страницы шире зазора карточек, чтобы меню не сливалось с фильтрами */
+  --nav-padding: var(--space-2);
+  --nav-gap: var(--space-6);
+  --icon-size-nav: 20px;
+  /* Иконка пункта стоит в одной точке в обоих состояниях меню: поле пункта центрирует её в свёрнутом */
+  --nav-item-inset: calc((var(--nav-width-collapsed) - 2 * var(--nav-padding) - 4 * var(--hairline) - var(--icon-size-nav)) / 2);
 
   /* Типографика: роль — начертание, размер и интерлиньяж вместе (C-01, D-48); мельче 12 px только оси (V-33) */
   --font-sans: "Manrope", "Manrope Fallback", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
@@ -255,6 +261,14 @@
   --tab-min-width: 64px;
   --segmented-inset: 2px;
   --tab-height-lg: 40px;
+  /* Высота контролов: одна внутри карточек — как у сегментного переключателя, одна у управления всей страницей в шапке */
+  --control-height: calc(var(--tab-height) + 2 * var(--segmented-inset) + 2 * var(--hairline));
+  --control-height-lg: var(--tab-height-lg);
+  /* Переключатель «С кэшбеком» — вторичный фильтр: заметно ниже строки фильтров, не крупнее её контролов */
+  --switch-width: 36px;
+  --switch-height: 20px;
+  --switch-knob: 16px;
+  --switch-inset: 2px;
 
   /* Индикаторы, легенда и sparkline (C-04, C-05): доли цвета тона и размеры из макета */
   --tone-tint: 12%;

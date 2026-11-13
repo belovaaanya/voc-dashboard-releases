@@ -54,7 +54,8 @@
 
 /*
   J-68: без border-spacing — промежутки между плитками дают поля ячеек. Иначе в
-  щели между строками липкой колонки просвечивали плитки, уехавшие под подписи
+  щели между строками липкой колонки просвечивали плитки, уехавшие под подписи.
+  J-193 («всё прилипло»): поле 2 px — между плитками 4 px
 */
 .heatmap {
   width: max-content;
@@ -63,7 +64,7 @@
 
 .heatmap th,
 .heatmap td {
-  padding: 1px;
+  padding: 2px;
 }
 
 /* Липкая колонка подписей: плотная до своего правого поля, дальше — затухание поверх уехавших под неё плиток.
@@ -139,11 +140,23 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2) var(--space-3);
-  margin-block-end: var(--space-2);
+  gap: var(--space-3);
+  margin-block-end: var(--space-4);
 }
 
-/* J-74: пояснение уходит под пункты легенды своей строкой — между ними 4, как у связанной пары (ui-system §2): с нулём строки слипались */
+/* Подпись «Цвет:» перед режимами — пара связанных элементов, переносится вместе */
+.heatmap-mode {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.heatmap-mode__label {
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+}
+
+/* Легенда: пункты цвета и значок «i» с пояснением в подсказке; зазор 12 между пунктами (J-74: с нулём строки слипались) */
 .heatmap-legend {
   display: flex;
   align-items: center;
@@ -151,7 +164,7 @@
   min-width: 0;
 }
 
-/* J-144: пояснение в одну строку с многоточием — высота легенды одна во всех режимах, страница не прыгает */
+/* Строка состояния легенды без пунктов (нет плана) — в одну строку с многоточием: высота легенды одна во всех режимах (J-144) */
 .heatmap-legend__note {
   flex: 1 1 0;
   min-width: 0;
@@ -163,12 +176,31 @@
   white-space: nowrap;
 }
 
+/* Значок «i» у легенды: пояснение цвета — в подсказке по наведению и фокусу */
+.heatmap-legend__hint {
+  display: inline-flex;
+  flex: none;
+  border-radius: var(--radius-pill);
+  color: var(--color-text-tertiary);
+  cursor: help;
+}
+
+.heatmap-legend__hint:hover,
+.heatmap-legend__hint:focus-visible {
+  color: var(--color-text-strong);
+}
+
+.heatmap-legend__hint-icon {
+  width: var(--icon-size);
+  height: var(--icon-size);
+}
+
 .heatmap-pagination {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  margin-block-start: var(--space-2);
+  margin-block-start: var(--space-4);
 }
 
 .heatmap-pagination__status {
@@ -177,9 +209,13 @@
   font: var(--type-caption);
 }
 
+/* Высота контрола внутри карточки — общий токен «Общего» (PR #20); fallback до его слияния */
 .heatmap-more,
 .heatmap-collapse {
-  padding: var(--space-2) var(--space-4);
+  display: inline-flex;
+  align-items: center;
+  block-size: var(--control-height, 29px);
+  padding: 0 var(--space-4);
   border: var(--hairline) solid var(--color-control-border);
   border-radius: var(--radius-pill);
   background: var(--control-raised);

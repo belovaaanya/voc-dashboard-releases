@@ -116,6 +116,11 @@
 
 /* ── Малая карточка (design-spec §3.2) ─────────────────────────────── */
 
+/* Сегменты в верхней строке шапки — чуть выше своего содержимого (150 → 176 px): число не прижато к заголовку */
+.card--metric-segment {
+  min-height: calc(var(--space-10) * 4 + var(--space-4));
+}
+
 /* J-66, J-94: содержимое сегмента прижато к нижнему краю; числа на одной линии — у подписей одна строка (B-08) */
 .metric--segment {
   flex: 1 1 auto;
@@ -134,16 +139,25 @@
 
 /*
   J-87: подписи слева, кольцо справа на всю высоту карточки, вровень с заголовком.
-  На самой узкой карточке (1200) заголовок и подписи до кольца не доходят.
   J-96: поле кольца сверху, справа и снизу одно — поле карточки: кольцо стоит у нижнего правого
   угла содержимого и выше него на шапку (строка --space-6 и зазор --space-3). Точка отсчёта — само
-  содержимое: у тела карточки на время проявления есть transform, от него кольцо меняло бы размер
+  содержимое: у тела карточки на время проявления есть transform, от него кольцо меняло бы размер.
+  J-198: легенда берёт свою ширину, кольцо — остаток, не больше --plan-days-ring: в трети ширины на 1280
+  подписи не переносятся, на широкой карточке кольцо прежнего размера
 */
 .plan-days {
-  position: relative;
-  display: flex;
+  display: grid;
   flex: 1 1 auto;
-  align-items: flex-end;
+  grid-template-columns: max-content minmax(0, var(--plan-days-ring));
+  justify-content: space-between;
+  align-items: end;
+  column-gap: var(--space-3);
+  min-width: 0;
+}
+
+.plan-days__ring-slot {
+  position: relative;
+  align-self: stretch;
   min-width: 0;
 }
 
@@ -151,7 +165,7 @@
   position: absolute;
   inset-block-end: 0;
   inset-inline-end: 0;
-  height: calc(100% + var(--space-6) + var(--space-3));
+  width: 100%;
   aspect-ratio: 1;
   border-radius: 50%;
   background: conic-gradient(var(--plan-days-arcs));
@@ -160,45 +174,40 @@
 }
 
 /*
-  Числа в ряд у низа карточки: на одной линии с соседней плиткой. Узкая плитка переносит
-  подпись, а не число; длинные числа, которым тесно в ряду (период больше 100 дней на
-  узком экране), уходят на следующую строку и не наезжают друг на друга
+  J-189: плитка — треть ширины второй строки шапки, поэтому строки столбиком у низа карточки.
+  J-198: строка — точка, подпись, число (до J-198 число стояло первым кеглем value-sm): числа мельче,
+  одной колонкой справа, вровень по правому краю — сетка с общими колонками для всех строк.
+  Порядок прежний: ниже → выше → в плане
 */
 .plan-days__legend {
-  display: flex;
-  flex: 1 1 auto;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: var(--space-3);
-  min-width: 0;
+  display: grid;
+  grid-template-columns: auto max-content auto;
+  gap: var(--space-1) var(--space-2);
+  align-items: center;
   margin: 0;
-  margin-inline-end: calc(var(--plan-days-ring) + var(--space-6));
   padding: 0;
   list-style: none;
 }
 
 .plan-days__item {
-  display: flex;
-  flex: 1 1 0;
-  flex-direction: column;
-  gap: var(--space-1);
-  min-width: min-content;
-}
-
-.plan-days__figure {
-  display: flex;
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   align-items: center;
-  gap: var(--space-2);
 }
 
 .plan-days__count {
+  justify-self: end;
   color: var(--color-text-strong);
-  font: var(--type-value-sm);
+  font: var(--type-text-strong);
+  font-variant-numeric: tabular-nums;
+  text-align: end;
 }
 
 .plan-days__caption {
   color: var(--color-text-secondary);
   font: var(--type-caption);
+  white-space: nowrap;
 }
 
 .plan-days__swatch {
