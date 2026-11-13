@@ -2,7 +2,8 @@
 
 import { element, withFullLabel } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
-import { revealAround, slideSelection } from '../ui/motion.js';
+import { slideSelection } from '../ui/motion.js';
+import { holdDuring } from '../ui/page-height.js';
 
 const STEPS = { ArrowRight: 1, ArrowLeft: -1 };
 
@@ -39,14 +40,13 @@ export function segmented({ label, options, selected, onSelect, size = 'sm' }) {
     }
     const host = group.closest('.card, #header');
     const from = group.querySelector('[aria-selected="true"]')?.getBoundingClientRect?.();
-    onSelect(options[index].value);
-    restoreFocus(host, label, origin);
-    if (!host?.isConnected) return;
-    /* Рамка выбора переезжает к новому табу; своё содержимое карточки проявляется, а перестройку дашборда проявляет main.js (D-56) */
-    const next = selectedTab(host, label);
-    slideSelection(from, next);
-    const body = host.classList.contains('card') ? host.querySelector(':scope > .card__body') : null;
-    if (body) revealAround(body, next?.closest('.segmented'));
+    holdDuring(group, () => {
+      onSelect(options[index].value);
+      restoreFocus(host, label, origin);
+      if (!host?.isConnected) return;
+      /* Движется только рамка выбора; содержимое встаёт на место без проявления (D-56) */
+      slideSelection(from, selectedTab(host, label));
+    });
   };
 
   options.forEach((option, index) => {

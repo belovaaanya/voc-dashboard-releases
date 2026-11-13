@@ -10,7 +10,7 @@ import { legendItem, legendList } from '../components/legend.js';
 import { sparkline } from '../components/sparkline.js';
 import { chartDomain } from '../core/chart-geometry.js';
 import { colourScale } from '../core/antidrivers.js';
-import { buildDigest, buildPlatforms, buildRoles, buildTriggers, defaultMonth, monthsOf } from '../core/digest.js';
+import { STABILITY_PLAN, buildDigest, buildPlatforms, buildRoles, buildTriggers, defaultMonth, monthsOf } from '../core/digest.js';
 import { element } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { MONTHS, formatBucket, monthName, formatCount, formatImpact, formatRatings, formatShare, formatVoc, plural } from '../core/format.js';
@@ -21,6 +21,7 @@ import { DELTA_SHAPES, GROWTH, countGroupNode, countNode, figureNode, leadNode, 
 import { valueDelta } from '../components/value-delta.js';
 
 const monthIndex = (month) => Number(month.slice(5, 7)) - 1;
+const MONTHS_PREPOSITIONAL = ['январе', 'феврале', 'марте', 'апреле', 'мае', 'июне', 'июле', 'августе', 'сентябре', 'октябре', 'ноябре', 'декабре'];
 export const monthTitle = (month) => `${capitalized(monthName(month))} ${month.slice(0, 4)}`;
 const capitalized = (text) => text.charAt(0).toUpperCase() + text.slice(1);
 const monthShort = (month) => formatBucket(`${month}-01`, 'month');
@@ -63,7 +64,9 @@ function weeklyNode(points, plan) {
   const wrap = element('div', 'digest-trend digest-trend--fill digest-trend--segment');
   const band = plan ? { min: plan.min, max: plan.max } : null;
   /* Недели и план — в базе чисел под итогом страницы, а не подписью в каждой карточке */
-  wrap.append(sparkline(points.map(({ voc }) => voc), { tone: 'neutral', wide: true, fill: true, label: vocText, band, glow: true }));
+  /* Под точками — даты начала недель, ролью оси: видно, что шаг — неделя */
+  wrap.append(sparkline(points.map(({ voc }) => voc), { tone: 'neutral', wide: true, fill: true, label: vocText, band, glow: true,
+    axis: points.map(({ from }) => dayMonth(from)) }));
   return wrap;
 }
 
@@ -273,14 +276,34 @@ export function renderDigestStability(block, context) {
   const [previous, current] = points.slice(-2).map(({ damage }) => (damage === null ? null : roundImpact(damage)));
   const shift = current === null || previous === null ? null : current - previous;
   block.setHead({ note: shift === null ? null : leadNode(shift, { shape: { round: roundImpact, format: formatImpact } }) });
-  const month = monthName(digest.month);
+  /* «В октябре», а не «В октябрь»: месяц в предложном падеже */
+  const month = MONTHS_PREPOSITIONAL[monthIndex(digest.month)];
   const headline = shift === null ? 'Урон сбоев и технических проблем по месяцам'
     : shift > 0 ? `В ${month} — снижение негативного влияния стабильности на VOC`
       : shift < 0 ? `В ${month} — рост негативного влияния стабильности на VOC` : 'Влияние стабильности на VOC без изменений';
   /* J-152: урон по месяцам — серыми столбиками, как на слайде заказчика: высота — модуль урона, число — под столбиком */
-  const bars = barsNode(points.map(({ month, damage }) => ({ month, size: Math.abs(damage ?? 0), text: damage === null ? null : formatImpact(roundImpact(damage)) })));
+  /*
+    План руководства (STABILITY_PLAN) — пунктирной линией-порогом на шкале столбиков; шкала вмещает порог с запасом сверху.
+    Столбик сильнее порога — тоном «ниже плана», и это продублировано числом под ним
+  */
+  const scale = Math.max(Math.abs(STABILITY_PLAN), ...points.map(({ damage }) => Math.abs(damage ?? 0))) * 1.15;
+  const bars = element('div', 'digest-bars digest-bars--plan');
+  bars.style.setProperty('--plan', String(Math.round((Math.abs(STABILITY_PLAN) / scale) * 1000) / 1000));
+  for (const { month: key, damage } of points) {
+    const below = damage !== null && roundImpact(damage) < STABILITY_PLAN;
+    const item = element('div', below ? 'digest-bars__item digest-bars__item--below' : 'digest-bars__item');
+    const track = element('span', 'digest-bars__track');
+    const bar = element('span', 'digest-bars__bar');
+    bar.style.setProperty('--bar', String(Math.round((Math.abs(damage ?? 0) / scale) * 1000) / 1000));
+    track.append(bar, element('span', 'digest-bars__plan'));
+    const value = element('span', 'digest-bars__value');
+    value.append(damage === null ? emptyValue() : formatImpact(roundImpact(damage)));
+    item.append(track, value, element('span', 'digest-bars__month', monthShort(key)));
+    bars.append(item);
+  }
   const content = element('div', 'digest-stability');
-  content.append(element('p', 'digest-headline', headline), bars,
+  content.append(element('p', 'digest-headline', headline),
+    element('p', 'digest-caption digest-stability__plan', `Пунктир — план: урон не сильнее ${formatImpact(STABILITY_PLAN)}`), bars,
     element('p', 'digest-caption', 'Урон группы «Сбои / тех. проблемы» по формуле ДКО, в пунктах VOC'));
   block.setContent(content);
 }
@@ -511,8 +534,9 @@ function roleTrend(role, data) {
 }
 
 /*
-  Плитка роли: слева шапка карточки — портрет и название роли (J-169, шапка одна на все карточки — C-02), под ней внизу
-  VOC с дельтой и оценки; через разделитель справа с самого верха — линия VOC с коридором плана и топ-3 проблем таблицей
+  Плитка роли: слева шапка карточки — название роли (шапка одна на все карточки — C-02), под ней крупный портрет и внизу
+  VOC с дельтой и оценки; через разделитель справа с самого верха — линия VOC с коридором плана и топ-3 проблем таблицей.
+  Портрет — в теле плитки, а не 40 px в шапке (J-169): заполняет левую колонку над числом
 */
 export const digestRole = (index) => (block, context) => {
   const data = rolesOf(context);
@@ -521,11 +545,12 @@ export const digestRole = (index) => (block, context) => {
   if (!role) return;
   roleTiles.set(index, { block, context });
   block.setTitle(role.role);
-  block.setHead({ marker: roleAvatar(role.role) });
+  block.setHead();
   const lead = element('div', 'role-card__lead');
+  lead.append(roleAvatar(role.role));
   const content = element('div', 'role-card');
   if (!role.count) {
-    /* Пустая роль — сразу под шапкой карточки: место надписи не зависит от высоты соседней плитки в строке */
+    /* Пустая роль — сразу под портретом: место надписи не зависит от высоты соседней плитки в строке */
     lead.classList.add('role-card__lead--empty');
     lead.append(element('p', 'role-card__none', 'Нет оценок за месяц'));
     content.append(lead);

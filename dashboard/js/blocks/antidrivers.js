@@ -259,7 +259,6 @@ function controls(block, context, scale) {
 /* Разрез остаётся и у пустого результата: иначе из пустого разреза не вернуться */
 function withCut(node, cutTabs) {
   const wrap = element('div', 'antidriver-empty');
-  wrap.setAttribute('data-steady', '');
   const toolbar = element('div', 'heatmap-toolbar');
   toolbar.append(cutTabs);
   wrap.append(toolbar, node);
@@ -549,11 +548,6 @@ function fitAfterPaint(scroll, resizer) {
 function heatmapView(context, shown, rerender, cutTabs, lead) {
   const view = element('div', 'antidriver-heatmap');
   view.id = 'antidrivers-heatmap';
-  /*
-    Режим цвета, разрез, ОС версий и порции перестраивают карту целиком, но проявление (D-56) здесь не нужно:
-    соседние табы, легенда, карта и подвал мигали бы при каждом клике. Меняются только данные; выбор показывает рамка таба
-  */
-  view.setAttribute('data-steady', '');
   const { columns } = shown.heatmap;
   const columnPlans = columns.map(({ from, to }) =>
     planFor(context.reference?.plan, { channel: context.state.channel, from, to }),
@@ -574,14 +568,11 @@ function heatmapView(context, shown, rerender, cutTabs, lead) {
   return view;
 }
 
-/* Пустой разрез — тоже без проявления: переход туда и обратно меняет только содержимое (data-steady) */
 function noVersionOs() {
-  const panel = statusPanel('antidriver-unavailable', {
+  return statusPanel('antidriver-unavailable', {
     title: 'Нет оценок iOS и Android',
     detail: 'Версии показываются только для iOS и Android, а в срезе таких оценок нет.',
   });
-  panel.setAttribute('data-steady', '');
-  return panel;
 }
 
 function noElements() {

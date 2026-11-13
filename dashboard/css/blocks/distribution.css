@@ -85,10 +85,5 @@
   color: var(--color-text-tertiary);
   font: var(--type-caption);
   text-align: end;
-  font-variant-numeric: tabular-nums;
   white-space: nowrap;
-}
-
-.distribution-row__share {
-  font-variant-numeric: tabular-nums;
 }

@@ -90,11 +90,6 @@
   color: var(--color-text-strong);
 }
 
-.insight-help__trigger:focus-visible {
-  outline: var(--focus-ring) solid var(--color-text-strong);
-  outline-offset: 2px;
-}
-
 .insight-help__icon {
   width: var(--icon-size);
   height: var(--icon-size);

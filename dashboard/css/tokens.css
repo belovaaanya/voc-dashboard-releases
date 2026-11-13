@@ -85,9 +85,6 @@
   --color-orange: #FF8A3D;
   --color-yellow: #F2C94C;
   --color-purple: #B18CFF;
-  /* «Тонкий луч» конверсии: холодный край аудитории и тёплый край причины (стратегия VoC) */
-  --funnel-cool: #96BEFF;
-  --funnel-warm: #FFAA6E;
   /* Палитра календаря J-20: мятный, жёлтый и оранжевый тегов и точек ленты */
   --calendar-mint: #85E294;
   --calendar-yellow: #DBED99;
@@ -187,6 +184,8 @@
   --tracking-value-lg: -4px;
   /* J-59: заголовки блоков плотнее — разрядка +0,02em читалась как широкий набор */
   --tracking-title: -0.01em;
+  /* Подпись 12 px в строках таблиц — чуть свободнее: мелкий кегль без разрядки читается сжатым (12 px — +1 %) */
+  --tracking-caption: 0.01em;
 
   /* Поверхность карточки и её шапки — wireframe (V-32, Figma 3204:2724, 3204:2866) */
   --color-card-border: rgba(61, 63, 67, 0.5);
@@ -507,8 +506,6 @@
   --color-orange: #A64808;
   --color-yellow: #8A6500;
   --color-purple: #6F45D6;
-  --funnel-cool: #3D6FD9;
-  --funnel-warm: #C8641E;
   /* J-69, J-71: в светлой теме мятный и жёлтый плотнее, текст мятного и оранжевого — темнее; аварию сдвигает к янтарному */
   --calendar-mint: #2FBF71;
   --calendar-mint-ink: #00704B;

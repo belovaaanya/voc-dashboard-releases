@@ -33,6 +33,7 @@ import { createLabels } from './core/labels.js';
 import { SOURCE_EMPTY, loadVerbatim as loadVerbatimFile, startLoading } from './io/loader.js';
 import { defaultPeriod, metricsBase } from './core/period.js';
 import { createSelector } from './state/selection.js';
+import { holdPageHeight as holdPage, releasePageHeight as releasePage } from './ui/page-height.js';
 import { sameInputs, staleInputs, watchInputs } from './shell/inputs.js';
 import { ROLE_SLOTS } from './core/digest.js';
 import { ANALYST_PAGE, DEFAULT_PAGE, LOCAL_PERIOD_BLOCKS, onStateChange, readState, syncState, toSearch, viewOf, withFilter, writeState } from './state/url-state.js';
@@ -455,12 +456,12 @@ function startDashboard(env) {
   const holdPageHeight = () => {
     if (heightHeld) return;
     heightHeld = true;
-    document.documentElement.style.minHeight = `${document.documentElement.scrollHeight}px`;
+    holdPage();
   };
   const releasePageHeight = () => {
     if (!heightHeld) return;
     heightHeld = false;
-    document.documentElement.style.minHeight = '';
+    releasePage();
   };
 
   /* Новые данные встают на место прежних без проявления и скелета (D-56): движение — только у нажатого контрола */

@@ -19,6 +19,7 @@ import { emptyValue } from '../components/empty-value.js';
 import { buildTimeSeries } from '../core/timeseries.js';
 import { equalDaysPeriod } from '../core/period.js';
 import { earliestDate } from '../core/dates.js';
+import { holdPageHeight, releasePageHeight } from '../ui/page-height.js';
 import { FEW_COMPLAINTS, NO_CATEGORY_GROUP, NO_DOMAIN, PEAK_RULE, POSITIVE_GROUP, buildProblemCards, damageOf, negativeShare } from '../core/verbatim.js';
 
 let selectedCut = 'domainProblem';
@@ -92,20 +93,13 @@ const groupKey = (group) => `${GROUP_KEY}${group}`;
 
 /*
   Перерисовка по действию внутри блока не двигает страницу: блок остаётся на том же месте экрана. Без scroll anchoring
-  (WebKit — окно приложения, Safari) замена содержимого и фокус нового таба уносили прокрутку вверх. На время
-  перерисовки страница держит прежнюю высоту, после — блок возвращается на прежнее место
+  (WebKit — окно приложения, Safari) замена содержимого и фокус нового таба уносили прокрутку вверх
 */
-/* Удержание общее на вложенные и частые вызовы: высоту до первого возвращает последний */
-const pageHold = { depth: 0, previous: '', held: '' };
 export function keepPagePosition(anchor, action) {
   const view = anchor?.ownerDocument?.defaultView;
   const before = anchor?.getBoundingClientRect?.().top;
   if (!view?.scrollBy || !Number.isFinite(before)) return action();
-  const root = view.document.documentElement;
-  if (pageHold.depth === 0) pageHold.previous = root.style.minHeight;
-  pageHold.depth += 1;
-  pageHold.held = `${Math.max(root.scrollHeight, Number.parseFloat(root.style.minHeight) || 0)}px`;
-  root.style.minHeight = pageHold.held;
+  holdPageHeight(view);
   const settle = () => {
     if (!anchor.isConnected) return;
     const shift = anchor.getBoundingClientRect().top - before;
@@ -116,8 +110,7 @@ export function keepPagePosition(anchor, action) {
   /* Фокус нового таба ставит переключатель уже после перерисовки — место проверяется ещё раз перед кадром */
   const release = () => {
     settle();
-    pageHold.depth -= 1;
-    if (pageHold.depth === 0 && root.style.minHeight === pageHold.held) root.style.minHeight = pageHold.previous;
+    releasePageHeight(view);
   };
   if (view.requestAnimationFrame) view.requestAnimationFrame(release);
   else release();
@@ -288,23 +281,28 @@ const stepText = (value, metric) => {
   return metric === 'share' ? formatNegative(value) : formatImpact(-roundImpact(value));
 };
 /* J-142: шаг подсвечен тоном негатива по силе: чем больше жалоб, доли или урона, тем краснее — как карта антидрайверов */
+/*
+  Шаг — пилюля тепловой карты антидрайверов (общие классы heatmap-cell / tone-pill, как в дайджесте): ячейка таблицы
+  без заливки, сила значения — свечением пилюли (--heat-strength), шкала — максимум списка. Похвала — зелёной пилюлей.
+  Доля и урон — значение крупно, число жалоб шага под ним тише: частотность видна в любом режиме; в «Частотности»
+  значение и есть число жалоб — второй строки нет. Пустой шаг — пилюля без тона с прочерком
+*/
 function bucketCell(bucket, positive, gap, heatMax, metric) {
   const value = stepValue(bucket, positive, gap, metric);
-  let cell;
   const main = stepText(value, metric);
-  /*
-    Доля и урон — значение крупно, число жалоб шага под ним тише: частотность видна в любом режиме. В «Частотности»
-    значение и есть число жалоб — второй строки нет. У похвалы доли и урона нет — прочерк и жалобы под ним
-  */
-  if (metric === 'count' || (main === null && !bucket.count)) cell = valueCell(main, 'problem-table__count problem-table__step');
-  else {
-    cell = element('td', 'problem-table__count problem-table__step problem-table__step--with-count');
-    const value = element('span', main === null ? 'problem-table__step-main problem-table__none' : 'problem-table__step-main', main ?? '');
-    if (main === null) value.append(emptyValue());
-    cell.append(value,
-      element('small', 'problem-table__step-sub', bucket.count ? complaints(bucket.count) : 'нет жалоб'));
-  }
-  if (value !== null && heatMax > 0) cell.style.setProperty('--step-heat', `${Math.round(Math.min(1, value / heatMax) * 100)}%`);
+  /* В «Доле» и «Уроне» вторая строка у каждого шага, и у пустого («нет жалоб»): пилюли строки одной высоты */
+  const withCount = metric !== 'count';
+  const cell = element('td', `problem-table__count problem-table__step${withCount ? ' problem-table__step--with-count' : ''}${main === null ? ' problem-table__none' : ''}`);
+  const strength = value !== null && heatMax > 0 ? Math.min(1, value / heatMax) : 0;
+  const tone = strength > 0 ? (positive ? ' heatmap-cell--good' : ' heatmap-cell--bad') : '';
+  const pill = element('span', `heatmap-cell tone-pill problem-step-pill${tone}`);
+  if (strength > 0) pill.style.setProperty('--heat-strength', `${Math.round(strength * 100)}%`);
+  const shown = element('span', 'problem-table__step-main');
+  if (main === null) shown.append(emptyValue());
+  else shown.append(main);
+  pill.append(shown);
+  if (withCount) pill.append(element('small', 'problem-table__step-sub', bucket.count ? complaints(bucket.count) : 'нет жалоб'));
+  cell.append(pill);
   return cell;
 }
 
@@ -436,6 +434,110 @@ function problemRow(item, { columns, selected, onSelect, base }) {
   return row;
 }
 
+/*
+  Колонка названий тянется ручкой у её правого края — как колонка названий тепловой карты антидрайверов (J-68):
+  длинная проблематика читается целиком. Ширина — от исходной (токен --problem-name-flat) до NAME_WIDTH_MAX и не шире
+  половины таблицы; между визитами — в localStorage как удобство зрителя. Стрелки — по 16 px, Home и двойной клик —
+  исходная ширина, End — наибольшая
+*/
+const NAME_WIDTH_KEY = 'voc.problems.nameWidth';
+export const NAME_WIDTH_MIN = 240;
+export const NAME_WIDTH_MAX = 480;
+const NAME_WIDTH_STEP = 16;
+const NAME_DRAG_THRESHOLD = 3;
+const nameWidth = { value: readNameWidth() };
+
+function readNameWidth() {
+  try {
+    const stored = Number(globalThis.localStorage?.getItem(NAME_WIDTH_KEY));
+    return Number.isFinite(stored) && stored > NAME_WIDTH_MIN ? Math.min(stored, NAME_WIDTH_MAX) : null;
+  } catch {
+    return null;
+  }
+}
+
+function storeNameWidth(width) {
+  try {
+    if (width === null) globalThis.localStorage?.removeItem(NAME_WIDTH_KEY);
+    else globalThis.localStorage?.setItem(NAME_WIDTH_KEY, String(width));
+  } catch {
+    /* Хранилище недоступно (приватное окно) — ширина живёт до перезагрузки */
+  }
+}
+
+/** Ширина колонки названий в пределах: не уже исходной, не больше максимума и половины видимой таблицы. */
+export function clampNameWidth(width, frameWidth = 0) {
+  const ceiling = Math.max(NAME_WIDTH_MIN, Math.min(NAME_WIDTH_MAX, frameWidth > 0 ? Math.floor(frameWidth / 2) : NAME_WIDTH_MAX));
+  return Math.round(Math.min(ceiling, Math.max(NAME_WIDTH_MIN, width)));
+}
+
+function applyNameWidth(table, resizer, width, frameWidth) {
+  const shown = clampNameWidth(width ?? NAME_WIDTH_MIN, frameWidth);
+  table.style.setProperty('--problem-name-width', shown === NAME_WIDTH_MIN ? '' : `${shown}px`);
+  resizer.setAttribute('aria-valuenow', String(shown));
+  resizer.setAttribute('aria-valuemax', String(clampNameWidth(Infinity, frameWidth)));
+  resizer.setAttribute('aria-valuetext', `${shown} пикселей`);
+  return shown;
+}
+
+function nameResizer(table) {
+  const resizer = element('div', 'problem-table__resizer');
+  resizer.setAttribute('role', 'separator');
+  resizer.setAttribute('aria-orientation', 'vertical');
+  resizer.setAttribute('aria-label', 'Ширина колонки названий');
+  resizer.setAttribute('aria-valuemin', String(NAME_WIDTH_MIN));
+  resizer.setAttribute('tabindex', '0');
+  resizer.title = 'Потяните, чтобы увидеть названия длиннее. Двойной клик — исходная ширина';
+  const frameWidth = () => table.parentElement?.getBoundingClientRect?.().width ?? 0;
+  let shown = NAME_WIDTH_MIN;
+  const set = (width) => {
+    nameWidth.value = width === null ? null : clampNameWidth(width, frameWidth());
+    shown = applyNameWidth(table, resizer, nameWidth.value, frameWidth());
+  };
+  /* Клик и выбор строки под ручкой не срабатывают: ручка — не часть строки */
+  resizer.addEventListener('click', (event) => event.stopPropagation());
+  resizer.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const startWidth = shown;
+    resizer.setPointerCapture?.(event.pointerId);
+    resizer.dataset.dragging = '';
+    let moved = false;
+    const move = (moveEvent) => {
+      const shift = moveEvent.clientX - startX;
+      if (!moved && Math.abs(shift) < NAME_DRAG_THRESHOLD) return;
+      moved = true;
+      set(startWidth + shift);
+    };
+    const stop = () => {
+      delete resizer.dataset.dragging;
+      resizer.removeEventListener('pointermove', move);
+      resizer.removeEventListener('lostpointercapture', stop);
+      if (resizer.hasPointerCapture?.(event.pointerId)) resizer.releasePointerCapture(event.pointerId);
+      if (moved) storeNameWidth(nameWidth.value);
+    };
+    resizer.addEventListener('pointermove', move);
+    resizer.addEventListener('lostpointercapture', stop);
+  });
+  resizer.addEventListener('dblclick', () => {
+    set(null);
+    storeNameWidth(null);
+  });
+  resizer.addEventListener('keydown', (event) => {
+    const next = { ArrowRight: shown + NAME_WIDTH_STEP, ArrowLeft: shown - NAME_WIDTH_STEP, Home: null, End: NAME_WIDTH_MAX }[event.key];
+    if (next === undefined) return;
+    event.preventDefault();
+    set(next);
+    storeNameWidth(nameWidth.value);
+  });
+  /* Ширина таблицы известна после вставки: применяется в следующем кадре, сохранённая — и сразу */
+  shown = applyNameWidth(table, resizer, nameWidth.value, 0);
+  globalThis.requestAnimationFrame?.(() => { shown = applyNameWidth(table, resizer, nameWidth.value, frameWidth()); });
+  return resizer;
+}
+
 function tableHead(context, columns) {
   const head = element('thead');
   const row = element('tr');
@@ -459,7 +561,12 @@ function tableHead(context, columns) {
   parts.append(part('', 2, 'problem-table__part--lead'), part('За период', summarySpan - 2),
     part(`Динамика · ${DYNAMICS[columns.metric].label.toLowerCase()} ${selectedScale === 'month' ? 'по месяцам' : 'по неделям'}`, columns.buckets.length, 'problem-table__part--steps'));
   head.append(parts);
-  row.append(th(nameHead, nameTitle), th(groupHead, groupTitle));
+  const nameCell = th(nameHead, nameTitle);
+  nameCell.append(columns.resizer);
+  /* Шапка группы — по левому краю, над значениями: значения группы стоят у названий */
+  const groupCell = th(groupHead, groupTitle);
+  groupCell.classList.add('problem-table__group-head');
+  row.append(nameCell, groupCell);
   /* J-139: «было» — за какой период. J-195: период — в подсказке шапки и «было», а не второй строкой шапки */
   const was = columns.previousPeriod ? `было — за ${formatInterval(columns.previousPeriod)}` : null;
   row.append(th('Жалоб', `Жалоб за период${was ? `; ${was}` : ''}`),
@@ -477,6 +584,8 @@ function tableHead(context, columns) {
   if (columns.analyst) row.append(peakHead);
   columns.buckets.forEach((bucket, index) => {
     const cell = th(headCaption(bucket), `${DYNAMICS[columns.metric].of} за ${bucketCaption(bucket)}`);
+    /* Шапка шага — по ширине пилюли под ней: те же поля 1 px, подпись по центру */
+    cell.classList.add('problem-table__step');
     if (index === 0) cell.classList.add('problem-table__step--first');
     row.append(cell);
   });
@@ -584,11 +693,8 @@ function skeleton() {
   return content;
 }
 
-/* Пустой разрез — тоже без проявления: переключение туда и обратно меняет только содержимое (data-steady) */
 function unavailable(title, detail) {
-  const panel = statusPanel('verbatim-unavailable', { title, detail });
-  panel.setAttribute('data-steady', '');
-  return panel;
+  return statusPanel('verbatim-unavailable', { title, detail });
 }
 
 /* Тексты прямой речи грузятся отдельно: до них — скелетон, при ошибке — состояние ошибки */
@@ -662,6 +768,7 @@ function problemTable(context, state, { cards, ordered, columns, base }) {
   keepSelection();
   const table = element('table', 'problem-table');
   const body = element('tbody');
+  columns.resizer = nameResizer(table);
   table.append(tableHead(context, columns), body);
   /* Аудит 13.11: таблица шире видимой — общая прокрутка с затуханием края (hScroll), колонка не режется посреди слова */
   const scroll = hScroll(table, { className: 'problem-table-scroll', label: 'Таблица топа проблем' });
@@ -814,11 +921,6 @@ export function renderVerbatimCards(block, context) {
   const column = element('div', 'verbatim-problems__list');
   column.append(toolbar, scroll, ...(columns.os ? [versionLegend()] : []), buttons);
   const content = element('div', 'verbatim-problems');
-  /*
-    Переключатели блока перестраивают его целиком, но проявление (D-56) здесь не нужно: поиск, табы и кнопки мигали
-    бы при каждом клике, а таблица и лента — с пустого кадра. Меняются только данные; выбор показывает рамка таба
-  */
-  content.setAttribute('data-steady', '');
   content.append(column, feedSlot, feedToggle(content, feedSlot));
   /* J-147: метки «Сделано с AI» у «Топ проблем» пока нет — по просьбе заказчика; лента отзывов начинается от заголовка */
   head({ controls: [driverChip(context)].filter(Boolean) });

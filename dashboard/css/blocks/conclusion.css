@@ -105,12 +105,6 @@
   white-space: nowrap;
 }
 
-/* Источник вывода — служебная подпись, тише текста вывода (R-46) */
-.summary-note--source {
-  color: var(--color-text-tertiary);
-  font: var(--type-caption);
-}
-
 .summary-list--skeleton .summary-row {
   align-items: center;
 }
@@ -156,10 +150,4 @@
 .summary-tooltip__title {
   color: var(--color-text-strong);
   font: var(--type-caption-strong);
-}
-
-.summary-unavailable {
-  display: grid;
-  min-height: calc(var(--space-8) * 2 + var(--space-2));
-  align-content: center;
 }

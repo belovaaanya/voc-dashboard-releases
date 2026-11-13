@@ -18,6 +18,8 @@ import { MINIMUM_RATINGS } from './sufficiency.js';
 import { damageOf, negativeBase, negativeShare } from './verbatim.js';
 import { buildTimeSeries } from './timeseries.js';
 
+/* План руководства по стабильности: урон «Сбоев / тех. проблем» не сильнее −0,055 пункта VOC в месяц. Может меняться */
+export const STABILITY_PLAN = -0.055;
 /* Перекрёстная группа ДКО «Сбои / тех. проблемы» — урон стабильности (`categorygroup_cross_name`) */
 const STABILITY_CROSS = 'сбои / тех. проблемы';
 /* Динамика — полгода, таблицы — квартал до выбранного месяца включительно */

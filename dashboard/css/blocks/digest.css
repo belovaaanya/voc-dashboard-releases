@@ -118,6 +118,8 @@
   (под числом и база) слипаются в одну
 */
 .digest-summary__wrap {
+  /* Заголовок страницы → крупное число — уровень секции, а не 12 между заголовком и телом карточки */
+  margin-top: var(--space-4);
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
@@ -170,8 +172,8 @@
 }
 
 /* Подзаголовок внутри карточки — слабее заголовка карточки (14/300): подпись 12/500 (аудит 13.11) */
-.digest-segment__note,
-.digest-headline {
+.digest-headline,
+.digest-subhead {
   margin: 0;
   color: var(--color-text-strong);
   font: var(--type-caption-strong);
@@ -192,21 +194,79 @@
   flex: 1 1 auto;
 }
 
-.digest-stability .digest-bars__bar {
-  height: auto;
-  min-height: var(--space-1);
-  flex: 0 1 calc(var(--space-10) * 4 * var(--bar, 0));
-}
-
+/*
+  Столбики стабильности стоят на дорожке (`track`), которая забирает остаток высоты: высота столбика — доля дорожки
+  (`--bar`), пунктир плана — на высоте `--plan` той же шкалы; соседние отрезки пунктира сливаются в одну линию-порог
+*/
 .digest-stability .digest-bars__item {
   justify-content: flex-end;
   align-self: stretch;
+}
+
+.digest-bars__track {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  justify-content: center;
+  align-items: flex-end;
+  align-self: stretch;
+  min-height: calc(var(--space-10) * 2);
+}
+
+.digest-stability .digest-bars__bar {
+  height: calc(100% * var(--bar, 0));
+}
+
+.digest-bars__plan {
+  position: absolute;
+  inset-inline: calc(var(--space-2) / -2);
+  bottom: calc(100% * var(--plan, 0));
+  border-top: var(--hairline) dashed var(--color-negative);
+}
+
+/* Столбик сильнее плана — тоном «ниже плана»; число под ним дублирует цвет */
+.digest-bars__item--below .digest-bars__bar {
+  background: linear-gradient(var(--color-negative), transparent);
+}
+
+.digest-bars__item--below .digest-bars__value {
+  color: var(--color-negative);
 }
 
 /* Антидрайверы ДКО — одна таблица: шапка месяцев сверху, группы — строками-подзаголовками */
 .digest-dko {
   display: flex;
   flex-direction: column;
+}
+
+/*
+  Плотная таблица ДКО (неделя 16–22.11): колонки месяцев шириной с пилюлю стоят вплотную справа от названий — зазор
+  4 px, как у тепловой карты главной; строки без вертикальных полей, между ними 2 px. Остаток ширины — у названий
+*/
+.digest-dko .digest-table {
+  border-spacing: var(--space-1) calc(var(--space-1) / 2);
+}
+
+.digest-dko .digest-table col:not(.digest-table__name-col) {
+  width: calc(var(--space-10) * 1.75);
+}
+
+.digest-dko .digest-table__name-col {
+  width: auto;
+}
+
+.digest-dko .digest-table td,
+.digest-dko .digest-table tbody tr:not(.digest-table__group) th {
+  padding-block: 0;
+}
+
+.digest-dko .digest-table thead th:not(.digest-table__name) {
+  text-align: center;
+}
+
+.digest-dko .digest-pill.heatmap-cell {
+  width: 100%;
+  padding-inline: var(--space-2);
 }
 
 .digest-table {
@@ -221,7 +281,6 @@
   padding: var(--space-1) 0;
   color: var(--color-text-tertiary);
   font: var(--type-caption);
-  font-variant-numeric: tabular-nums;
   text-align: end;
 }
 
@@ -290,13 +349,6 @@
   color: var(--color-negative);
 }
 
-/* Подзаголовок внутри карточки — слабее заголовка карточки (14/300) */
-.digest-subhead {
-  margin: 0;
-  color: var(--color-text-strong);
-  font: var(--type-caption-strong);
-}
-
 /*
   Пилюля тепловой карты — овальный чип по числу, а не полоса во всю колонку месяца: высота 32, ширина от числа
   с полем по бокам; стоит у правого края колонки, под подписью месяца
@@ -346,7 +398,6 @@
 .digest-bars__value {
   color: var(--color-text-secondary);
   font: var(--type-caption);
-  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
@@ -384,7 +435,8 @@
 .digest-hbars {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  /* Строки триггеров — через 12: двухстрочное название не сливается со следующим */
+  gap: var(--space-3);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -444,7 +496,6 @@
 .digest-hbars__value {
   color: var(--color-text-secondary);
   font: var(--type-caption);
-  font-variant-numeric: tabular-nums;
   text-align: end;
   white-space: nowrap;
 }
@@ -489,12 +540,14 @@
   font: var(--type-caption);
 }
 
+/* Левая колонка: портрет сверху, VOC с оценками — у низа плитки; между ними — растущий зазор */
 .role-card__lead {
   grid-column: 1;
   grid-row: 2;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
+  justify-content: space-between;
+  gap: var(--space-6);
   min-width: 0;
 }
 
@@ -535,12 +588,12 @@
   white-space: nowrap;
 }
 
-/* J-169: портрет роли — круг 40 px в слоте метки шапки; до портретов от заказчика — тихая заглушка с иконкой */
+/* Портрет роли — круг 120 px в левой колонке плитки над VOC (раньше 40 px в шапке, J-169); без портрета — тихая заглушка с иконкой */
 .role-card__avatar {
   display: grid;
   place-items: center;
   flex: none;
-  width: var(--space-10);
+  width: calc(var(--space-10) * 3);
   aspect-ratio: 1;
   overflow: hidden;
   border-radius: var(--radius-pill);
@@ -563,8 +616,8 @@
 }
 
 .role-card__avatar-icon {
-  width: var(--space-5);
-  height: var(--space-5);
+  width: var(--space-10);
+  height: var(--space-10);
 }
 
 /* J-194: топ-3 проблем — таблица; число жалоб и дельта — столбцами вправо табличными цифрами */
@@ -574,6 +627,7 @@
   border-collapse: collapse;
   color: var(--color-text-strong);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 /* Роли текста — как в «Топ проблем» главной: заголовки колонок — подпись второстепенным цветом (роль оси — только у графиков), названия и числа — подпись основным */
@@ -592,7 +646,6 @@
 
 .role-card__problems .role-card__number {
   padding-inline-start: var(--space-4);
-  font-variant-numeric: tabular-nums;
   text-align: end;
   white-space: nowrap;
 }

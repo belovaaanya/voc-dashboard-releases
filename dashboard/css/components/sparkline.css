@@ -119,7 +119,6 @@
   transform: translate(-50%, calc(-100% - var(--space-2)));
   color: var(--color-text-secondary);
   font: var(--type-axis);
-  font-variant-numeric: tabular-nums;
   white-space: nowrap;
   pointer-events: none;
 }
@@ -162,7 +161,6 @@
   transform: translateX(-50%);
   color: var(--color-text-tertiary);
   font: var(--type-axis);
-  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 

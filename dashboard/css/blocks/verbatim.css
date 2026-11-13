@@ -99,13 +99,6 @@
 
 
 
-/* Фокус — общее кольцо каркаса, отличное от рамки выбора: выбранная строка с фокусом видна (WCAG 2.4.7) */
-.problem-table__name:focus-visible,
-.verbatim-feed__item:focus-visible {
-  outline: var(--focus-ring) solid var(--color-text-strong);
-  outline-offset: 2px;
-}
-
 
 
 /* Лента комментариев выбранной проблемы: свежие сверху, полный текст без обрезки */
@@ -501,9 +494,10 @@
   position: sticky;
   inset-inline-start: 0;
   z-index: 1;
-  width: var(--problem-name-flat);
-  min-width: var(--problem-name-flat);
-  max-width: var(--problem-name-flat);
+  /* Ширина — ручкой у правого края шапки (--problem-name-width из блока), по умолчанию — токен */
+  width: var(--problem-name-width, var(--problem-name-flat));
+  min-width: var(--problem-name-width, var(--problem-name-flat));
+  max-width: var(--problem-name-width, var(--problem-name-flat));
   background: var(--color-surface);
   text-align: start;
   white-space: normal;
@@ -549,7 +543,6 @@
 
 .problem-table__count {
   color: var(--color-text-strong);
-  font-variant-numeric: tabular-nums;
 }
 
 .problem-table__text span {
@@ -605,9 +598,50 @@
   max-width: 160px;
 }
 
-/* J-139: группа — текст, по левому краю: короткие и обрезанные названия стоят в одну линию */
-.problem-table .problem-table__group-name {
+/* J-139: группа — текст, по левому краю: короткие и обрезанные названия стоят в одну линию; шапка — над ними */
+.problem-table .problem-table__group-name,
+.problem-table .problem-table__group-head {
   text-align: start;
+}
+
+/* Текст строк — с тем же межбуквенным, что у таблиц «Ролей» и дайджеста (--tracking-caption) */
+.problem-table__name-text,
+.problem-table__group-name span {
+  letter-spacing: var(--tracking-caption);
+}
+
+/* Ручка ширины колонки названий — у правого края шапки, как у тепловой карты (J-68): видна при наведении и фокусе */
+.problem-table thead tr:not(.problem-table__parts) th:first-child {
+  overflow: visible;
+}
+
+.problem-table__resizer {
+  position: absolute;
+  z-index: 2;
+  inset-block: 0;
+  inset-inline-end: calc(-1 * var(--space-2));
+  width: var(--space-4);
+  border-radius: var(--radius-pill);
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.problem-table__resizer::after {
+  content: '';
+  position: absolute;
+  inset-block: var(--space-2);
+  inset-inline-start: calc(50% - var(--hairline));
+  width: calc(2 * var(--hairline));
+  border-radius: var(--radius-pill);
+  background: var(--color-border-strong);
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--ease-standard);
+}
+
+.problem-table__resizer:hover::after,
+.problem-table__resizer:focus-visible::after,
+.problem-table__resizer[data-dragging]::after {
+  opacity: 1;
 }
 
 /* J-195: легенда круга частой версии — под таблицей, тише строк */
@@ -687,14 +721,29 @@
   padding-inline-start: var(--space-3);
 }
 
-/* Шаг подсвечен тоном негатива по силе значения (--step-heat из блока), как плитки антидрайверов */
+/*
+  Шаг — пилюля тепловой карты (heatmap-cell / tone-pill антидрайверов), а не заливка всей ячейки: ячейка без фона,
+  между пилюлями 2 px — поля ячеек, как в карте; пилюля во всю ширину колонки шага
+*/
 .problem-table .problem-table__step {
-  background: color-mix(in srgb, var(--color-negative) calc(var(--step-heat, 0%) * 0.28), transparent);
-  background-clip: padding-box;
+  /* По 1 px с каждой стороны — 2 px между пилюлями, как в карте антидрайверов */
+  padding-inline: calc(var(--space-1) / 4);
+  text-align: center;
 }
 
-.problem-table__row.is-selected .problem-table__step {
-  background: color-mix(in srgb, var(--color-negative) calc(var(--step-heat, 0%) * 0.28), var(--row-selected));
+.problem-table .problem-table__step--first {
+  padding-inline-start: var(--space-3);
+}
+
+.problem-step-pill.heatmap-cell {
+  width: 100%;
+  min-width: var(--space-10);
+  padding: var(--space-1) var(--space-2);
+  white-space: nowrap;
+}
+
+.problem-table thead .problem-table__step {
+  text-align: center;
 }
 
 /* Шаг доли и урона — значение крупно, число жалоб строкой ниже, тише */

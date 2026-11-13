@@ -7,8 +7,8 @@
 import { EMPTY } from '../shell/block.js';
 import { emptyValue } from '../components/empty-value.js';
 import { element, svgNode } from '../ui/dom.js';
-import { formatCount, formatShare } from '../core/format.js';
-import { surveyConversion } from '../core/conversion.js';
+import { formatCount, formatDayRange, formatShare } from '../core/format.js';
+import { isWholeMonth, surveyConversion } from '../core/conversion.js';
 
 export const CONVERSION_TITLE = 'Конверсия опроса';
 
@@ -73,7 +73,8 @@ function beamNode(steps) {
   const svg = svgNode('svg', 'conversion__beam', { viewBox: `0 0 ${VIEW.width} ${VIEW.height}`, preserveAspectRatio: 'none', 'aria-hidden': 'true', focusable: 'false' });
   const defs = svgNode('defs');
   const gradient = svgNode('linearGradient', null, { id: `${id}-flow`, x1: 0, y1: 0, x2: 1, y2: 0 });
-  for (const [offset, tone, opacity] of [[0, 'cool', 0.15], [0.35, 'cool', 0.45], [0.7, 'core', 0.85], [1, 'warm', 1]]) {
+  /* Нейтральный серый луч, как в тёмной теме стратегии: от тусклого края аудитории к светлому хвосту причины */
+  for (const [offset, tone, opacity] of [[0, 'dim', 0.2], [0.4, 'mid', 0.45], [0.75, 'core', 0.8], [1, 'core', 1]]) {
     gradient.append(svgNode('stop', `conversion__stop conversion__stop--${tone}`, { offset, 'stop-opacity': opacity }));
   }
   defs.append(gradient);
@@ -108,9 +109,15 @@ function stepNode({ key, label, short, count, share }) {
   return item;
 }
 
-export function renderConversion(block, { slice }) {
+/* Подпись: за целый месяц — только база долей; за другой период — ещё и сам период, иначе неясно, о чём ступени */
+export function conversionNote(period, rows) {
+  if (!period?.from || isWholeMonth(period, rows)) return 'от оценивших';
+  return `за ${formatDayRange(period.from, period.to)}, от оценивших`;
+}
+
+export function renderConversion(block, { slice, period, rows }) {
   block.setTitle?.(CONVERSION_TITLE);
-  block.setHead({ note: 'от оценивших' });
+  block.setHead({ note: conversionNote(period, rows) });
   if (slice.length === 0) {
     block.setState(EMPTY);
     return;

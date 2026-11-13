@@ -26,7 +26,7 @@
 }
 
 /* Нейтральное без своего серого: второй серый текста. Бейдж «В плане» и рост числа оценок в шапке — не четвёртый серый
-   карточки. Не `tone--muted`: тот ниже — цвет рамки, и одноимённое правило перебивало это */
+   карточки */
 .tone--quiet {
   --tone: var(--color-text-secondary);
 }
@@ -80,10 +80,6 @@
 
 .tone--heat-good {
   --tone: var(--color-positive);
-}
-
-.tone--muted {
-  --tone: var(--color-border-strong);
 }
 
 .tone--plan {
@@ -181,13 +177,6 @@
   height: var(--space-6);
   font: var(--type-caption-strong);
   white-space: nowrap;
-}
-
-/* J-29: заливка тега следует фактическому числу строк, без пустой второй строки. */
-.verbatim-card__head > .tag {
-  max-width: 100%;
-  white-space: normal;
-  overflow-wrap: anywhere;
 }
 
 /*

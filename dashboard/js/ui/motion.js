@@ -1,8 +1,6 @@
 /*
-  Движение подтверждает действие пользователя и смысла не несёт (D-56): выбор
-  таба переезжает рамкой, перестроенное табом содержимое блока проявляется.
-  Смена состояния дашборда не движется: данные встают на место прежних.
-  При prefers-reduced-motion и без Web Animations API ничего не анимируется.
+  Движение подтверждает действие пользователя и смысла не несёт (D-56): выбор таба переезжает рамкой,
+  данные — и дашборда, и внутри блока — встают на место без проявления. При prefers-reduced-motion и без Web Animations API ничего не анимируется
 */
 
 const REDUCED = '(prefers-reduced-motion: reduce)';
@@ -38,31 +36,4 @@ export function slideSelection(fromRect, tab) {
     [{ left: `${left}px`, right: `${right}px` }, { left: '0px', right: '0px' }],
     { ...timing('--motion-base'), pseudoElement: '::before' },
   );
-}
-
-/** Перестроенное содержимое блока проявляется. */
-export function reveal(nodes) {
-  if (!motionAllowed()) return;
-  const options = timing('--motion-base');
-  for (const node of nodes) {
-    node.animate?.([{ opacity: 0, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }], options);
-  }
-}
-
-/**
- * Проявляет перестроенное содержимое вокруг `keep`: нажатый переключатель не гаснет под указателем.
- * Узел с `data-steady` — управление блока (поиск, соседние переключатели, кнопки), а не содержимое: при перестройке
- * оно стоит на месте, иначе каждый клик по табу заставлял мигать все соседние контролы
- */
-export function revealAround(container, keep) {
-  const rebuilt = [];
-  const walk = (node) => {
-    for (const child of node.children) {
-      if (child === keep || child.hasAttribute?.('data-steady')) continue;
-      if (keep && child.contains(keep)) walk(child);
-      else rebuilt.push(child);
-    }
-  };
-  walk(container);
-  reveal(rebuilt);
 }

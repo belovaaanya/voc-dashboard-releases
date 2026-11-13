@@ -56,11 +56,14 @@ function legendNode(days) {
   return legend;
 }
 
-/* За целый месяц на этом месте — «Конверсия опроса» (решение пользователя); за другой период — дни плана */
+/*
+  На главной на этом месте всегда «Конверсия опроса» на две колонки (решение пользователя); в разделе «Для аналитика» —
+  конверсия за целый месяц, за другой период — дни плана
+*/
 export function renderPlanDays(block, context) {
-  const wholeMonth = isWholeMonth(context.period, context.rows);
-  block.element?.classList.toggle('card--conversion', wholeMonth);
-  if (wholeMonth) {
+  const conversion = !context.analyst || isWholeMonth(context.period, context.rows);
+  block.element?.classList.toggle('card--conversion', conversion);
+  if (conversion) {
     renderConversion(block, context);
     return;
   }
