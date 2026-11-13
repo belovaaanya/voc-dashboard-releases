@@ -1,5 +1,10 @@
 /* ── Распределение оценок (P0 №8, D-40, V-22, V-31) ─────────────── */
 
+/* Только в разделе «Для аналитика»: на главной блок прячет карточку, атрибут hidden сильнее display карточки */
+.card--distribution[hidden] {
+  display: none;
+}
+
 .distribution {
   display: flex;
   flex-direction: column;
@@ -9,7 +14,7 @@
 .distribution-row {
   display: grid;
   /* J-130: оценка, полоса, число, доля. J-137: колонки изменения доли нет. J-145: ширина числа и доли общая для строк — колонки ровные */
-  grid-template-columns: var(--space-6) minmax(0, 1fr) var(--distribution-count-width) var(--distribution-percent-width);
+  grid-template-columns: var(--space-6) minmax(0, 1fr) var(--distribution-percent-width) var(--distribution-count-width);
   align-items: center;
   gap: var(--space-2);
   min-height: var(--space-4);
@@ -26,15 +31,17 @@
   outline: none;
 }
 
-.distribution-row__mark,
-.distribution-row__share {
+.distribution-row__mark {
   font: var(--type-caption);
   white-space: nowrap;
 }
 
+/* Число оценок — та же роль, что счётчик легенды «Дней относительно плана»: caption-strong, белый */
 .distribution-row__share {
-  color: var(--color-text-secondary);
+  color: var(--color-text-strong);
+  font: var(--type-caption-strong);
   text-align: end;
+  white-space: nowrap;
 }
 
 .distribution-row__track {
@@ -73,10 +80,11 @@
   justify-content: space-between;
 }
 
-/* J-137: доля в скобках — тише числа оценок */
+/* J-137: доля тише числа оценок; стоит перед числом, без скобок, по правому краю колонки */
 .distribution-row__percent {
   color: var(--color-text-tertiary);
   font: var(--type-caption);
+  text-align: end;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }

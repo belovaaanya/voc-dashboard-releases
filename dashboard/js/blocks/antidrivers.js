@@ -11,6 +11,7 @@ import {
   highlightModes,
   isBlankCell,
   frequentElements,
+  mergeVersionHeatmaps,
   offersVersions,
   splitVersionKey,
   versionRowKey,
@@ -21,7 +22,7 @@ import { normalizeDriver } from '../state/driver-pick.js';
 import { legendItem, legendList } from '../components/legend.js';
 import { hoverTooltip } from '../components/hover-tooltip.js';
 import { icon } from '../ui/icons.js';
-import { DIMENSIONS, osName } from '../core/dimensions.js';
+import { DIMENSIONS, OS_ANDROID, OS_IOS, osName } from '../core/dimensions.js';
 import { element, withOverflowTitle } from '../ui/dom.js';
 import { bindShortWords, formatCount, formatDate, formatDelta, formatInterval, formatImpact, formatNumber, formatShare, formatVoc, plural } from '../core/format.js';
 import { focusChip } from '../components/focus-chip.js';
@@ -31,6 +32,8 @@ import { planFor } from '../core/plan.js';
 import { roundDelta, roundImpact, roundShare } from '../core/round.js';
 import { segmented } from '../components/segmented.js';
 import { pagingButtons } from '../components/paging.js';
+import { hScroll, scrollEdges } from '../components/h-scroll.js';
+import { emptyValue } from '../components/empty-value.js';
 import { periodScaleMemory, scaleTabs } from '../components/scale-tabs.js';
 import { statusPanel } from '../components/status-panel.js';
 import { recommendedScale, SCALE_OPTIONS } from '../core/timeseries.js';
@@ -41,6 +44,21 @@ const DIMENSION_KEYS = ['trigger', 'product'];
 
 let selectedAntidriverDimension = DIMENSION_KEYS[0];
 let selectedHeatmapHighlight = HIGHLIGHT_PLAN;
+/*
+  Режим цвета карты: «Урон» и «Влияние» — только в разделе «Для аналитика»; на главной карта всегда по «Плану»,
+  а выбор аналитика остаётся в памяти до возврата в раздел
+*/
+const highlightOf = (context) => (context.analyst ? selectedHeatmapHighlight : HIGHLIGHT_PLAN);
+/* ОС разреза «Версии»: по умолчанию обе платформы одним списком; выбор живёт, пока открыта страница */
+const VERSION_OS_BOTH = 'both';
+let selectedVersionOs = VERSION_OS_BOTH;
+const VERSION_OS_OPTIONS = [
+  { value: VERSION_OS_BOTH, label: 'Обе', title: 'Версии Android и iOS одним списком' },
+  { value: OS_ANDROID, label: 'Android' },
+  { value: OS_IOS, label: 'iOS' },
+];
+/* Короткая метка платформы у номера версии, когда в списке обе ОС */
+const OS_TAGS = { iOS: 'iOS', Android: 'And' };
 /* Ручной масштаб — для периода блока, в котором его выбрали; выбранный день его не сбрасывает */
 const heatmapScales = periodScaleMemory();
 function heatmapScale(blockPeriod, viewPeriod) {
@@ -182,11 +200,14 @@ function titleResizer(view, frame, onResize) {
   return resizer;
 }
 
-/* J-68: «справа есть ещё колонки» — правый край плиток затухает; у конца прокрутки обрыва нет */
+/*
+  J-68: «справа есть ещё колонки» — правый край плиток затухает; у конца прокрутки обрыва нет. Края — общим правилом
+  `hScroll` (`scrollEdges`); пересчёт и при смене ширины колонки названий: тогда меняется таблица, а не сама прокрутка
+*/
 export function markOverflow(scroll) {
-  const more = scroll.scrollLeft + scroll.clientWidth < scroll.scrollWidth - 1;
-  if (more) scroll.dataset.moreEnd = '';
-  else delete scroll.dataset.moreEnd;
+  const { start, end } = scrollEdges(scroll);
+  scroll.dataset.fadeStart = String(start);
+  scroll.dataset.fadeEnd = String(end);
 }
 
 /* Подсветка не сбрасывает раскрытие; новый срез или разрез начинается с десяти строк (J-11, J-202: порция 20 из J-193 отменена). */
@@ -238,6 +259,7 @@ function controls(block, context, scale) {
 /* Разрез остаётся и у пустого результата: иначе из пустого разреза не вернуться */
 function withCut(node, cutTabs) {
   const wrap = element('div', 'antidriver-empty');
+  wrap.setAttribute('data-steady', '');
   const toolbar = element('div', 'heatmap-toolbar');
   toolbar.append(cutTabs);
   wrap.append(toolbar, node);
@@ -245,8 +267,8 @@ function withCut(node, cutTabs) {
 }
 
 /* Отклонение режима подсветки — строкой подсказки, а не в ячейке: в ячейке только VOC (R-18) */
-function highlightCaption(highlight, cell) {
-  if (selectedHeatmapHighlight === HIGHLIGHT_PLAN) {
+function highlightCaption(mode, highlight, cell) {
+  if (mode === HIGHLIGHT_PLAN) {
     if (highlight.value === null) return { line: 'Плана нет', spoken: 'плана нет' };
     const shown = formatDelta(roundDelta(highlight.value));
     const distance = formatVoc(Math.abs(highlight.value));
@@ -254,11 +276,11 @@ function highlightCaption(highlight, cell) {
     if (highlight.value > 0) return { line: `Дельта к плану ${shown}`, spoken: `выше плана на ${distance}` };
     return { line: 'В плане', spoken: 'в плане' };
   }
-  if (selectedHeatmapHighlight === HIGHLIGHT_DAMAGE && highlight.value !== null) {
+  if (mode === HIGHLIGHT_DAMAGE && highlight.value !== null) {
     const shown = formatImpact(highlight.value);
     return { line: `Урон ${shown}`, spoken: `урон ${shown}` };
   }
-  if (selectedHeatmapHighlight === HIGHLIGHT_INFLUENCE) {
+  if (mode === HIGHLIGHT_INFLUENCE) {
     if (highlight.value === null) return { line: 'Влияние не считается: все оценки интервала с элементом', spoken: 'влияние не считается' };
     const shown = formatImpact(highlight.value);
     const without = `без элемента VOC ${formatVoc(cell.vocWithout)}`;
@@ -282,9 +304,9 @@ function showTooltip(tooltip, view, cell, lines) {
 
 const counted = (count, forms) => `${formatCount(count)} ${plural(count, forms)}`;
 
-function elementCellFacts(cell, highlight) {
+function elementCellFacts(mode, cell, highlight) {
   const value = formatVoc(cell.voc);
-  const caption = cell.voc === null ? { line: null, spoken: null } : highlightCaption(highlight, cell);
+  const caption = cell.voc === null ? { line: null, spoken: null } : highlightCaption(mode, highlight, cell);
   /* Оценка с упоминанием элемента считается один раз: группа дедуплицирована по voc_ccode (D-09) */
   const ratings = `${counted(cell.mentions, ['оценка', 'оценки', 'оценок'])} с упоминанием`;
   return { value, lines: [`VOC ${value}`, ratings, caption.line], spoken: [`VOC ${value}`, ratings, caption.spoken] };
@@ -320,13 +342,16 @@ function togglePick(context, pick, node) {
 function heatmapCell(context, heatmap, row, column, cell, highlight, tooltip, view) {
   const label = rowLabel(context, row.key);
   const interval = formatInterval(column);
-  const facts = elementCellFacts(cell, highlight);
+  const facts = elementCellFacts(highlightOf(context), cell, highlight);
   const tone = isBlankCell(heatmap, cell) ? 'empty' : highlight.tone;
   const node = element('button', tone ? `heatmap-cell tone-pill heatmap-cell--${tone}` : 'heatmap-cell tone-pill');
   node.type = 'button';
   if (highlight.muted) node.classList.add('heatmap-cell--muted');
   if (highlight.tone) node.style.setProperty('--heat-strength', `${Math.round(highlight.strength * 100)}%`);
-  node.append(element('span', 'heatmap-cell__value', facts.value));
+  /* Интервал без оценок — общий прочерк «нет значения» (emptyValue); имя ячейки для screen reader — у кнопки */
+  const value = element('span', 'heatmap-cell__value', cell.voc === null ? null : facts.value);
+  if (cell.voc === null) value.append(emptyValue());
+  node.append(value);
   const pick = pickOf(row.key, column);
   const picked = samePick(context.state.driver, pick);
   node.setAttribute('aria-pressed', String(picked));
@@ -382,9 +407,9 @@ function intervalOf(columns) {
 }
 
 /* J-188: легенды «Влияния» и «Урона» говорят, что значит цвет, а не как он посчитан: расчёт — в подсказке ячейки и в «Как считается» */
-function legendFor(columnPlans, columns) {
+function legendFor(mode, columnPlans, columns) {
   const interval = intervalOf(columns);
-  if (selectedHeatmapHighlight === HIGHLIGHT_INFLUENCE) {
+  if (mode === HIGHLIGHT_INFLUENCE) {
     /* J-144: тянет вверх — драйвер, вниз — антидрайвер; «около нуля» не подписывается — серая ячейка понятна и так */
     return heatmapLegend(
       [legendItem('Драйвер', 'heat-good'), legendItem('Антидрайвер', 'heat-bad')],
@@ -392,14 +417,14 @@ function legendFor(columnPlans, columns) {
     'Влияние',
     );
   }
-  if (selectedHeatmapHighlight === HIGHLIGHT_DAMAGE) {
+  if (mode === HIGHLIGHT_DAMAGE) {
     return heatmapLegend(
       [legendItem('Урон', 'heat-bad')],
       `Сколько VOC ${interval} теряет из-за элемента. Стабильнее «Влияния», но копится и у частых элементов с оценками около среднего`,
     'Урон',
     );
   }
-  if (selectedHeatmapHighlight !== HIGHLIGHT_PLAN) return null;
+  if (mode !== HIGHLIGHT_PLAN) return null;
   const plans = columnPlans.filter(Boolean);
   if (!plans.length) return heatmapLegend([], 'Для среза нет планового коридора — подсветка по плану недоступна');
   const corridor = sameCorridor(plans);
@@ -412,12 +437,14 @@ function legendFor(columnPlans, columns) {
   );
 }
 
-/*
-  J-149: карта — одна или несколько секций строк. У разреза «Версии» секции — платформы: подзаголовок «iOS» /
-  «Android», свои строки по частотности, своя подсветка и своё «Показать ещё»; колонки общие
-*/
-function heatmapToolbar(columnPlans, columns, rerender, cutTabs, lead) {
+function heatmapToolbar(context, columnPlans, columns, rerender, cutTabs, lead) {
   const toolbar = element('div', 'heatmap-toolbar');
+  const legend = legendFor(highlightOf(context), columnPlans, columns);
+  /* На главной режим один — «План»: переключатель цвета только в разделе «Для аналитика» */
+  if (!context.analyst) {
+    toolbar.append(...[cutTabs, ...lead, legend].filter(Boolean));
+    return toolbar;
+  }
   const highlightTabs = segmented({
     label: 'Подсветка тепловой карты',
     options: highlightModes(selectedAntidriverDimension).map((value) => ({ value, ...HIGHLIGHT_OPTIONS[value] })),
@@ -430,9 +457,8 @@ function heatmapToolbar(columnPlans, columns, rerender, cutTabs, lead) {
   /* J-193: режимы — не сортировка, а цвет карты; подпись «Цвет:» говорит это прямо, порядок строк — частотность (J-11) */
   const highlight = element('div', 'heatmap-mode');
   highlight.append(element('span', 'heatmap-mode__label', 'Цвет:'), highlightTabs);
-  /* J-117 + J-112: разрез, у разреза «Версии» — ОС и схлопывание, затем режим подсветки; гранулярность — в шапке блока */
+  /* J-117 + J-112: разрез, у разреза «Версии» — переключатель ОС, затем режим подсветки; гранулярность — в шапке блока */
   toolbar.append(...[cutTabs, ...lead, highlight].filter(Boolean));
-  const legend = legendFor(columnPlans, columns);
   if (legend) toolbar.append(legend);
   return toolbar;
 }
@@ -449,44 +475,32 @@ function heatmapHead(columns) {
   return head;
 }
 
-/* Строка на всю ширину карты: заголовок секции или её кнопки порции */
-function spanningRow(rowClass, cell, span) {
-  const tr = element('tr', rowClass);
-  cell.colSpan = span;
-  tr.append(cell);
-  return tr;
-}
-
-function sectionTitleRow(section, span) {
-  const th = element('th', 'heatmap__section-title');
-  th.setAttribute('scope', 'rowgroup');
-  th.append(element('span', null, section.title), element('span', 'heatmap__section-count', section.caption));
-  return spanningRow('heatmap__section', th, span);
-}
-
-/* J-128: подпись — кнопка выбора строки за весь период; у версии — платформа меткой и номер */
-function rowPickButton(context, row, driver) {
+/* J-128: подпись — кнопка выбора строки за весь период; у версии — номер и, когда в списке обе ОС, метка платформы */
+function rowPickButton(context, row, driver, tagged) {
   const pick = pickOf(row.key);
   const wholeRow = samePick(driver, pick);
   const button = element('button', 'heatmap__row-pick');
   button.type = 'button';
   button.setAttribute('aria-pressed', String(wholeRow));
-  /* J-149: платформа — в подзаголовке секции, у строки — номер версии */
-  if (isVersionCut()) button.append(withOverflowTitle(element('span', 'heatmap__row-label', splitVersionKey(row.key).version)));
-  else button.append(withOverflowTitle(element('span', 'heatmap__row-label', rowLabel(context, row.key))));
+  if (isVersionCut()) {
+    const { os, version } = splitVersionKey(row.key);
+    button.append(withOverflowTitle(element('span', 'heatmap__row-label', version)));
+    /* Метка — справа, колонкой напротив номеров: одинаковые номера iOS и Android различимы */
+    if (tagged && os) button.append(element('span', 'heatmap__os', OS_TAGS[os] ?? os));
+  } else button.append(withOverflowTitle(element('span', 'heatmap__row-label', rowLabel(context, row.key))));
   button.setAttribute('aria-label', `${rowLabel(context, row.key)}. ${wholeRow ? 'Снять выбор' : 'Показать проблемы и комментарии'}`);
   button.dataset.pickKey = row.key;
   button.addEventListener('click', () => togglePick(context, pick, button));
   return button;
 }
 
-function heatmapRow(context, heatmap, row, highlights, { tooltip, view }) {
+function heatmapRow(context, heatmap, row, highlights, { tooltip, view, tagged }) {
   const driver = normalizeDriver(context.state.driver);
   const rowPicked = Boolean(driver && driver.cut === selectedAntidriverDimension && driver.key === row.key);
   const tr = element('tr', rowPicked ? 'is-picked' : null);
   /* Подпись в одну строку с многоточием, полная — в подсказке; имя строки не меняется (R-47) */
   const title = element('th', 'heatmap__row-title');
-  title.append(rowPickButton(context, row, driver));
+  title.append(rowPickButton(context, row, driver, tagged));
   tr.append(title);
   row.cells.forEach((cell, index) => {
     const td = element('td');
@@ -496,25 +510,16 @@ function heatmapRow(context, heatmap, row, highlights, { tooltip, view }) {
   return tr;
 }
 
-function heatmapBody(context, sections, columnPlans, overlay) {
+function heatmapBody(context, { heatmap, calibration }, columnPlans, overlay) {
   const body = element('tbody');
-  const span = sections[0].heatmap.columns.length + 1;
-  for (const section of sections) {
-    const { heatmap } = section;
-    const highlights = highlightHeatmap(heatmap, selectedHeatmapHighlight, columnPlans, section.calibration);
-    if (section.title) body.append(sectionTitleRow(section, span));
-    heatmap.rows.forEach((row, rowIndex) => body.append(heatmapRow(context, heatmap, row, highlights[rowIndex], overlay)));
-    if (section.actions) {
-      const td = element('td');
-      td.append(section.actions);
-      body.append(spanningRow('heatmap__section-actions', td, span));
-    }
-  }
+  const highlights = highlightHeatmap(heatmap, highlightOf(context), columnPlans, calibration);
+  heatmap.rows.forEach((row, rowIndex) => body.append(heatmapRow(context, heatmap, row, highlights[rowIndex], overlay)));
   return body;
 }
 
-function heatmapScroll(tooltip) {
-  const scroll = element('div', 'heatmap-scroll scroll-area');
+/* Прокрутка — общий `hScroll` (`scroll-area`, края по `scrollEdges`); затухание — наложением, см. antidrivers.css */
+function heatmapScroll(table, tooltip) {
+  const scroll = hScroll(table, { className: 'heatmap-scroll' });
   /* Фокус на скрытой колонке прокручивает карту к ней: подсказка переезжает к ячейке, а гаснет только без фокуса */
   scroll.addEventListener('scroll', () => {
     markOverflow(scroll);
@@ -541,22 +546,26 @@ function fitAfterPaint(scroll, resizer) {
   }
 }
 
-function heatmapView(context, sections, rerender, cutTabs, lead) {
+function heatmapView(context, shown, rerender, cutTabs, lead) {
   const view = element('div', 'antidriver-heatmap');
   view.id = 'antidrivers-heatmap';
-  const { columns } = sections[0].heatmap;
+  /*
+    Режим цвета, разрез, ОС версий и порции перестраивают карту целиком, но проявление (D-56) здесь не нужно:
+    соседние табы, легенда, карта и подвал мигали бы при каждом клике. Меняются только данные; выбор показывает рамка таба
+  */
+  view.setAttribute('data-steady', '');
+  const { columns } = shown.heatmap;
   const columnPlans = columns.map(({ from, to }) =>
     planFor(context.reference?.plan, { channel: context.state.channel, from, to }),
   );
-  view.append(heatmapToolbar(columnPlans, columns, rerender, cutTabs, lead));
+  view.append(heatmapToolbar(context, columnPlans, columns, rerender, cutTabs, lead));
   /* Подсказка — вне прокрутки карты: иначе у верхней строки её срезал бы край области прокрутки */
   const tooltip = element('div', 'heatmap-tooltip glass');
   tooltip.setAttribute('aria-hidden', 'true');
   tooltip.hidden = true;
-  const scroll = heatmapScroll(tooltip);
   const table = element('table', 'heatmap');
-  table.append(heatmapHead(columns), heatmapBody(context, sections, columnPlans, { tooltip, view }));
-  scroll.append(table);
+  table.append(heatmapHead(columns), heatmapBody(context, shown, columnPlans, { tooltip, view, tagged: shown.tagged }));
+  const scroll = heatmapScroll(table, tooltip);
   const frame = element('div', 'heatmap-frame');
   const resizer = titleResizer(view, frame, () => markOverflow(scroll));
   frame.append(scroll, resizer);
@@ -565,11 +574,14 @@ function heatmapView(context, sections, rerender, cutTabs, lead) {
   return view;
 }
 
+/* Пустой разрез — тоже без проявления: переход туда и обратно меняет только содержимое (data-steady) */
 function noVersionOs() {
-  return statusPanel('antidriver-unavailable', {
+  const panel = statusPanel('antidriver-unavailable', {
     title: 'Нет оценок iOS и Android',
     detail: 'Версии показываются только для iOS и Android, а в срезе таких оценок нет.',
   });
+  panel.setAttribute('data-steady', '');
+  return panel;
 }
 
 function noElements() {
@@ -580,17 +592,16 @@ function noElements() {
 }
 
 /* Кнопки порции строк; горизонтальная прокрутка карты сохраняется */
-function moreButtons({ limit, total, setLimit, rerender, label = '', key = '' }) {
+function moreButtons({ limit, total, setLimit, rerender }) {
   const buttons = element('div', 'heatmap-pagination__actions');
   const keepScroll = (change) => {
     change();
     return rerender();
   };
-  const moreOf = (host) => host?.querySelector(`.heatmap-more[data-section="${key}"]`);
+  const moreOf = (host) => host?.querySelector('.heatmap-more');
   buttons.append(...pagingButtons({
-    shown: limit, total, page: PAGE_SIZE, moreClass: 'heatmap-more', collapseClass: 'heatmap-collapse', controls: 'antidrivers-heatmap', section: key,
-    moreLabel: label ? `Показать ещё версии ${label}` : '',
-    collapseLabel: label ? `Скрыть дополнительные версии ${label}` : 'Скрыть дополнительные строки антидрайверов',
+    shown: limit, total, page: PAGE_SIZE, moreClass: 'heatmap-more', collapseClass: 'heatmap-collapse', controls: 'antidrivers-heatmap',
+    collapseLabel: 'Скрыть дополнительные строки антидрайверов',
     onMore: () => {
       const host = keepScroll(() => setLimit(limit + PAGE_SIZE));
       return moreOf(host) ?? host?.querySelector('.heatmap-pagination__status');
@@ -600,36 +611,22 @@ function moreButtons({ limit, total, setLimit, rerender, label = '', key = '' })
   return buttons;
 }
 
-/*
-  J-11: строки — порциями по десять. J-149: у версий — порции в каждой секции платформы, кнопки — строкой под секцией;
-  итог показанного — в подвале карты
-*/
-function paginatedView(context, parts, page, rerender, cutTabs, lead = []) {
-  const sectioned = parts.length > 1 || Boolean(parts[0].title);
-  page.limits ??= {};
-  const limitOf = (key) => page.limits[key] ?? page.limit;
-  const sections = parts.map((part) => {
-    const actions = sectioned ? moreButtons({ limit: limitOf(part.key), total: part.total, label: part.title, key: part.key, rerender,
-      setLimit: (limit) => { page.limits[part.key] = limit; } }) : null;
-    return {
-      ...part,
-      heatmap: { ...part.heatmap, rows: part.heatmap.rows.slice(0, limitOf(part.key)) },
-      calibration: part.heatmap,
-      /* Строка кнопок — сразу за строками своей секции */
-      actions: actions?.children.length ? actions : null,
-    };
-  });
-  const view = heatmapView(context, sections, rerender, cutTabs, lead);
+/* J-11: строки — порциями по десять; у версий — тоже, одним списком (J-149 с секциями платформ отменён). Итог — в подвале */
+function paginatedView(context, part, page, rerender, cutTabs, lead = []) {
+  const shown = {
+    ...part,
+    heatmap: { ...part.heatmap, rows: part.heatmap.rows.slice(0, page.limit) },
+    calibration: part.heatmap,
+  };
+  const view = heatmapView(context, shown, rerender, cutTabs, lead);
   const footer = element('div', 'heatmap-pagination');
-  const shown = sections.map((section) => `${section.title ? `${section.title}: ` : ''}${formatCount(section.heatmap.rows.length)} из ${formatCount(section.total)}`);
-  const status = element('p', 'heatmap-pagination__status', `По частотности · ${sectioned ? shown.join(' · ') : `Показано ${shown[0]}`}`);
+  const status = element('p', 'heatmap-pagination__status',
+    `По частотности · Показано ${formatCount(shown.heatmap.rows.length)} из ${formatCount(part.total)}`);
   status.setAttribute('role', 'status');
   status.setAttribute('tabindex', '-1');
   footer.append(status);
-  if (!sectioned) {
-    const buttons = moreButtons({ limit: page.limit, total: parts[0].total, rerender, setLimit: (limit) => { page.limit = limit; } });
-    if (buttons.children.length) footer.append(buttons);
-  }
+  const buttons = moreButtons({ limit: page.limit, total: part.total, rerender, setLimit: (limit) => { page.limit = limit; } });
+  if (buttons.children.length) footer.append(buttons);
   view.append(footer);
   return view;
 }
@@ -644,6 +641,20 @@ function keepHeatmapScroll(block, render) {
   const scroll = block.element?.querySelector('.heatmap-scroll');
   if (scroll) scroll.scrollLeft = scrollLeft;
   return block.element;
+}
+
+/* Переключатель ОС версий: «Обе / Android / iOS»; при одной ОС в срезе выбирать нечего — его нет */
+function versionOsTabs(found, rerender) {
+  if (found.length < 2) return [];
+  return [segmented({
+    label: 'ОС версий',
+    options: VERSION_OS_OPTIONS.filter(({ value }) => value === VERSION_OS_BOTH || found.includes(value)),
+    selected: selectedVersionOs,
+    onSelect: (value) => {
+      selectedVersionOs = value;
+      rerender();
+    },
+  })];
 }
 
 const focusParameters = (context) => (context.state.focus ? [['Выбранная дата', formatDate(context.state.focus)]] : []);
@@ -670,12 +681,14 @@ export function renderAntidrivers(block, context) {
       keepHeatmapScroll(block, () => renderAntidrivers(block, context));
     },
   });
-  /* J-149: платформы — секциями; сузить до одной — фильтром «Опер. системы» шапки */
-  const found = isVersionCut() ? versionOsChoices(viewContext.slice) : [];
-  const page = pageFor(block, context, isVersionCut() ? found : null);
-  const scale = heatmapScale(context.period, viewContext.period);
+  /* Версии: ОС среза (фильтр шапки сужает выбор), из них — выбранная переключателем или обе */
   const isVersion = isVersionCut();
-  const versionParameters = isVersion && found.length ? [['ОС версий', found.map(osName).join(', ')]] : [];
+  const found = isVersion ? versionOsChoices(viewContext.slice) : [];
+  if (selectedVersionOs !== VERSION_OS_BOTH && !found.includes(selectedVersionOs)) selectedVersionOs = VERSION_OS_BOTH;
+  const shownOs = selectedVersionOs === VERSION_OS_BOTH ? found : [selectedVersionOs];
+  const page = pageFor(block, context, isVersion ? shownOs : null);
+  const scale = heatmapScale(context.period, viewContext.period);
+  const versionParameters = isVersion && shownOs.length ? [['ОС версий', shownOs.map(osName).join(', ')]] : [];
   /* В шапке — период блока; выбранный день и окно его сравнения — на кнопке сброса даты */
   const head = (heatmap = null) => block.setHead({
     ...(period ? { period } : {}),
@@ -706,30 +719,25 @@ export function renderAntidrivers(block, context) {
     ? (row) => [versionRowKey(row)]
     : (row) => dimension.values(row, viewContext.reference);
   /*
-    J-112, J-149: у версий секция на платформу — частотность, урон и влияние считаются внутри своей ОС: номера версий
-    платформ независимы, и знаменатель другой платформы их бы смешал. Остальные разрезы — одна секция без заголовка
+    J-112: у версий каждая ОС считается отдельно — частотность, урон и влияние внутри своей платформы: номера версий
+    независимы, и знаменатель другой платформы их бы смешал. Оценки ОС — `context.select` того же периода с фильтром `os`
   */
-  const parts = (isVersion ? found : [null]).map((os) => {
+  const partOf = (os) => {
     const slice = os
       ? context.select({ from: viewContext.period.from, to: viewContext.period.to, filters: withFilter(context.state.filters, 'os', [osName(os)]) }).rows
       : viewContext.slice;
     const ranked = frequentElements(slice, project, viewContext.label, dimension.key);
-    return {
-      key: os ?? '',
-      title: os ? osName(os) : null,
-      caption: os ? `${formatCount(ranked.length)} ${plural(ranked.length, ['версия', 'версии', 'версий'])}` : null,
-      total: ranked.length,
-      /* J-11: наиболее частотные элементы текущего периода, сначала десять. */
-      heatmap: buildHeatmap(slice, viewContext.period, scale, project, ranked.map(({ key }) => key)),
-    };
-  }).filter(({ total }) => total > 0);
-  if (parts.length === 0) {
+    /* J-11: наиболее частотные элементы текущего периода, сначала десять. */
+    return { ranked, heatmap: buildHeatmap(slice, viewContext.period, scale, project, ranked.map(({ key }) => key)) };
+  };
+  const { heatmap } = isVersion ? mergeVersionHeatmaps(shownOs.map(partOf)) : partOf(null);
+  const part = { heatmap, total: heatmap.rows.length, tagged: isVersion && shownOs.length > 1 };
+  if (part.total === 0) {
     head();
     block.setContent(withCut(noElements(), cutTabs));
     return;
   }
-  /* Выгрузка — все строки всех секций, а не раскрытые; ключ строки версии несёт платформу */
-  const heatmap = { columns: parts[0].heatmap.columns, rows: parts.flatMap((part) => part.heatmap.rows) };
+  /* Выгрузка — все строки, а не раскрытые; ключ строки версии несёт платформу */
   head(heatmap);
-  block.setContent(paginatedView(viewContext, parts, page, rerender, cutTabs));
+  block.setContent(paginatedView(viewContext, part, page, rerender, cutTabs, isVersion ? versionOsTabs(found, rerender) : []));
 }

@@ -41,6 +41,34 @@
   min-width: 0;
 }
 
+/* Пара число + дельта карточек шапки (`valueDelta`): дельта по верху поля числа, а не по базовой линии */
+.metric__pair {
+  align-items: flex-start;
+  min-width: 0;
+}
+
+/* Строка значения сегмента: число с дельтой слева, мини-тренд справа на всё оставшееся место */
+.metric__value-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* Тренд берёт остаток строки: линия масштабируется в него целиком по ширине, высота — по пропорции линии */
+.metric__trend {
+  display: flex;
+  flex: 1 1 0;
+  justify-content: flex-end;
+  min-width: 0;
+  max-width: calc(var(--space-10) * 3);
+}
+
+.metric__trend > svg {
+  width: 100%;
+  height: auto;
+}
+
 .metric__lead--empty,
 .metric__caption--empty {
   visibility: hidden;
@@ -92,11 +120,6 @@
   container-type: inline-size;
 }
 
-/* Дельта справа от числа не переносится под него: место под неё отводит кегль числа */
-.metric--big .metric__figure {
-  flex-wrap: nowrap;
-}
-
 /*
   Кегль числа — от ширины карточки, чтобы справа помещалась дельта (68 px с зазором): до 96 px,
   на 1440 — ≈90, на 1280 — ≈65 (роль --type-display-fit). Трекинг — в em, число ужимается
@@ -113,10 +136,6 @@
   padding-inline-end: calc(-1 * var(--tracking-display-fit));
 }
 
-/* Дельта VOC — на уровне верха цифр: у крупного кегля над цифрами есть поле строки */
-.metric--big .metric__lead {
-  margin-block-start: var(--space-2);
-}
 
 /* Градиент цифр из макета (Figma 3204:2733): низ цифр проходит контраст крупного текста (D-28); без обрезки по тексту — плоский цвет, а не прямоугольник градиента */
 @supports (background-clip: text) or (-webkit-background-clip: text) {
@@ -145,7 +164,7 @@
 }
 
 /* Поле числа под весь диапазон 1,00–5,00: дельты трёх карточек стоят на одном отступе (J-17) */
-.metric--segment .metric__figure > .metric__value {
+.metric--segment .metric__pair > .metric__value {
   flex: none;
   inline-size: calc(4ch + 4 * var(--tracking-value));
   white-space: nowrap;
@@ -212,10 +231,11 @@
   align-items: center;
 }
 
+/* Счётчик легенды — та же роль, что число оценки в «Распределении»: caption-strong, белый */
 .plan-days__count {
   justify-self: end;
   color: var(--color-text-strong);
-  font: var(--type-text-strong);
+  font: var(--type-caption-strong);
   font-variant-numeric: tabular-nums;
   text-align: end;
 }
@@ -236,6 +256,12 @@
 .plan-days__swatch--below { background: var(--color-negative); }
 .plan-days__swatch--above { background: var(--color-positive); }
 .plan-days__swatch--in { background: var(--plan-days-in-mark); }
+
+/* «Нет плана на этот период» — заголовок служебного состояния, как у остальных карточек, а не подпись */
+.card--metric-plan-days .state--compact .state__title {
+  color: var(--color-text-secondary);
+  font: var(--type-text-strong);
+}
 
 .metric--tally {
   flex: 1 1 auto;
@@ -410,4 +436,101 @@
 .metrics-grid:has(.metric__toggle[aria-pressed='true']) .card--metric-big .metric__value--big {
   background: none;
   color: var(--color-text-tertiary);
+}
+
+/*
+  ── Конверсия опроса (за целый месяц вместо дней плана) ─────────────────
+  Луч — фон всей ширины средней полосы, ступени — пять колонок поверх: подпись капсом сверху,
+  значение и доля снизу. Ширина полосы — из core/conversion.js, цвета — токены луча
+*/
+.conversion {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-rows: auto minmax(var(--space-8), 1fr) auto auto;
+  /* Доли колонок — те же, что COLUMNS в blocks/conversion.js: по ним стоят центры полосы */
+  grid-template-columns: 0.7fr 0.9fr 1.4fr 1fr 1fr;
+  align-self: stretch;
+  min-width: 0;
+}
+
+.conversion__beam {
+  grid-row: 2;
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.conversion__steps {
+  display: contents;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Колонка каждой ступени задана явно: луч занимает средний ряд во всю ширину, автоплейсмент увёл бы ступени вбок */
+.conversion__step:nth-child(1) { grid-column: 1; }
+.conversion__step:nth-child(2) { grid-column: 2; }
+.conversion__step:nth-child(3) { grid-column: 3; }
+.conversion__step:nth-child(4) { grid-column: 4; }
+.conversion__step:nth-child(5) { grid-column: 5; }
+
+.conversion__step {
+  position: relative;
+  display: grid;
+  grid-row: 1 / -1;
+  grid-template-rows: subgrid;
+  justify-items: center;
+  min-width: 0;
+  text-align: center;
+}
+
+.conversion__label {
+  grid-row: 1;
+  color: var(--color-text-tertiary);
+  font: var(--type-axis);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.conversion__step > .visually-hidden {
+  grid-row: 1;
+}
+
+.conversion__value,
+.conversion__step > .value-empty {
+  grid-row: 3;
+  color: var(--color-text-strong);
+  font: var(--type-funnel-value);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.conversion__step > .value-empty {
+  color: var(--color-text-tertiary);
+}
+
+.conversion__share {
+  grid-row: 4;
+  min-height: 1lh;
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Последняя ступень — понятная причина: подпись светлее, как в стратегии */
+.conversion__step--feedback .conversion__label {
+  color: var(--color-text-secondary);
+}
+
+.conversion__stop--cool { stop-color: var(--funnel-cool); }
+.conversion__stop--core { stop-color: var(--color-text-strong); }
+.conversion__stop--warm { stop-color: var(--funnel-warm); }
+
+.conversion__thread {
+  stroke: var(--color-text-strong);
+  stroke-width: 1.5;
+  filter: drop-shadow(0 0 2px var(--color-text-strong)) drop-shadow(0 0 6px var(--funnel-cool)) drop-shadow(0 0 12px var(--funnel-warm));
 }

@@ -2,135 +2,146 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
+<script type="importmap">{"imports":{"./js/blocks/antidrivers.js":"./js/blocks/antidrivers.js?v=8b7d8f6fce","./js/blocks/conclusion.js":"./js/blocks/conclusion.js?v=2e1b7859b9","./js/blocks/conversion.js":"./js/blocks/conversion.js?v=79e6af740e","./js/blocks/digest.js":"./js/blocks/digest.js?v=3b4576d11c","./js/blocks/distribution.js":"./js/blocks/distribution.js?v=d00cd2cf6d","./js/blocks/dynamics.js":"./js/blocks/dynamics.js?v=8122c8bacb","./js/blocks/insights.js":"./js/blocks/insights.js?v=8dba0d1dfb","./js/blocks/metric-card.js":"./js/blocks/metric-card.js?v=e53f411277","./js/blocks/plan-days.js":"./js/blocks/plan-days.js?v=1a935f884a","./js/blocks/tally.js":"./js/blocks/tally.js?v=c0d4169d5e","./js/blocks/verbatim-cards.js":"./js/blocks/verbatim-cards.js?v=9a002d42ef","./js/blocks/verbatim-table.js":"./js/blocks/verbatim-table.js?v=23f36294d9","./js/blocks/voc-channel.js":"./js/blocks/voc-channel.js?v=2241641165","./js/blocks/voc-segment.js":"./js/blocks/voc-segment.js?v=edbec8f16e","./js/boot.js":"./js/boot.js?v=a00a967e69","./js/components/badge.js":"./js/components/badge.js?v=dcd228a032","./js/components/chart-timeline.js":"./js/components/chart-timeline.js?v=5bd2d7d59a","./js/components/copy-button.js":"./js/components/copy-button.js?v=f30d2de1d6","./js/components/delta.js":"./js/components/delta.js?v=2ec3403dbd","./js/components/detail-event-chip.js":"./js/components/detail-event-chip.js?v=70c349e277","./js/components/driver-chip.js":"./js/components/driver-chip.js?v=09813047e9","./js/components/empty-value.js":"./js/components/empty-value.js?v=81345415e8","./js/components/filter-popover.js":"./js/components/filter-popover.js?v=59663cd503","./js/components/focus-chip.js":"./js/components/focus-chip.js?v=f6724a954c","./js/components/h-scroll.js":"./js/components/h-scroll.js?v=3479ebdb43","./js/components/hover-tooltip.js":"./js/components/hover-tooltip.js?v=82cfd952ab","./js/components/legend.js":"./js/components/legend.js?v=7663d941b4","./js/components/paging.js":"./js/components/paging.js?v=6b80bc7908","./js/components/period-picker.js":"./js/components/period-picker.js?v=b94f9c1ae7","./js/components/scale-tabs.js":"./js/components/scale-tabs.js?v=ca27288930","./js/components/search-field.js":"./js/components/search-field.js?v=53ba1b9b73","./js/components/segmented.js":"./js/components/segmented.js?v=21b67cdcd4","./js/components/share-pie.js":"./js/components/share-pie.js?v=6068ed45ba","./js/components/side-toggle.js":"./js/components/side-toggle.js?v=fa8d59d3ab","./js/components/sparkline.js":"./js/components/sparkline.js?v=089f831b4b","./js/components/stage-observer.js":"./js/components/stage-observer.js?v=6190dc695d","./js/components/status-dot.js":"./js/components/status-dot.js?v=ec49e54396","./js/components/status-panel.js":"./js/components/status-panel.js?v=48dc543767","./js/components/tag.js":"./js/components/tag.js?v=40e2c52f3a","./js/components/trigger-choices.js":"./js/components/trigger-choices.js?v=4fdc40eaeb","./js/components/value-delta.js":"./js/components/value-delta.js?v=6f492ce3fb","./js/core/analytical-causes.js":"./js/core/analytical-causes.js?v=6af40456af","./js/core/annotations.js":"./js/core/annotations.js?v=79cf65c75e","./js/core/anomalies.js":"./js/core/anomalies.js?v=dcd432c1ff","./js/core/antidrivers.js":"./js/core/antidrivers.js?v=9b33ca304e","./js/core/breakdown.js":"./js/core/breakdown.js?v=89d612f00c","./js/core/calendar-analysis.js":"./js/core/calendar-analysis.js?v=4387458d86","./js/core/calendar.js":"./js/core/calendar.js?v=993919b8b9","./js/core/cashback.js":"./js/core/cashback.js?v=b01f9f4861","./js/core/chart-geometry.js":"./js/core/chart-geometry.js?v=5402e9f81e","./js/core/conclusion-payload.js":"./js/core/conclusion-payload.js?v=d713107e65","./js/core/conclusions.js":"./js/core/conclusions.js?v=00a4f55290","./js/core/conversion.js":"./js/core/conversion.js?v=3c4e515c34","./js/core/critical-drop.js":"./js/core/critical-drop.js?v=b40199aca9","./js/core/data-loss.js":"./js/core/data-loss.js?v=5d863164a0","./js/core/dates.js":"./js/core/dates.js?v=8439400da4","./js/core/digest.js":"./js/core/digest.js?v=199731d5a7","./js/core/dimensions.js":"./js/core/dimensions.js?v=5704277e2b","./js/core/distribution.js":"./js/core/distribution.js?v=761535ea06","./js/core/export.js":"./js/core/export.js?v=c00f1db156","./js/core/format.js":"./js/core/format.js?v=a78f8b380b","./js/core/impact.js":"./js/core/impact.js?v=cd010089bb","./js/core/incident-events.js":"./js/core/incident-events.js?v=1b35727647","./js/core/insights.js":"./js/core/insights.js?v=97ce5ea265","./js/core/labels.js":"./js/core/labels.js?v=d99cb23114","./js/core/methodology.js":"./js/core/methodology.js?v=f0c8d88fb7","./js/core/metrics.js":"./js/core/metrics.js?v=90623d2a13","./js/core/period.js":"./js/core/period.js?v=e257bc9f96","./js/core/plan.js":"./js/core/plan.js?v=db933c249f","./js/core/recent.js":"./js/core/recent.js?v=1eabe96836","./js/core/rest-days.js":"./js/core/rest-days.js?v=1d23f58cac","./js/core/round.js":"./js/core/round.js?v=aedd9e4c46","./js/core/sufficiency.js":"./js/core/sufficiency.js?v=70aeab6d08","./js/core/timeseries.js":"./js/core/timeseries.js?v=51d90b463a","./js/core/verbatim.js":"./js/core/verbatim.js?v=5d6cace530","./js/core/xlsx.js":"./js/core/xlsx.js?v=1c0e1e7521","./js/io/desktop.js":"./js/io/desktop.js?v=3f473f97c6","./js/io/llm-conclusion.js":"./js/io/llm-conclusion.js?v=a592fd195e","./js/io/loader.js":"./js/io/loader.js?v=31980bc4df","./js/main.js":"./js/main.js?v=6be4815599","./js/shell/app-update.js":"./js/shell/app-update.js?v=292061dc5d","./js/shell/block.js":"./js/shell/block.js?v=a9c70d8dbb","./js/shell/data-import.js":"./js/shell/data-import.js?v=18a564ab3b","./js/shell/feedback.js":"./js/shell/feedback.js?v=7dc2949c76","./js/shell/header-ambient.js":"./js/shell/header-ambient.js?v=db474daab4","./js/shell/header.js":"./js/shell/header.js?v=da420fe040","./js/shell/inputs.js":"./js/shell/inputs.js?v=a041721eac","./js/shell/side-nav.js":"./js/shell/side-nav.js?v=b927e80290","./js/shell/theme.js":"./js/shell/theme.js?v=ddcf591254","./js/state/chart-selection.js":"./js/state/chart-selection.js?v=c026766b87","./js/state/controls.js":"./js/state/controls.js?v=d212c8fd68","./js/state/detail-event.js":"./js/state/detail-event.js?v=51f7dc30cf","./js/state/driver-pick.js":"./js/state/driver-pick.js?v=6dc648d2a4","./js/state/event-analysis.js":"./js/state/event-analysis.js?v=591d457688","./js/state/focus.js":"./js/state/focus.js?v=6476a082be","./js/state/resolve-state.js":"./js/state/resolve-state.js?v=737f2d8938","./js/state/selection.js":"./js/state/selection.js?v=4e1698744b","./js/state/url-state.js":"./js/state/url-state.js?v=3c42c215ee","./js/ui/dom.js":"./js/ui/dom.js?v=f33af24811","./js/ui/download.js":"./js/ui/download.js?v=dee7f41e87","./js/ui/icons.js":"./js/ui/icons.js?v=165daf8a7f","./js/ui/motion.js":"./js/ui/motion.js?v=ba5adbf54a","./js/ui/popover.js":"./js/ui/popover.js?v=ec80bdec75"}}</script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Дашборд VOC для PO B2B</title>
 <!-- J-69: тема — до первой отрисовки, иначе светлая страница мигает тёмной; ключ — THEME_KEY в js/shell/theme.js -->
 <script>try { if (localStorage.getItem('voc.theme') === 'light') document.documentElement.dataset.theme = 'light'; } catch (error) { /* без хранилища — тёмная */ }</script>
 <!-- J-115, J-124: боковое меню по умолчанию свёрнуто — до первой отрисовки, иначе страница прыгнет; развёрнутое помнит NAV_KEY в js/shell/side-nav.js -->
 <script>try { if (localStorage.getItem('voc.nav') !== 'expanded') document.documentElement.dataset.nav = 'collapsed'; } catch (error) { document.documentElement.dataset.nav = 'collapsed'; }</script>
-<script type="module" src="js/boot.js" async></script>
+<script type="module" src="js/boot.js?v=a00a967e69" async></script>
 <link rel="preload" href="fonts/manrope-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/manrope-cyrillic.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="css/tokens.css">
-<link rel="stylesheet" href="css/shell.css">
-<link rel="stylesheet" href="css/components/segmented.css">
-<link rel="stylesheet" href="css/components/indicators.css">
-<link rel="stylesheet" href="css/components/legend.css">
-<link rel="stylesheet" href="css/components/sparkline.css">
-<link rel="stylesheet" href="css/components/share-pie.css">
-<link rel="stylesheet" href="css/components/focus-chip.css">
-<link rel="stylesheet" href="css/components/trigger-choices.css">
-<link rel="stylesheet" href="css/components/copy-button.css">
-<link rel="stylesheet" href="css/components/side-toggle.css">
-<link rel="stylesheet" href="css/blocks/metrics.css">
-<link rel="stylesheet" href="css/blocks/distribution.css">
-<link rel="stylesheet" href="css/blocks/conclusion.css">
-<link rel="stylesheet" href="css/blocks/dynamics.css">
-<link rel="stylesheet" href="css/blocks/antidrivers.css">
-<link rel="stylesheet" href="css/blocks/insights.css">
-<link rel="stylesheet" href="css/blocks/verbatim.css">
-<link rel="stylesheet" href="css/blocks/digest.css">
+<link rel="stylesheet" href="css/tokens.css?v=3e6f291a1b">
+<link rel="stylesheet" href="css/shell.css?v=5068689910">
+<link rel="stylesheet" href="css/components/segmented.css?v=3adae70681">
+<link rel="stylesheet" href="css/components/indicators.css?v=e3ad836a08">
+<link rel="stylesheet" href="css/components/legend.css?v=61a48ef327">
+<link rel="stylesheet" href="css/components/sparkline.css?v=a346117062">
+<link rel="stylesheet" href="css/components/share-pie.css?v=82e1083004">
+<link rel="stylesheet" href="css/components/focus-chip.css?v=55910c4e7a">
+<link rel="stylesheet" href="css/components/trigger-choices.css?v=ac24daab97">
+<link rel="stylesheet" href="css/components/copy-button.css?v=b9b5c7dad9">
+<link rel="stylesheet" href="css/components/side-toggle.css?v=f3f3611dcc">
+<link rel="stylesheet" href="css/blocks/metrics.css?v=d6be29952e">
+<link rel="stylesheet" href="css/blocks/distribution.css?v=6f6e193f2a">
+<link rel="stylesheet" href="css/blocks/conclusion.css?v=8862f560d3">
+<link rel="stylesheet" href="css/blocks/dynamics.css?v=e9a8aea8c4">
+<link rel="stylesheet" href="css/blocks/antidrivers.css?v=64c78489cd">
+<link rel="stylesheet" href="css/blocks/insights.css?v=c6b696d7df">
+<link rel="stylesheet" href="css/blocks/verbatim.css?v=4db7692f65">
+<link rel="stylesheet" href="css/blocks/digest.css?v=e6b061cff9">
 <!-- modulepreload: node tools/module_preload.mjs --write -->
-<link rel="modulepreload" href="js/blocks/antidrivers.js">
-<link rel="modulepreload" href="js/blocks/conclusion.js">
-<link rel="modulepreload" href="js/blocks/digest.js">
-<link rel="modulepreload" href="js/blocks/distribution.js">
-<link rel="modulepreload" href="js/blocks/dynamics.js">
-<link rel="modulepreload" href="js/blocks/insights.js">
-<link rel="modulepreload" href="js/blocks/metric-card.js">
-<link rel="modulepreload" href="js/blocks/plan-days.js">
-<link rel="modulepreload" href="js/blocks/verbatim-cards.js">
-<link rel="modulepreload" href="js/blocks/verbatim-table.js">
-<link rel="modulepreload" href="js/blocks/voc-channel.js">
-<link rel="modulepreload" href="js/blocks/voc-segment.js">
-<link rel="modulepreload" href="js/components/badge.js">
-<link rel="modulepreload" href="js/components/chart-timeline.js">
-<link rel="modulepreload" href="js/components/copy-button.js">
-<link rel="modulepreload" href="js/components/delta.js">
-<link rel="modulepreload" href="js/components/detail-event-chip.js">
-<link rel="modulepreload" href="js/components/driver-chip.js">
-<link rel="modulepreload" href="js/components/filter-popover.js">
-<link rel="modulepreload" href="js/components/focus-chip.js">
-<link rel="modulepreload" href="js/components/hover-tooltip.js">
-<link rel="modulepreload" href="js/components/legend.js">
-<link rel="modulepreload" href="js/components/paging.js">
-<link rel="modulepreload" href="js/components/period-picker.js">
-<link rel="modulepreload" href="js/components/scale-tabs.js">
-<link rel="modulepreload" href="js/components/search-field.js">
-<link rel="modulepreload" href="js/components/segmented.js">
-<link rel="modulepreload" href="js/components/share-pie.js">
-<link rel="modulepreload" href="js/components/side-toggle.js">
-<link rel="modulepreload" href="js/components/sparkline.js">
-<link rel="modulepreload" href="js/components/stage-observer.js">
-<link rel="modulepreload" href="js/components/status-dot.js">
-<link rel="modulepreload" href="js/components/status-panel.js">
-<link rel="modulepreload" href="js/components/tag.js">
-<link rel="modulepreload" href="js/components/trigger-choices.js">
-<link rel="modulepreload" href="js/core/analytical-causes.js">
-<link rel="modulepreload" href="js/core/annotations.js">
-<link rel="modulepreload" href="js/core/anomalies.js">
-<link rel="modulepreload" href="js/core/antidrivers.js">
-<link rel="modulepreload" href="js/core/breakdown.js">
-<link rel="modulepreload" href="js/core/calendar-analysis.js">
-<link rel="modulepreload" href="js/core/calendar.js">
-<link rel="modulepreload" href="js/core/cashback.js">
-<link rel="modulepreload" href="js/core/chart-geometry.js">
-<link rel="modulepreload" href="js/core/conclusion-payload.js">
-<link rel="modulepreload" href="js/core/conclusions.js">
-<link rel="modulepreload" href="js/core/critical-drop.js">
-<link rel="modulepreload" href="js/core/data-loss.js">
-<link rel="modulepreload" href="js/core/dates.js">
-<link rel="modulepreload" href="js/core/digest.js">
-<link rel="modulepreload" href="js/core/dimensions.js">
-<link rel="modulepreload" href="js/core/distribution.js">
-<link rel="modulepreload" href="js/core/export.js">
-<link rel="modulepreload" href="js/core/format.js">
-<link rel="modulepreload" href="js/core/impact.js">
-<link rel="modulepreload" href="js/core/incident-events.js">
-<link rel="modulepreload" href="js/core/insights.js">
-<link rel="modulepreload" href="js/core/labels.js">
-<link rel="modulepreload" href="js/core/methodology.js">
-<link rel="modulepreload" href="js/core/metrics.js">
-<link rel="modulepreload" href="js/core/period.js">
-<link rel="modulepreload" href="js/core/plan.js">
-<link rel="modulepreload" href="js/core/recent.js">
-<link rel="modulepreload" href="js/core/rest-days.js">
-<link rel="modulepreload" href="js/core/round.js">
-<link rel="modulepreload" href="js/core/sufficiency.js">
-<link rel="modulepreload" href="js/core/timeseries.js">
-<link rel="modulepreload" href="js/core/verbatim.js">
-<link rel="modulepreload" href="js/core/xlsx.js">
-<link rel="modulepreload" href="js/io/desktop.js">
-<link rel="modulepreload" href="js/io/llm-conclusion.js">
-<link rel="modulepreload" href="js/io/loader.js">
-<link rel="modulepreload" href="js/shell/app-update.js">
-<link rel="modulepreload" href="js/shell/block.js">
-<link rel="modulepreload" href="js/shell/data-import.js">
-<link rel="modulepreload" href="js/shell/feedback.js">
-<link rel="modulepreload" href="js/shell/header.js">
-<link rel="modulepreload" href="js/shell/side-nav.js">
-<link rel="modulepreload" href="js/shell/theme.js">
-<link rel="modulepreload" href="js/state/chart-selection.js">
-<link rel="modulepreload" href="js/state/controls.js">
-<link rel="modulepreload" href="js/state/detail-event.js">
-<link rel="modulepreload" href="js/state/driver-pick.js">
-<link rel="modulepreload" href="js/state/event-analysis.js">
-<link rel="modulepreload" href="js/state/focus.js">
-<link rel="modulepreload" href="js/state/resolve-state.js">
-<link rel="modulepreload" href="js/state/selection.js">
-<link rel="modulepreload" href="js/state/url-state.js">
-<link rel="modulepreload" href="js/ui/dom.js">
-<link rel="modulepreload" href="js/ui/download.js">
-<link rel="modulepreload" href="js/ui/icons.js">
-<link rel="modulepreload" href="js/ui/motion.js">
-<link rel="modulepreload" href="js/ui/popover.js">
+<link rel="modulepreload" href="js/blocks/antidrivers.js?v=8b7d8f6fce">
+<link rel="modulepreload" href="js/blocks/conclusion.js?v=2e1b7859b9">
+<link rel="modulepreload" href="js/blocks/conversion.js?v=79e6af740e">
+<link rel="modulepreload" href="js/blocks/digest.js?v=3b4576d11c">
+<link rel="modulepreload" href="js/blocks/distribution.js?v=d00cd2cf6d">
+<link rel="modulepreload" href="js/blocks/dynamics.js?v=8122c8bacb">
+<link rel="modulepreload" href="js/blocks/insights.js?v=8dba0d1dfb">
+<link rel="modulepreload" href="js/blocks/metric-card.js?v=e53f411277">
+<link rel="modulepreload" href="js/blocks/plan-days.js?v=1a935f884a">
+<link rel="modulepreload" href="js/blocks/verbatim-cards.js?v=9a002d42ef">
+<link rel="modulepreload" href="js/blocks/verbatim-table.js?v=23f36294d9">
+<link rel="modulepreload" href="js/blocks/voc-channel.js?v=2241641165">
+<link rel="modulepreload" href="js/blocks/voc-segment.js?v=edbec8f16e">
+<link rel="modulepreload" href="js/components/badge.js?v=dcd228a032">
+<link rel="modulepreload" href="js/components/chart-timeline.js?v=5bd2d7d59a">
+<link rel="modulepreload" href="js/components/copy-button.js?v=f30d2de1d6">
+<link rel="modulepreload" href="js/components/delta.js?v=2ec3403dbd">
+<link rel="modulepreload" href="js/components/detail-event-chip.js?v=70c349e277">
+<link rel="modulepreload" href="js/components/driver-chip.js?v=09813047e9">
+<link rel="modulepreload" href="js/components/empty-value.js?v=81345415e8">
+<link rel="modulepreload" href="js/components/filter-popover.js?v=59663cd503">
+<link rel="modulepreload" href="js/components/focus-chip.js?v=f6724a954c">
+<link rel="modulepreload" href="js/components/h-scroll.js?v=3479ebdb43">
+<link rel="modulepreload" href="js/components/hover-tooltip.js?v=82cfd952ab">
+<link rel="modulepreload" href="js/components/legend.js?v=7663d941b4">
+<link rel="modulepreload" href="js/components/paging.js?v=6b80bc7908">
+<link rel="modulepreload" href="js/components/period-picker.js?v=b94f9c1ae7">
+<link rel="modulepreload" href="js/components/scale-tabs.js?v=ca27288930">
+<link rel="modulepreload" href="js/components/search-field.js?v=53ba1b9b73">
+<link rel="modulepreload" href="js/components/segmented.js?v=21b67cdcd4">
+<link rel="modulepreload" href="js/components/share-pie.js?v=6068ed45ba">
+<link rel="modulepreload" href="js/components/side-toggle.js?v=fa8d59d3ab">
+<link rel="modulepreload" href="js/components/sparkline.js?v=089f831b4b">
+<link rel="modulepreload" href="js/components/stage-observer.js?v=6190dc695d">
+<link rel="modulepreload" href="js/components/status-dot.js?v=ec49e54396">
+<link rel="modulepreload" href="js/components/status-panel.js?v=48dc543767">
+<link rel="modulepreload" href="js/components/tag.js?v=40e2c52f3a">
+<link rel="modulepreload" href="js/components/trigger-choices.js?v=4fdc40eaeb">
+<link rel="modulepreload" href="js/components/value-delta.js?v=6f492ce3fb">
+<link rel="modulepreload" href="js/core/analytical-causes.js?v=6af40456af">
+<link rel="modulepreload" href="js/core/annotations.js?v=79cf65c75e">
+<link rel="modulepreload" href="js/core/anomalies.js?v=dcd432c1ff">
+<link rel="modulepreload" href="js/core/antidrivers.js?v=9b33ca304e">
+<link rel="modulepreload" href="js/core/breakdown.js?v=89d612f00c">
+<link rel="modulepreload" href="js/core/calendar-analysis.js?v=4387458d86">
+<link rel="modulepreload" href="js/core/calendar.js?v=993919b8b9">
+<link rel="modulepreload" href="js/core/cashback.js?v=b01f9f4861">
+<link rel="modulepreload" href="js/core/chart-geometry.js?v=5402e9f81e">
+<link rel="modulepreload" href="js/core/conclusion-payload.js?v=d713107e65">
+<link rel="modulepreload" href="js/core/conclusions.js?v=00a4f55290">
+<link rel="modulepreload" href="js/core/conversion.js?v=3c4e515c34">
+<link rel="modulepreload" href="js/core/critical-drop.js?v=b40199aca9">
+<link rel="modulepreload" href="js/core/data-loss.js?v=5d863164a0">
+<link rel="modulepreload" href="js/core/dates.js?v=8439400da4">
+<link rel="modulepreload" href="js/core/digest.js?v=199731d5a7">
+<link rel="modulepreload" href="js/core/dimensions.js?v=5704277e2b">
+<link rel="modulepreload" href="js/core/distribution.js?v=761535ea06">
+<link rel="modulepreload" href="js/core/export.js?v=c00f1db156">
+<link rel="modulepreload" href="js/core/format.js?v=a78f8b380b">
+<link rel="modulepreload" href="js/core/impact.js?v=cd010089bb">
+<link rel="modulepreload" href="js/core/incident-events.js?v=1b35727647">
+<link rel="modulepreload" href="js/core/insights.js?v=97ce5ea265">
+<link rel="modulepreload" href="js/core/labels.js?v=d99cb23114">
+<link rel="modulepreload" href="js/core/methodology.js?v=f0c8d88fb7">
+<link rel="modulepreload" href="js/core/metrics.js?v=90623d2a13">
+<link rel="modulepreload" href="js/core/period.js?v=e257bc9f96">
+<link rel="modulepreload" href="js/core/plan.js?v=db933c249f">
+<link rel="modulepreload" href="js/core/recent.js?v=1eabe96836">
+<link rel="modulepreload" href="js/core/rest-days.js?v=1d23f58cac">
+<link rel="modulepreload" href="js/core/round.js?v=aedd9e4c46">
+<link rel="modulepreload" href="js/core/sufficiency.js?v=70aeab6d08">
+<link rel="modulepreload" href="js/core/timeseries.js?v=51d90b463a">
+<link rel="modulepreload" href="js/core/verbatim.js?v=5d6cace530">
+<link rel="modulepreload" href="js/core/xlsx.js?v=1c0e1e7521">
+<link rel="modulepreload" href="js/io/desktop.js?v=3f473f97c6">
+<link rel="modulepreload" href="js/io/llm-conclusion.js?v=a592fd195e">
+<link rel="modulepreload" href="js/io/loader.js?v=31980bc4df">
+<link rel="modulepreload" href="js/shell/app-update.js?v=292061dc5d">
+<link rel="modulepreload" href="js/shell/block.js?v=a9c70d8dbb">
+<link rel="modulepreload" href="js/shell/data-import.js?v=18a564ab3b">
+<link rel="modulepreload" href="js/shell/feedback.js?v=7dc2949c76">
+<link rel="modulepreload" href="js/shell/header-ambient.js?v=db474daab4">
+<link rel="modulepreload" href="js/shell/header.js?v=da420fe040">
+<link rel="modulepreload" href="js/shell/inputs.js?v=a041721eac">
+<link rel="modulepreload" href="js/shell/side-nav.js?v=b927e80290">
+<link rel="modulepreload" href="js/shell/theme.js?v=ddcf591254">
+<link rel="modulepreload" href="js/state/chart-selection.js?v=c026766b87">
+<link rel="modulepreload" href="js/state/controls.js?v=d212c8fd68">
+<link rel="modulepreload" href="js/state/detail-event.js?v=51f7dc30cf">
+<link rel="modulepreload" href="js/state/driver-pick.js?v=6dc648d2a4">
+<link rel="modulepreload" href="js/state/event-analysis.js?v=591d457688">
+<link rel="modulepreload" href="js/state/focus.js?v=6476a082be">
+<link rel="modulepreload" href="js/state/resolve-state.js?v=737f2d8938">
+<link rel="modulepreload" href="js/state/selection.js?v=4e1698744b">
+<link rel="modulepreload" href="js/state/url-state.js?v=3c42c215ee">
+<link rel="modulepreload" href="js/ui/dom.js?v=f33af24811">
+<link rel="modulepreload" href="js/ui/download.js?v=dee7f41e87">
+<link rel="modulepreload" href="js/ui/icons.js?v=165daf8a7f">
+<link rel="modulepreload" href="js/ui/motion.js?v=ba5adbf54a">
+<link rel="modulepreload" href="js/ui/popover.js?v=ec80bdec75">
 <!-- /modulepreload -->
 </head>
 <body>
   <div class="app">
   <!-- J-115: боковое меню — страницы дашборда, данные выгрузки и методика; сворачивается до иконок -->
   <nav class="side-nav" id="side-nav" aria-label="Разделы дашборда"></nav>
-  <div class="page">
+  <!-- Рабочая область (макет дизайнера 11.11): строка действий и панель с шапкой и страницей -->
+  <main class="workspace">
+  <div class="workspace-toolbar" id="workspace-toolbar"></div>
+  <div class="page dashboard-surface">
     <div id="header"></div>
 
     <!-- J-151: страницы дашборда — пункты меню; видна одна, main.js скрывает остальные и не считает их блоки -->
@@ -175,8 +186,9 @@
       <div class="column" id="roles"></div>
     </div>
   </div>
+  </main>
   </div>
 
-  <script type="module" src="js/main.js"></script>
+  <script type="module" src="js/main.js?v=6be4815599"></script>
 </body>
 </html>

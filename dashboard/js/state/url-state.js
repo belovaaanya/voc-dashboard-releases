@@ -25,8 +25,16 @@ const PARAM_FOCUS = 'focus';
 export const LOCAL_PERIOD_BLOCKS = ['dynamics', 'verbatim'];
 
 /* J-151: страницы дашборда — пункты меню; главная («VOC ЦК») в URL не пишется */
-export const PAGES = ['voc', 'roles', 'digest', 'feedback'];
+export const PAGES = ['voc', 'analyst', 'roles', 'digest', 'feedback'];
 export const DEFAULT_PAGE = 'voc';
+/*
+  «Для аналитика» — та же главная с теми же фильтрами и срезом, но блоки показывают продвинутые режимы и колонки.
+  Режим живёт в URL (`page=analyst`): ссылка на срез и ссылка пункта меню его сохраняют. Блок проверяет
+  `context.analyst`; что прятать на главной, решает он сам
+*/
+export const ANALYST_PAGE = 'analyst';
+/** Какой вид страницы показывать: у «Для аналитика» он общий с главной. */
+export const viewOf = (page) => (page === ANALYST_PAGE ? DEFAULT_PAGE : page);
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 const VALID_PRESETS = new Set([...PRESETS, 'custom']);
 
@@ -71,10 +79,9 @@ export function readState(search = window.location.search) {
     ...(detailEvent ? { detailEvent } : {}),
     ...(driver ? { driver } : {}),
     ...(params.has('days') ? { days: normalizedDays(params.get('days').split(',')) } : {}),
-    /* J-151: страница, месяц и тема детализации дайджеста */
+    /* J-151: страница и месяц дайджеста; тема «Детализации» ушла вместе с карточкой */
     page: PAGES.includes(params.get('page')) ? params.get('page') : DEFAULT_PAGE,
     ...(MONTH.test(params.get('month') ?? '') ? { month: params.get('month') } : {}),
-    ...(params.get('topic') ? { topic: params.get('topic') } : {}),
     filters,
     local,
   };
@@ -85,7 +92,6 @@ export function toSearch(state) {
   if (state.page && state.page !== DEFAULT_PAGE && PAGES.includes(state.page)) params.set('page', state.page);
   if (state.channel) params.set(PARAM_CHANNEL, state.channel);
   if (state.month && MONTH.test(state.month)) params.set('month', state.month);
-  if (state.topic) params.set('topic', state.topic);
   if (VALID_PRESETS.has(state.preset)) params.set(PARAM_PRESET, state.preset);
   if (state.from) params.set(PARAM_FROM, state.from);
   if (state.to) params.set(PARAM_TO, state.to);

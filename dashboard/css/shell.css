@@ -23,11 +23,21 @@ body {
   /* Ниже --content-min страница скроллится по горизонтали, сетка не ломается (D-29) */
   min-width: calc(var(--content-min) + var(--nav-current, var(--nav-width)));
   padding: var(--space-10) var(--page-gutter);
-  background: var(--page-ambient), var(--color-bg);
-  /* Пятна подсветки закреплены за окном: шапка повторяет их на своём стекле, и шва на её краях нет */
-  background-attachment: fixed;
   color: var(--color-text-secondary);
   font: var(--type-text);
+}
+
+/*
+  Пятна подсветки закреплены за окном отдельным слоем: background-attachment: fixed перерисовывал бы
+  всю страницу на каждом кадре прокрутки. Тон страницы — фон html, у body своего фона нет: он лёг бы поверх слоя
+*/
+body::before {
+  content: '';
+  position: fixed;
+  z-index: -1;
+  inset: 0;
+  background: var(--page-ambient), var(--color-bg);
+  pointer-events: none;
 }
 
 /* Без движения по просьбе системы: смысл от анимаций не зависит (D-56) */
@@ -64,6 +74,8 @@ body {
   grid-template-columns: var(--nav-current, var(--nav-width)) minmax(0, 1fr);
   gap: var(--nav-gap);
   align-items: start;
+  /* «Г» из меню и строки действий сужается и расширяется вместе с меню, панель подстраивается — без скачка */
+  transition: grid-template-columns var(--motion-base) var(--ease-standard);
 }
 
 :root {
@@ -76,7 +88,7 @@ body {
 
 /* J-186: слой над шапкой (15): sticky создаёт свой контекст наложения, и без z-index карточки и шапка, идущие позже
    в DOM, рисовались поверх popover «Как считается». Развёрнутая карточка (20) выше.
-   Меню — своя панель с поверхностью карточки: без неё пункты меню и фильтры шапки читались одной полосой */
+   От фильтров меню отделяет не своя подложка (J-192), а панель рабочей области: фильтры лежат на ней, меню — на фоне */
 .side-nav {
   position: sticky;
   z-index: 16;
@@ -87,10 +99,8 @@ body {
   flex-direction: column;
   gap: var(--space-6);
   padding: var(--nav-padding);
-  border: var(--hairline) solid var(--color-card-border);
-  border-radius: var(--radius-card);
-  background: var(--card-surface);
-  box-shadow: var(--card-shadow);
+  /* Макет дизайнера 11.11: меню — не карточка, а левая сторона «Г» на фоне страницы вместе со строкой действий над
+     панелью рабочей области; своей поверхности у него нет, выделена только панель с данными */
 }
 
 .side-nav__brand {
@@ -140,9 +150,10 @@ body {
 
 /* Текущий раздел — плашкой и рамкой, а не только цветом (D-26) */
 .side-nav__link[aria-current='page'] {
-  border-color: var(--color-border-strong);
-  background: var(--control-raised);
-  box-shadow: var(--control-raised-edge);
+  position: relative;
+  border-color: var(--nav-selected-edge);
+  background: var(--nav-selected);
+  box-shadow: inset 0 1px 0 var(--nav-selected-highlight);
   color: var(--color-text-strong);
 }
 
@@ -250,13 +261,44 @@ body {
   overflow-x: clip;
 }
 
-/* Рядом с меню страница начинается у его края: отрицательное поле слева заходило бы под меню */
-.app > .page {
-  margin-inline-start: 0;
-  padding-inline-start: 0;
+/*
+  Рабочая область (макет дизайнера 11.11): над панелью — строка действий, сама панель несёт шапку и страницу.
+  Панель — поверхность, а не стекло: backdrop-filter сделал бы её контейнером для position: fixed, и развёрнутая
+  карточка и подсказки встали бы от её края, а не от окна
+*/
+.workspace {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.workspace-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  min-height: var(--workspace-toolbar-height);
+  margin-block-end: var(--space-4);
+  padding-inline: var(--workspace-pad);
+}
+
+.workspace-toolbar:empty {
+  visibility: hidden;
+}
+
+.workspace > .page {
   display: flex;
   flex-direction: column;
   gap: var(--gap-section);
+  margin: 0;
+  padding: var(--workspace-pad);
+}
+
+.dashboard-surface {
+  border: var(--divider-width) solid var(--workspace-edge);
+  border-radius: var(--workspace-radius);
+  background: linear-gradient(145deg, var(--workspace-highlight), transparent 45%), var(--workspace-fill);
+  box-shadow: inset 0 1px 0 var(--workspace-highlight), 0 24px 80px -48px var(--workspace-shadow);
 }
 
 .column {
@@ -305,14 +347,12 @@ body {
 }
 
 /* Большая карточка к малой — 1.4 : 1, а не 356 : 216 макета: малым — больше ширины под значение с объёмом в строку, большой хватает меньшей доли (B-09) */
-/*
-  Колонка VOC канала — прежней ширины, как до J-189, когда справа от сетки стоял рейл:
-  1,4 / 4,4 от ширины без рейла, его зазора и трёх зазоров плиток; остальное делят сегменты
-*/
+/* Колонка VOC канала — 1,4fr от всей ширины, как у дизайнера (без вычета рейла, которым её сужали в J-204) */
 .metrics-grid {
   display: grid;
-  grid-template-columns: calc((100% - var(--rail-width) - var(--gap-section) - 3 * var(--gap-tile)) * 1.4 / 4.4) repeat(3, minmax(0, 1fr));
-  gap: var(--gap-tile);
+  grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr));
+  /* Зазор карточек шапки — как у остальных блоков страницы */
+  gap: var(--gap-section);
   align-items: stretch;
 }
 
@@ -329,6 +369,11 @@ body {
   (поля 40 + шапка 24 + зазор 12 + две строки по 49 и зазор 8 = 182), строка не скачет при смене фильтров
   и длины текста; дни плана и распределение растягиваются под неё. Лишнее прокручивается в карточке (D-55)
 */
+/* «Распределение оценок» — только у аналитика: на главной вывод берёт и его колонку, дыры в сетке нет */
+.metrics-grid:has(> .card--distribution[hidden]) > .card--summary {
+  grid-column: span 2;
+}
+
 .metrics-grid > .card--summary {
   contain: size;
   height: calc(var(--space-10) * 4 + var(--space-8));
@@ -463,7 +508,7 @@ body {
 .card__period--control {
   min-height: var(--control-height);
   padding: var(--space-1) var(--space-2);
-  border: var(--divider-width) solid transparent;
+  border: var(--hairline) solid transparent;
   border-radius: var(--radius-pill);
   background: none;
   cursor: pointer;
@@ -483,13 +528,15 @@ body {
 .card__action {
   display: inline-grid;
   flex: 0 0 auto;
-  width: var(--action-width);
-  /* Контролы карточки — одной высоты с сегментным переключателем рядом */
+  /* Одна форма кнопки-иконки на странице — круг высоты контрола, как кнопка боковой колонки и кнопки шапки;
+     прямоугольник 48 px рядом с круглыми читался другим видом контрола */
+  width: var(--control-height);
   height: var(--control-height);
   padding: 0;
   place-items: center;
   border: var(--hairline) solid var(--color-control-border);
-  border-radius: var(--radius-action);
+  border-radius: var(--radius-pill);
+  font: var(--type-caption);
   background: var(--control-raised);
   box-shadow: var(--control-raised-edge);
   color: var(--color-text-secondary);
@@ -579,9 +626,6 @@ body {
 .group-row {
   --group-rail: calc(var(--rail-width) - 2 * var(--card-padding));
   --group-gap: calc(var(--gap-section) + 2 * var(--card-padding));
-  /* J-148: кнопка календаря — на линии раздела, как у ленты отзывов */
-  --side-toggle-at: calc(100% - var(--group-rail) - var(--group-gap) / 2);
-  --side-toggle-reserve: calc(var(--space-10) * 2 + var(--space-6));
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) var(--group-rail);
@@ -610,6 +654,13 @@ body {
   min-width: 0;
   /* Вертикального скролла внутри карточек нет, растёт страница (design-spec); исключение — колонка D-55 */
   overflow: visible;
+}
+
+/* «Показать ещё» / «Скрыть» любого блока — высота контрола карточки, а не поле вокруг подписи: было 34 и 29 в соседних
+   блоках. Тег в селекторе — правило сильнее класса оформления блока (heatmap-more и др.) */
+button.paging-button {
+  height: var(--control-height);
+  padding-block: 0;
 }
 
 /* ── Служебные состояния (D-34) ────────────────────────────────────── */
@@ -676,8 +727,9 @@ body {
   position: sticky;
   z-index: 15;
   top: 0;
-  margin-block: calc(-1 * var(--header-pad));
-  padding-block: var(--header-pad);
+  /* Шапка начинается у верха панели: её поле — часть полосы, к которой прилипает шапка */
+  margin-block: calc(-1 * var(--workspace-pad)) calc(-1 * var(--header-pad));
+  padding-block: var(--workspace-pad) var(--header-pad);
 }
 
 /* Стекло шапки — на псевдоэлементе: backdrop-filter на самой шапке ограничил бы размытие её popover'ов её же содержимым */
@@ -688,16 +740,26 @@ body {
   inset-block: 0;
   /* Полоса шире любой страницы, лишнее обрезает .page */
   inset-inline: calc(-1 * var(--content-max));
-  /* Стекло шапки несёт те же пятна страницы, закреплённые за окном: без прокрутки под ним те же пиксели,
-     что вокруг, — тёмной плашки с краем у меню и под строкой фильтров нет. При прокрутке плотный тон
-     по-прежнему закрывает содержимое под фильтрами */
-  background: var(--page-ambient), var(--header-fill);
-  background-attachment: fixed;
+  /* Пятна страницы поверх плотного тона, плиткой размером с окно в его координатах (header-ambient.js); до JS — fixed */
+  background-color: var(--header-fill);
+  background-image: var(--page-ambient);
+  background-position: var(--ambient-position, 0 0);
+  background-size: var(--ambient-size, auto);
+  background-repeat: no-repeat;
+  background-attachment: var(--ambient-attachment, fixed);
   -webkit-mask-image: var(--header-fade);
   mask-image: var(--header-fade);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
+  /* На месте шапка — часть панели, своей полосы у неё нет: шва с панелью нет. Полоса появляется, когда шапка
+     прилипла и под ней едет содержимое (data-stuck — header-ambient.js) */
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--ease-standard);
   pointer-events: none;
+}
+
+#header[data-stuck]::before {
+  opacity: 1;
 }
 
 .shell-head {
@@ -726,13 +788,15 @@ body {
   height: var(--control-height-lg);
   margin-inline-start: auto;
   padding: calc(var(--space-1) / 2);
-  border: var(--divider-width) solid var(--color-control-border);
+  border: var(--hairline) solid var(--color-control-border);
   border-radius: var(--radius-pill);
   background: var(--glass-control);
 }
 
 .theme-toggle__option {
   display: inline-grid;
+  /* Кнопки шапки — роль подписи, а не 13,33 px браузера */
+  font: var(--type-caption);
   place-items: center;
   width: calc(var(--control-height-lg) - var(--space-2));
   padding: 0;
@@ -893,7 +957,7 @@ body {
   align-items: center;
   height: var(--control-height-lg);
   padding: 0 var(--space-3);
-  border: var(--divider-width) solid var(--color-control-border);
+  border: var(--hairline) solid var(--color-control-border);
   border-radius: var(--radius-pill);
   background: var(--control-raised);
   box-shadow: var(--control-raised-edge);
@@ -951,7 +1015,7 @@ body {
 .app-update__install {
   flex-shrink: 0;
   padding: var(--space-1) var(--space-3);
-  border: var(--divider-width) solid var(--color-text-strong);
+  border: var(--hairline) solid var(--color-text-strong);
   border-radius: var(--radius-pill);
   background: var(--color-text-strong);
   color: var(--color-on-accent);
@@ -988,7 +1052,7 @@ body {
   width: 100%;
   min-width: 0;
   padding: var(--space-2);
-  border: var(--divider-width) solid var(--glass-edge);
+  border: var(--hairline) solid var(--glass-edge);
   border-radius: var(--radius-control);
   background: var(--glass-control);
   color: var(--color-text-strong);
@@ -1174,13 +1238,14 @@ body {
   gap: var(--space-2);
   min-width: 0;
   /* Дорожки шапки — одной высоты с переключателем канала: фильтры не разной величины в одной строке */
-  min-height: var(--control-height-lg);
+  height: var(--header-control-height);
   /* Поле со всех сторон как зазор сверху: крайние контролы и чип прижаты к краям панели одинаково (R-35, J-05) */
   padding: var(--space-1);
-  /* Дорожка фильтров — как у переключателей, а не карточка (J-15, Figma 3204:2691) */
-  border: var(--hairline) solid var(--color-control-border);
+  /* Макет дизайнера 11.11: канал, период и фильтры — pill на одной поверхности с рамкой 1 px */
+  border: var(--divider-width) solid var(--filter-edge);
   border-radius: var(--radius-pill);
-  background: var(--control-surface);
+  background: var(--filter-surface);
+  box-shadow: inset 0 1px 0 var(--filter-highlight);
 }
 
 /* J-61: период — своя дорожка перед фильтрами среза; не сжимается, сжимаются подписи фильтров */
@@ -1205,7 +1270,7 @@ body {
   max-width: 22ch;
   min-width: 0;
   /* Плашка наведения заполняет дорожку по высоте, как выбор в переключателе канала */
-  min-height: calc(var(--control-height-lg) - 2 * var(--space-1) - 2 * var(--hairline));
+  min-height: calc(var(--header-control-height) - 2 * var(--space-1) - 2 * var(--divider-width));
   padding: var(--space-1) var(--space-3);
   border: 0;
   border-radius: var(--radius-pill);
@@ -1245,7 +1310,7 @@ body {
 /* Выбранный фильтр — чип: значение и крестик в одной плашке; форма, а не только цвет, отличает его (R-34, D-26) */
 .filters__item--chip {
   align-items: center;
-  border: var(--divider-width) solid var(--color-border-strong);
+  border: var(--hairline) solid var(--color-border-strong);
   border-radius: var(--radius-pill);
   background: var(--control-raised);
   box-shadow: var(--control-raised-edge);
@@ -1291,6 +1356,39 @@ body {
 }
 
 /* J-128: «Сбросить фильтры» — текстовая кнопка в конце строки фильтров, видна только при выбранном фильтре */
+.filters__item[hidden],
+.filters__divider[hidden] {
+  display: none;
+}
+
+/* «Ещё фильтры» — контрол строки фильтров; шеврон показывает, раскрыт ли список */
+.filters__more {
+  flex: none;
+  max-width: none;
+}
+
+.filters__more-icon {
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
+  transition: transform var(--motion-fast) var(--ease-standard);
+}
+
+.filters__more[aria-expanded='true'] .filters__more-icon {
+  transform: rotate(180deg);
+}
+
+/* Настройки расчёта: popover под кнопкой, у правого края — кнопка стоит у края строки шапки */
+.control-popover.shell-head__settings-popover {
+  inset-inline: auto 0;
+  width: calc(var(--space-10) * 7);
+}
+
+.shell-head__settings-note {
+  margin: 0;
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+}
+
 .filters__reset {
   flex-shrink: 0;
   min-height: var(--tab-height);
@@ -1394,7 +1492,7 @@ body {
 .control-popover__apply,
 .control-popover__reset {
   padding: var(--space-2) var(--space-3);
-  border: var(--divider-width) solid var(--glass-edge);
+  border: var(--hairline) solid var(--glass-edge);
   border-radius: var(--radius-pill);
   background: var(--glass-control);
   color: var(--color-text-secondary);
@@ -1449,7 +1547,7 @@ body {
   width: 100%;
   min-width: 0;
   padding: var(--space-2);
-  border: var(--divider-width) solid var(--glass-edge);
+  border: var(--hairline) solid var(--glass-edge);
   border-radius: var(--radius-control);
   background: var(--glass-control);
   color: var(--color-text-secondary);
@@ -1541,8 +1639,7 @@ body {
   }
 
   #header::before {
-    background: var(--page-ambient), var(--color-bg);
-    background-attachment: fixed;
+    background-color: var(--workspace-solid);
   }
 }
 
@@ -1558,13 +1655,19 @@ body {
   }
 
   #header::before {
-    background: var(--page-ambient), var(--color-bg);
-    background-attachment: fixed;
+    background-color: var(--workspace-solid);
   }
 
-  .card,
-  .side-nav {
+  .card {
     background: var(--card-surface-solid);
+  }
+
+  .dashboard-surface {
+    background: var(--workspace-solid);
+  }
+
+  .shell-head__bar > .filters {
+    background: var(--filter-surface-solid);
   }
 }
 

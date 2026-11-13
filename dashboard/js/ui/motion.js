@@ -1,7 +1,8 @@
 /*
   Движение подтверждает действие пользователя и смысла не несёт (D-56): выбор
-  таба переезжает рамкой, перестроенное содержимое проявляется. При
-  prefers-reduced-motion и без Web Animations API ничего не анимируется.
+  таба переезжает рамкой, перестроенное табом содержимое блока проявляется.
+  Смена состояния дашборда не движется: данные встают на место прежних.
+  При prefers-reduced-motion и без Web Animations API ничего не анимируется.
 */
 
 const REDUCED = '(prefers-reduced-motion: reduce)';
@@ -39,54 +40,29 @@ export function slideSelection(fromRect, tab) {
   );
 }
 
-/* Перестройка всего дашборда стартует не с нуля: иначе каждый клик мигал бы страницей */
-const DASHBOARD_FROM = 0.5;
-
-/** Перестроенное содержимое проявляется; `from` — стартовая непрозрачность. */
-export function reveal(nodes, from = 0) {
+/** Перестроенное содержимое блока проявляется. */
+export function reveal(nodes) {
   if (!motionAllowed()) return;
   const options = timing('--motion-base');
   for (const node of nodes) {
-    node.animate?.([{ opacity: from, transform: `translateY(${from ? 0 : 4}px)` }, { opacity: 1, transform: 'none' }], options);
+    node.animate?.([{ opacity: 0, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }], options);
   }
 }
 
-/** Проявляет перестроенное содержимое вокруг `keep`: нажатый переключатель не гаснет под указателем. */
+/**
+ * Проявляет перестроенное содержимое вокруг `keep`: нажатый переключатель не гаснет под указателем.
+ * Узел с `data-steady` — управление блока (поиск, соседние переключатели, кнопки), а не содержимое: при перестройке
+ * оно стоит на месте, иначе каждый клик по табу заставлял мигать все соседние контролы
+ */
 export function revealAround(container, keep) {
   const rebuilt = [];
   const walk = (node) => {
     for (const child of node.children) {
-      if (child === keep) continue;
+      if (child === keep || child.hasAttribute?.('data-steady')) continue;
       if (keep && child.contains(keep)) walk(child);
       else rebuilt.push(child);
     }
   };
   walk(container);
   reveal(rebuilt);
-}
-
-let clicked = null;
-globalThis.document?.addEventListener?.('click', (event) => {
-  clicked = event.target;
-  setTimeout(() => { clicked = null; });
-}, true);
-
-/*
-  J-40: тело карточки-группы не карточка блока — оно содержит тела вложенных блоков. Иначе `acted`
-  стало бы телом группы, и блок, где было действие, проявлялся бы вопреки D-56, а при смене
-  фильтра прозрачность группы и вложенного блока перемножалась бы
-*/
-export const CARD_BODIES = '.card__body:not(.card--group > .card__body)';
-
-/** Снимок карточек до действия; `acted` — карточка, где оно случилось: клик ещё в обработке или фокус клавиатуры. */
-export function snapshotCards(bodies = document.querySelectorAll(CARD_BODIES), origin = clicked ?? document.activeElement) {
-  return { html: new Map([...bodies].map((body) => [body, body.innerHTML])), acted: [...bodies].find((body) => body.contains(origin)) };
-}
-
-/** Изменившиеся карточки, кроме той, где было действие: её контрол сам показывает выбор. */
-export const changedCards = (bodies, before, active) =>
-  [...bodies].filter((body) => before.html.get(body) !== body.innerHTML && body !== before.acted && !body.contains(active));
-
-export function revealDashboard(before, bodies = document.querySelectorAll(CARD_BODIES)) {
-  reveal(changedCards(bodies, before, document.activeElement), DASHBOARD_FROM);
 }

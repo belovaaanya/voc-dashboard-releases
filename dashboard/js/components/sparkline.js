@@ -5,6 +5,8 @@ import { element, svgNode } from '../ui/dom.js';
 
 const VIEWBOX = { width: 91, height: 28 };
 const DOT_RADIUS = 1.5;
+/* Скругление коридора плана у `glow`, в единицах viewBox */
+const BAND_RADIUS = 3;
 let sequence = 0;
 
 /* Заливка под линией гаснет к низу, как у графика динамики (R-50) */
@@ -29,7 +31,15 @@ function appendFill(svg, points) {
 */
 /* J-163: `fill` — широкая линия на всю высоту контейнера (плитка роли), а не фиксированной высоты */
 /* J-165: `axis` — подписи под точками широкой линии (даты недель), по одной на значение */
-export function sparkline(values, { tone, domain, wide = false, fill = false, band = null, label = null, axis = null }) {
+/*
+  `zones: false` — коридор плана полосой, но линия и точки своего тона, без перекраски по зонам: так две линии
+  на одном графике (iOS и Android дайджеста) различаются цветом ряда, а не попаданием в план
+*/
+/*
+  `glow` — широкая линия дайджеста: линия светится своим тоном, заливки под ней нет, точки маленькие, подписи значений —
+  над каждой точкой; коридор плана со скруглёнными углами
+*/
+export function sparkline(values, { tone, domain, wide = false, fill = false, band = null, zones = true, label = null, axis = null, glow = false }) {
   const scale = domain ?? rangeOf(band ? [...values, band.min, band.max] : values);
   const points = plotPoints(values.map((voc) => ({ voc })), { ...VIEWBOX, ...scale });
   const svg = svgNode('svg', `sparkline${wide ? ' sparkline--wide' : ''}${wide && fill ? ' sparkline--fill' : ''} tone--${tone}`, {
@@ -37,15 +47,22 @@ export function sparkline(values, { tone, domain, wide = false, fill = false, ba
   });
   if (band) {
     const y = (value) => VIEWBOX.height - ((value - scale.min) / (scale.max - scale.min)) * VIEWBOX.height;
-    svg.append(svgNode('rect', 'sparkline__band', { x: 0, y: y(band.max), width: VIEWBOX.width, height: Math.max(0.5, y(band.min) - y(band.max)) }));
+    /* Коридор плана — горизонтальный градиент тона «хорошо»: прозрачный слева, насыщеннее к текущей точке справа */
+    const id = `sparkline-band-${sequence += 1}`;
+    const gradient = svgNode('linearGradient', 'sparkline__band-gradient', { id, x1: 0, x2: 1, y1: 0, y2: 0 });
+    gradient.append(svgNode('stop', 'sparkline__band-stop sparkline__band-stop--clear', { offset: 0 }), svgNode('stop', 'sparkline__band-stop', { offset: 1 }));
+    const defs = svgNode('defs');
+    defs.append(gradient);
+    svg.append(defs);
+    svg.append(svgNode('rect', 'sparkline__band', { x: 0, y: y(band.max), width: VIEWBOX.width, height: Math.max(0.5, y(band.min) - y(band.max)), fill: `url(#${id})`, ...(glow ? { rx: BAND_RADIUS, ry: BAND_RADIUS } : {}) }));
   }
-  appendFill(svg, points);
+  if (!glow) appendFill(svg, points);
   /* Точка без соседей — отрезок нулевой длины: её видно только кружком */
   const lines = linePaths(points).filter((path) => path.includes(' C '));
-  if (band) appendPlanLines(svg, lines, scale, band);
+  if (band && zones) appendPlanLines(svg, lines, scale, band, glow);
   else for (const d of lines) svg.append(svgNode('path', 'sparkline__line', { d }));
   /* J-156: с коридором плана точка ниже него — тоном негатива, выше — позитива, в коридоре — тоном линии */
-  const planTone = (value) => (!band || value === null ? '' : value < band.min ? ' tone--negative' : value > band.max ? ' tone--positive' : '');
+  const planTone = (value) => (!band || !zones || value === null ? '' : value < band.min ? ' tone--negative' : value > band.max ? ' tone--positive' : '');
   if (!wide) {
     points.forEach(({ x, y }, index) => {
       if (y !== null) svg.append(svgNode('circle', `sparkline__dot${planTone(values[index])}`, { cx: x, cy: y, r: DOT_RADIUS }));
@@ -71,7 +88,7 @@ export function sparkline(values, { tone, domain, wide = false, fill = false, ba
     const edge = index === 0 && points.length > 1 ? ' sparkline-labels__value--start' : index === points.length - 1 && points.length > 1 ? ' sparkline-labels__value--end' : '';
     plot.append(at(element('span', `sparkline-labels__value${edge}`, label(values[index])), x, y));
   });
-  const wrap = element('div', fill ? 'sparkline-labels sparkline-labels--fill' : 'sparkline-labels');
+  const wrap = element('div', ['sparkline-labels', fill && 'sparkline-labels--fill', glow && 'sparkline-labels--glow'].filter(Boolean).join(' '));
   wrap.append(plot);
   if (axis) {
     const row = element('div', 'sparkline-labels__axis');
@@ -92,16 +109,32 @@ export function sparkline(values, { tone, domain, wide = false, fill = false, ba
 */
 const ZONE_FADE = VIEWBOX.height / 4;
 
-function appendPlanLines(svg, lines, scale, band) {
+/*
+  `glow`: под линией — её размытая копия тем же градиентом, но участок в коридоре прозрачный (`chart-zones--glow`, как
+  J-72 графика динамики): светятся только красная и зелёная части, у серой свечения нет
+*/
+function appendPlanLines(svg, lines, scale, band, glow = false) {
   const y = (value) => VIEWBOX.height - ((value - scale.min) / (scale.max - scale.min)) * VIEWBOX.height;
-  const id = `sparkline-zones-${sequence += 1}`;
-  const gradient = svgNode('linearGradient', 'chart-zones', { id, gradientUnits: 'userSpaceOnUse', x1: 0, x2: 0, y1: 0, y2: VIEWBOX.height });
-  for (const { offset, zone } of planZoneStops(y(band.max), y(band.min), VIEWBOX.height, ZONE_FADE)) {
-    gradient.append(svgNode('stop', `chart-zones__stop chart-zones__stop--${zone}`, { offset }));
-  }
   const defs = svgNode('defs');
-  defs.append(gradient);
+  const zoneGradient = (className) => {
+    const id = `sparkline-zones-${sequence += 1}`;
+    const gradient = svgNode('linearGradient', className, { id, gradientUnits: 'userSpaceOnUse', x1: 0, x2: 0, y1: 0, y2: VIEWBOX.height });
+    for (const { offset, zone } of planZoneStops(y(band.max), y(band.min), VIEWBOX.height, ZONE_FADE)) {
+      gradient.append(svgNode('stop', `chart-zones__stop chart-zones__stop--${zone}`, { offset }));
+    }
+    defs.append(gradient);
+    return id;
+  };
+  const id = zoneGradient('chart-zones');
+  const glowId = glow ? zoneGradient('chart-zones chart-zones--glow') : null;
   svg.append(defs);
+  if (glowId) {
+    for (const d of lines) {
+      const halo = svgNode('path', 'sparkline__line sparkline__line--zones sparkline__line--glow', { d });
+      halo.style.setProperty('--sparkline-zones', `url(#${glowId})`);
+      svg.append(halo);
+    }
+  }
   for (const d of lines) {
     const path = svgNode('path', 'sparkline__line sparkline__line--zones', { d });
     path.style.setProperty('--sparkline-zones', `url(#${id})`);

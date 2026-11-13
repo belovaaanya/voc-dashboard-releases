@@ -139,11 +139,16 @@ function cancelRequest(block) {
 }
 
 /**
- * Скелет до расчёта. Запрос прошлого среза отвязывается, а не отменяется: его ответ ложится
- * в кэш клиента для возврата к срезу, но не поверх нового.
+ * Запрос прошлого среза отвязывается, а не отменяется: его ответ ложится в кэш клиента
+ * для возврата к срезу, но не поверх нового.
  */
-export function conclusionPlaceholder(block) {
+export function detachConclusion(block) {
   requests.delete(block);
+}
+
+/** Скелет до расчёта — у первой отрисовки. */
+export function conclusionPlaceholder(block) {
+  detachConclusion(block);
   block.setHead();
   block.setState(LOADING, skeleton());
 }

@@ -39,9 +39,16 @@
 /*
   J-68: справа есть ещё колонки — плитки у края затухают, а не обрываются. Наложение
   тоном липкой колонки, как и стык слева; полоса прокрутки под ним не гаснет. Маска на
-  области прокрутки с липкой колонкой в Chrome гасила всю карту, поэтому — наложение
+  области прокрутки с липкой колонкой в Chrome гасила всю карту, поэтому — наложение;
+  левый край закрывает липкая колонка названий
 */
-.heatmap-frame:has(> .heatmap-scroll[data-more-end])::after {
+/* Маску общего .h-scroll здесь не применяем: края те же (data-fade-*), затухание — наложением */
+.heatmap-frame > .heatmap-scroll.h-scroll {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.heatmap-frame:has(> .heatmap-scroll[data-fade-end='true'])::after {
   content: '';
   position: absolute;
   z-index: 1;
@@ -390,37 +397,13 @@
   color: var(--color-text-strong);
 }
 
-/* Платформа версии — тихой меткой перед номером: одинаковые номера iOS и Android различимы */
+/* Платформа версии — тихой меткой справа, колонкой напротив номеров: одинаковые номера iOS и Android различимы */
 .heatmap__os {
   flex: none;
+  margin-inline-start: auto;
   padding: 0 var(--space-1);
   border: var(--hairline) solid var(--color-card-border);
   border-radius: var(--radius-tag);
   color: var(--color-text-tertiary);
   font: var(--type-axis);
-}
-
-
-/* J-149: секция платформы у разреза «Версии» — подзаголовок строкой во всю ширину карты, кнопки порции — под строками */
-.heatmap .heatmap__section-title {
-  position: sticky;
-  inset-inline-start: 0;
-  padding: var(--space-4) var(--space-2) var(--space-2);
-  color: var(--color-text-strong);
-  font: var(--type-caption-strong);
-  text-align: start;
-}
-
-.heatmap__section:first-child .heatmap__section-title {
-  padding-block-start: var(--space-1);
-}
-
-.heatmap__section-count {
-  margin-inline-start: var(--space-2);
-  color: var(--color-text-tertiary);
-  font: var(--type-caption);
-}
-
-.heatmap__section-actions td {
-  padding-block: var(--space-2);
 }

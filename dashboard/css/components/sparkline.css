@@ -56,14 +56,46 @@
   fill: var(--tone);
 }
 
+/* `glow`: светится размытая копия линии — только красный и зелёный участки (в коридоре стопы прозрачны), точки маленькие */
+.sparkline__line--glow {
+  opacity: var(--chart-glow-strength);
+  filter: blur(calc(var(--space-1) / 4));
+  stroke-width: var(--chart-glow-radius);
+}
+
+/* Значения VOC над точками линий дайджеста — кеглем текста, а не оси: их читают, а не сверяют */
+.sparkline-labels--glow .sparkline-labels__value {
+  font: var(--type-text);
+}
+
+.sparkline-labels--glow .sparkline__marker {
+  width: var(--space-1);
+  height: var(--space-1);
+}
+
 /* J-160: линия с коридором плана — градиентом зон, как на графике динамики */
 .sparkline__line--zones {
   stroke: var(--sparkline-zones);
 }
 
 /* J-153: коридор плана — тихой полосой за линией, как полоса плана на графике динамики */
+/* Коридор плана: градиент слева направо до тона «хорошо», края слегка размыты — полоса не режет сцену */
 .sparkline__band {
-  fill: var(--chart-selected-fill);
+  filter: blur(calc(var(--space-1) / 4));
+}
+
+.sparkline__band-stop {
+  --sparkline-band-strength: calc(var(--tone-rim) / 3);
+  stop-color: color-mix(in srgb, var(--color-positive) var(--sparkline-band-strength), transparent);
+}
+
+/* На светлом фоне 13 % зелёного не видно: коридор насыщеннее, чтобы читался так же, как на тёмном */
+:root[data-theme='light'] .sparkline__band-stop {
+  --sparkline-band-strength: calc(var(--tone-rim) * 0.75);
+}
+
+.sparkline__band-stop--clear {
+  stop-color: transparent;
 }
 
 /* J-157: подписи значений над точками широкой линии; сверху — место под подпись самой высокой точки */

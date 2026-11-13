@@ -23,6 +23,8 @@ const EXPANDED = 'expanded';
 */
 export const SECTIONS = [
   { id: 'voc', label: 'VOC ЦК', version: '1.0' },
+  /* Та же главная в режиме аналитика: продвинутые разрезы и колонки блоков (`context.analyst`) */
+  { id: 'analyst', label: 'Для аналитика', icon: 'analyst' },
   { id: 'roles', label: 'VOC ролей', icon: 'users' },
   { id: 'digest', label: 'VOC-дайджест', icon: 'digest' },
   { id: 'feedback', label: 'Обратная связь', icon: 'chat' },

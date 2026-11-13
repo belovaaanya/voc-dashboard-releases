@@ -1,18 +1,24 @@
 /*
   J-151: VOC-дайджест — месяц канала по макету заказчика, собранный из готовых частей дашборда: число со стрелкой
   динамики и кольцом плана — как в карточках метрик, линия полугода — sparkline, доли и урон по месяцам — пилюли
-  тепловой карты антидрайверов. Расчёт — `../digest.js`. Месяц и тема детализации живут в URL (`month`, `topic`).
+  тепловой карты антидрайверов, вклад триггеров — полосами. Расчёт — `../core/digest.js`. Месяц — из периода шапки.
 */
 import { EMPTY } from '../shell/block.js';
+import { emptyValue } from '../components/empty-value.js';
 import { segmented } from '../components/segmented.js';
+import { legendItem, legendList } from '../components/legend.js';
 import { sparkline } from '../components/sparkline.js';
 import { chartDomain } from '../core/chart-geometry.js';
-import { buildDigest, buildRoles, buildTopic, defaultMonth, monthsOf } from '../core/digest.js';
+import { colourScale } from '../core/antidrivers.js';
+import { buildDigest, buildPlatforms, buildRoles, buildTriggers, defaultMonth, monthsOf } from '../core/digest.js';
 import { element } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
-import { MONTHS, formatBucket, monthName, formatCount, formatImpact, formatShare, formatVoc, plural } from '../core/format.js';
-import { roundImpact, roundVoc } from '../core/round.js';
-import { DELTA_SHAPES, GROWTH, countNode, figureNode, leadNode, metaRowNode, planCaptionNode, planDotNode } from './metric-card.js';
+import { MONTHS, formatBucket, monthName, formatCount, formatImpact, formatRatings, formatShare, formatVoc, plural } from '../core/format.js';
+import { roundDelta, roundImpact, roundVoc } from '../core/round.js';
+import { MOBILE_CHANNEL } from '../core/dimensions.js';
+import { MINIMUM_RATINGS } from '../core/sufficiency.js';
+import { DELTA_SHAPES, GROWTH, countGroupNode, countNode, figureNode, leadNode, metaRowNode, planCaptionNode, planDotNode, valueNode } from './metric-card.js';
+import { valueDelta } from '../components/value-delta.js';
 
 const monthIndex = (month) => Number(month.slice(5, 7)) - 1;
 export const monthTitle = (month) => `${capitalized(monthName(month))} ${month.slice(0, 4)}`;
@@ -42,26 +48,10 @@ export function selectedMonth(context) {
   return months.includes(context.state.month) ? context.state.month : defaultMonth(context.channelRows);
 }
 
-function picker(label, options, selected, onChange) {
-  const wrap = element('label', 'digest-select');
-  wrap.append(element('span', 'visually-hidden', label));
-  const select = element('select', 'digest-select__input');
-  for (const { value, text } of options) {
-    const option = element('option', null, text);
-    option.value = value;
-    option.selected = value === selected;
-    select.append(option);
-  }
-  select.addEventListener('change', () => onChange(select.value));
-  wrap.append(select);
-  return wrap;
-}
-
-
 /* Линия полугода — sparkline карточек: VOC с поправкой; подпись — первый и последний месяц */
 function trendNode(points) {
   const wrap = element('div', 'digest-trend');
-  wrap.append(sparkline(points.map(({ voc }) => voc), { tone: 'neutral', wide: true, label: vocText }),
+  wrap.append(sparkline(points.map(({ voc }) => voc), { tone: 'neutral', wide: true, label: vocText, glow: true }),
     element('span', 'digest-caption', `${monthShort(points[0].month)} — ${monthShort(points.at(-1).month)}`));
   return wrap;
 }
@@ -69,10 +59,11 @@ function trendNode(points) {
 /* J-153: линия сегмента — недели, целиком покрывающие месяц, с коридором плана канала полосой */
 const dayMonth = (iso) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}`;
 function weeklyNode(points, plan) {
-  const wrap = element('div', 'digest-trend');
+  /* Линия недель забирает всю свободную высоту карточки сегмента (`fill`, как на плитках ролей): без пустоты над ней */
+  const wrap = element('div', 'digest-trend digest-trend--fill digest-trend--segment');
   const band = plan ? { min: plan.min, max: plan.max } : null;
-  wrap.append(sparkline(points.map(({ voc }) => voc), { tone: 'neutral', wide: true, label: vocText, band }),
-    element('span', 'digest-caption', `недели ${dayMonth(points[0].from)} — ${dayMonth(points.at(-1).to)}${plan ? ` · план ${formatVoc(plan.min)}–${formatVoc(plan.max)}` : ''}`));
+  /* Недели и план — в базе чисел под итогом страницы, а не подписью в каждой карточке */
+  wrap.append(sparkline(points.map(({ voc }) => voc), { tone: 'neutral', wide: true, fill: true, label: vocText, band, glow: true }));
   return wrap;
 }
 
@@ -80,15 +71,21 @@ function weeklyNode(points, plan) {
 let dkoMetric = 'share';
 
 /* Пилюля тепловой карты антидрайверов: чем сильнее значение, тем краснее (шкала — максимум своей таблицы) */
-function heatPill(text, strength) {
-  const pill = element('span', strength > 0 ? 'heatmap-cell tone-pill heatmap-cell--bad digest-pill' : 'heatmap-cell tone-pill digest-pill');
-  if (strength > 0) pill.style.setProperty('--heat-strength', `${Math.round(Math.min(1, strength) * 100)}%`);
-  pill.append(element('span', 'heatmap-cell__value', text));
+/* Пилюля тепловой карты главной: ниже Q75 таблицы — только рамка, выше — заливка тем сильнее, чем ближе к Q95 */
+function heatPill(text, highlight) {
+  const pill = element('span', highlight.muted ? 'heatmap-cell tone-pill heatmap-cell--bad heatmap-cell--muted digest-pill' : 'heatmap-cell tone-pill heatmap-cell--bad digest-pill');
+  if (!highlight.muted) pill.style.setProperty('--heat-strength', `${Math.round(highlight.strength * 100)}%`);
+  /* Нет значения — общий прочерк второстепенного цвета (emptyValue), а не белое тире ячейки */
+  pill.append(text === null ? emptyValue() : element('span', 'heatmap-cell__value', text));
   return pill;
 }
 
 function monthTable(months, rows) {
   const table = element('table', 'digest-table');
+  /* Ширины колонок — из colgroup: при table-layout: fixed строка-подзаголовок на всю ширину не задаёт их сама */
+  const columns = element('colgroup');
+  columns.append(element('col', 'digest-table__name-col'), ...months.map(() => element('col')));
+  table.append(columns);
   const head = element('tr');
   head.append(element('th', 'digest-table__name'), ...months.map((month) => element('th', null, MONTHS[monthIndex(month)])));
   const thead = element('thead');
@@ -96,7 +93,9 @@ function monthTable(months, rows) {
   const body = element('tbody');
   for (const { name, cells, className } of rows) {
     const row = element('tr', className ?? null);
-    row.append(element('th', 'digest-table__name', name));
+    const title = element('th', 'digest-table__name', name);
+    if (!cells.length) title.colSpan = months.length + 1;
+    row.append(title);
     for (const cell of cells) {
       const td = element('td');
       td.append(cell);
@@ -115,8 +114,8 @@ function unavailable(block) {
 
 export function renderDigestSummary(block, context) {
   const digest = digestOf(context);
-  const name = context.label('channel', context.state.channel);
-  block.setTitle(digest ? `${name} · ${monthTitle(digest.month)}` : name);
+  /* Заголовок страницы — «VOC-дайджест · Месяц ГГГГ» ролью --type-page-title (card--page-head); канал виден в шапке дашборда */
+  block.setTitle(digest ? `VOC-дайджест · ${monthTitle(digest.month)}` : 'VOC-дайджест');
   if (!digest) return unavailable(block);
   block.setHead({ marker: planDotNode(digest.voc.voc, digest.voc.plan) });
   const content = element('div', 'digest-summary');
@@ -128,12 +127,19 @@ export function renderDigestSummary(block, context) {
   /* J-176: оценки по месяцам — столбиками справа от числа, как урон стабильности, а не подписью строкой */
   const count = element('div', 'digest-summary__count');
   const figure = element('div', 'metric');
-  figure.append(figureNode(formatCount(digest.count.value), leadNode(digest.count.delta, { shape: DELTA_SHAPES.count, growth: GROWTH.volume })),
+  /* Число и дельта — неразрывной парой (valueDelta): «+557» не уходит под число */
+  figure.append(valueDelta(valueNode(formatCount(digest.count.value)), leadNode(digest.count.delta, { shape: DELTA_SHAPES.count, growth: GROWTH.volume })),
     metaRowNode(element('span', 'metric__meta', `${plural(digest.count.value, ['оценка', 'оценки', 'оценок'])} за месяц`)));
   count.append(figure, barsNode(digest.count.months.map(({ month, count: value }) => ({ month, size: value, text: formatCount(value) })), ' digest-bars--count'));
 
   content.append(main, trendNode(digest.trend), count);
-  block.setContent(content);
+  /* База чисел — одна на страницу, как у «VOC ролей»: не повторяется в каждой карточке сегмента */
+  /* План уже стоит под VOC итога — в базе его не повторяем */
+  const { from, to } = digest.weeks;
+  const base = element('p', 'digest-caption digest-summary__base', `Дельты — к прошлому месяцу · сегменты по неделям ${dayMonth(from)} — ${dayMonth(to)}`);
+  const wrap = element('div', 'digest-summary__wrap');
+  wrap.append(content, base);
+  block.setContent(wrap);
 }
 
 export const digestSegment = (index) => (block, context) => {
@@ -144,15 +150,71 @@ export const digestSegment = (index) => (block, context) => {
   block.setHead();
   const content = element('div', 'digest-segment');
   const numbers = element('div', 'metric digest-segment__numbers');
+  /* Анатомия карточки сегмента главной: число с дельтой, под ним «N оценок» с дельтой одним узлом (countGroupNode) */
   numbers.append(figureNode(vocText(segment.voc), leadNode(segment.delta)),
-    metaRowNode(countNode(segment.count), leadNode(segment.countDelta, { shape: DELTA_SHAPES.count, growth: GROWTH.volume })),
+    metaRowNode(countGroupNode(segment.count, segment.count - segment.countDelta)),
     ...(segment.raw !== null && roundVoc(segment.raw) !== roundVoc(segment.voc) ? [metaRowNode(element('span', 'metric__meta', `${vocText(segment.raw)} без поправки`))] : []));
   /* J-152: тезисов у сегментов пока нет — по просьбе заказчика; вывод считается и вернётся с архивом формулировок */
   const story = element('div', 'digest-segment__story');
-  story.append(weeklyNode(segment.weekly, digest.voc.plan));
+  story.append(segment.spread ? spreadNode(segment.spread) : weeklyNode(segment.weekly, digest.voc.plan));
   content.append(numbers, story);
   block.setContent(content);
 };
+
+/* Мало оценок у сегмента мобильного канала (D-25): линия недель стояла бы на единицах оценок — показываем оценки 5…1 */
+function spreadNode(spread) {
+  const table = element('table', 'digest-table digest-spread');
+  const head = element('tr');
+  head.append(element('th', 'digest-table__name', 'Оценка'), element('th', null, 'Оценок'), element('th', null, 'Доля'));
+  const thead = element('thead');
+  thead.append(head);
+  const body = element('tbody');
+  for (const { score, count, share } of spread) {
+    /* Оценка — рядом звёзд по её числу, как в отзыве; screen reader слышит «5 звёзд» */
+    const name = element('th', 'digest-table__name');
+    const stars = element('span', 'digest-spread__stars');
+    for (let index = 0; index < score; index += 1) stars.append(icon('star', 'digest-spread__star'));
+    stars.append(element('span', 'visually-hidden', `${score} ${plural(score, ['звезда', 'звезды', 'звёзд'])}`));
+    name.append(stars);
+    const row = element('tr', count ? null : 'digest-spread__row--zero');
+    row.append(name, element('td', null, formatCount(count)), element('td', null, percent(share)));
+    body.append(row);
+  }
+  table.append(thead, body);
+  const wrap = element('div', 'digest-trend');
+  wrap.append(table, element('span', 'digest-caption', `Мало оценок (порог ${formatCount(MINIMUM_RATINGS)}) — оценки 5…1 вместо линии`));
+  return wrap;
+}
+
+/*
+  Горизонтальные полосы триггеров: строка «название · полоса · VOC триггера · вклад»; над списком — одна шапка колонок.
+  Вклад — тоном направления (знак и группа дублируют цвет)
+*/
+function hbars(items, tone) {
+  const list = element('ol', 'digest-hbars');
+  for (const { name, size, voc: value, impact, hint } of items) {
+    const row = element('li', `digest-hbars__row digest-hbars__row--${tone}`);
+    const track = element('span', 'digest-hbars__track');
+    const bar = element('span', 'digest-hbars__bar');
+    bar.style.setProperty('--bar', String(Math.round(Math.min(1, size) * 100) / 100));
+    track.append(bar);
+    row.append(element('span', 'digest-hbars__name', name), track, element('span', 'digest-hbars__value', value),
+      element('span', 'digest-hbars__value digest-hbars__impact', impact));
+    if (hint) row.title = hint;
+    /* Шапка колонок скрыта от screen reader — строка называет числа сама */
+    row.setAttribute('aria-label', `${name}: VOC ${value}, вклад ${impact}`);
+    list.append(row);
+  }
+  return list;
+}
+
+function hbarsHead() {
+  const head = element('div', 'digest-hbars__row digest-hbars__head');
+  head.setAttribute('aria-hidden', 'true');
+  head.append(element('span', 'digest-hbars__name', 'Триггер'), element('span'), element('span', 'digest-hbars__value', 'VOC'),
+    element('span', 'digest-hbars__value', 'Вклад'));
+  return head;
+}
 
 export function renderDigestDko(block, context) {
   const digest = digestOf(context);
@@ -170,18 +232,19 @@ export function renderDigestDko(block, context) {
   })] });
   /* Подсветка — по силе показанного числа: шкала — максимум таблицы по модулю */
   const valuesOf = (category) => (damage ? category.damages : category.shares);
-  const peak = Math.max(0, ...digest.groups.flatMap(({ categories }) => categories.flatMap((category) => valuesOf(category).filter((value) => value !== null).map(Math.abs))));
-  const text = (value) => (value === null ? '—' : damage ? formatImpact(roundImpact(value)) : percent(value));
+  /* Шкала — как у тепловой карты главной (Q75 / Q95 по всем числам карточки): разница в доле видна заливкой */
+  const scale = colourScale(digest.groups.flatMap(({ categories }) => categories.flatMap((category) => valuesOf(category).filter((value) => value !== null).map(Math.abs))));
+  const text = (value) => (value === null ? null : damage ? formatImpact(roundImpact(value)) : percent(value));
+  /* Одна шапка месяцев на всю карточку: группа — строкой-подзаголовком, категории — под ней; пустая ячейка — тихий прочерк */
+  const rows = digest.groups.flatMap((group) => [
+    { name: `${damage ? formatImpact(roundImpact(group.damage)) : percent(group.share)} — ${group.name}`, className: 'digest-table__group', cells: [] },
+    ...group.categories.map((category) => ({
+      name: category.name,
+      cells: valuesOf(category).map((value) => (value === null ? emptyValue() : heatPill(text(value), scale(Math.abs(value))))),
+    })),
+  ]);
   const content = element('div', 'digest-dko');
-  for (const group of digest.groups) {
-    const section = element('section', 'digest-dko__group');
-    section.append(element('h4', 'digest-dko__title', `${damage ? formatImpact(roundImpact(group.damage)) : percent(group.share)} — ${group.name}`),
-      monthTable(digest.months.table, group.categories.map((category) => ({
-        name: category.name,
-        cells: valuesOf(category).map((value) => heatPill(text(value), value !== null && peak ? Math.abs(value) / peak : 0)),
-      }))));
-    content.append(section);
-  }
+  content.append(monthTable(digest.months.table, rows));
   block.setContent(content);
 }
 
@@ -193,7 +256,9 @@ function barsNode(points, className = '') {
     const item = element('div', 'digest-bars__item');
     const bar = element('span', 'digest-bars__bar');
     bar.style.setProperty('--bar', String(Math.round((size / peak) * 100) / 100));
-    item.append(bar, element('span', 'digest-bars__value', text), element('span', 'digest-bars__month', monthShort(month)));
+    const value = element('span', 'digest-bars__value');
+    value.append(text === null ? emptyValue() : text);
+    item.append(bar, value, element('span', 'digest-bars__month', monthShort(month)));
     bars.append(item);
   }
   return bars;
@@ -203,7 +268,8 @@ export function renderDigestStability(block, context) {
   const digest = digestOf(context);
   block.setTitle('ДКО: стабильность');
   const points = digest?.stability ?? [];
-  if (!points.some(({ damage }) => damage !== null)) return unavailable(block);
+  /* Нет урона ни в одном месяце (данных нет или все нули) — пустое состояние карточки, а не ряд пустых столбиков */
+  if (!points.some(({ damage }) => damage !== null && roundImpact(damage) !== 0)) return unavailable(block);
   const [previous, current] = points.slice(-2).map(({ damage }) => (damage === null ? null : roundImpact(damage)));
   const shift = current === null || previous === null ? null : current - previous;
   block.setHead({ note: shift === null ? null : leadNode(shift, { shape: { round: roundImpact, format: formatImpact } }) });
@@ -212,29 +278,92 @@ export function renderDigestStability(block, context) {
     : shift > 0 ? `В ${month} — снижение негативного влияния стабильности на VOC`
       : shift < 0 ? `В ${month} — рост негативного влияния стабильности на VOC` : 'Влияние стабильности на VOC без изменений';
   /* J-152: урон по месяцам — серыми столбиками, как на слайде заказчика: высота — модуль урона, число — под столбиком */
-  const bars = barsNode(points.map(({ month, damage }) => ({ month, size: Math.abs(damage ?? 0), text: damage === null ? '—' : formatImpact(roundImpact(damage)) })));
+  const bars = barsNode(points.map(({ month, damage }) => ({ month, size: Math.abs(damage ?? 0), text: damage === null ? null : formatImpact(roundImpact(damage)) })));
   const content = element('div', 'digest-stability');
   content.append(element('p', 'digest-headline', headline), bars,
     element('p', 'digest-caption', 'Урон группы «Сбои / тех. проблемы» по формуле ДКО, в пунктах VOC'));
   block.setContent(content);
 }
 
-export function renderDigestTopic(block, context) {
+/*
+  Триггеры: драйверы и антидрайверы месяца — вклад триггера в изменение VOC с поправкой к прошлому месяцу (D-10, та же
+  методика, что у «Главного вывода»): пять сильнейших вверх и пять вниз, полосой от нуля в свою сторону, как на слайде
+  «Влияние сценариев»
+*/
+export function renderDigestTriggers(block, context) {
   const digest = digestOf(context);
-  block.setTitle('Детализация');
-  const topic = digest?.topics.includes(context.state.topic) ? context.state.topic : digest?.defaultTopic;
-  if (!topic) return unavailable(block);
-  block.setHead({ controls: [picker('Тема детализации', digest.topics.map((name) => ({ value: name, text: name })), topic,
-    (value) => context.setState({ ...context.state, topic: value }))] });
-  const detail = buildTopic({ rows: context.channelRows, month: digest.month, reference: context.reference, topic });
-  const peak = Math.max(0.0001, ...detail.shares.map(({ share }) => share ?? 0));
-  const content = element('div', 'digest-topic');
-  content.append(element('p', 'digest-headline', `${topic}: доля негатива`),
-    monthTable(detail.shares.map(({ month }) => month), [{ name: 'Доля', cells: detail.shares.map(({ share }) => heatPill(percent(share), (share ?? 0) / peak)) }]),
-    monthTable(detail.months, [
-      ...detail.problems.map((problem) => ({ name: problem.name, cells: problem.counts.map((count) => element('span', null, count ? formatCount(count) : '')) })),
-      { name: 'Всего жалоб', className: 'digest-table__total', cells: detail.totals.map((count) => element('span', null, formatCount(count))) },
-    ]));
+  block.setTitle('Триггеры: драйверы и антидрайверы');
+  if (!digest) return unavailable(block);
+  const triggers = buildTriggers({ rows: context.channelRows, month: digest.month, reference: context.reference, label: context.label });
+  if (!triggers.drivers.length && !triggers.antidrivers.length) return unavailable(block);
+  block.setHead();
+  const peak = Math.max(0.0001, ...[...triggers.drivers, ...triggers.antidrivers].map(({ impact }) => Math.abs(impact)));
+  const content = element('div', 'digest-triggers');
+  /* Изменение VOC, которое раскладывают вклады, — словами, а не голой дельтой со стрелкой в шапке */
+  const change = triggers.delta === null ? null : roundDelta(triggers.delta);
+  if (change !== null) {
+    const text = change > 0 ? `VOC вырос на ${formatVoc(change)} к прошлому месяцу`
+      : change < 0 ? `VOC снизился на ${formatVoc(-change)} к прошлому месяцу` : 'VOC не изменился к прошлому месяцу';
+    content.append(element('p', 'digest-headline', text));
+  }
+  content.append(hbarsHead());
+  /* Направление группы — словом и стрелкой-иконкой (цвет только дублирует): «Подняли VOC» / «Снизили VOC» */
+  for (const [title, items, tone, arrow] of [['Подняли VOC', triggers.drivers, 'up', 'trend-up'], ['Снизили VOC', triggers.antidrivers, 'down', 'trend-down']]) {
+    if (!items.length) continue;
+    const section = element('section', 'digest-triggers__group');
+    const heading = element('h4', `digest-subhead digest-subhead--${tone}`, title);
+    heading.append(icon(arrow, 'digest-subhead__icon'));
+    section.append(heading);
+    const list = hbars(items.map((item) => ({
+      name: item.name, size: Math.abs(item.impact) / peak, voc: vocText(item.voc), impact: formatImpact(roundImpact(item.impact)),
+      hint: `${item.name}: VOC ${vocText(item.voc)}, ${formatRatings(item.ratings)}`,
+    })), tone);
+    section.append(list);
+    content.append(section);
+  }
+  content.append(element('p', 'digest-caption', 'VOC — с поправкой за месяц. Вклад — на сколько триггер сдвинул VOC к прошлому месяцу, в пунктах VOC; вклады всех триггеров в сумме дают изменение VOC'));
+  block.setContent(content);
+}
+
+/* iOS и Android мобильного канала — две широкие линии полугода на одной шкале, с коридором плана месяца */
+export function renderDigestPlatforms(block, context) {
+  const digest = digestOf(context);
+  block.setTitle('iOS / Android');
+  /* Карточка есть только у мобильного канала: у других каналов ОС в выгрузке нет, пустая карточка не нужна */
+  block.element.hidden = context.state.channel !== MOBILE_CHANNEL;
+  if (!digest || block.element.hidden) return unavailable(block);
+  const detail = buildPlatforms({ rows: context.channelRows, month: digest.month, reference: context.reference });
+  const points = detail.platforms.flatMap(({ months }) => months);
+  if (!points.some(({ voc: value }) => value !== null)) return unavailable(block);
+  block.setHead();
+  const plan = digest.voc.plan;
+  const band = plan ? { min: plan.min, max: plan.max } : null;
+  const domain = chartDomain(points, [], band);
+  const gap = detail.gap === null ? null : roundDelta(detail.gap);
+  const before = detail.previousGap === null ? null : roundDelta(detail.previousGap);
+  const side = (value) => (value > 0 ? `выше Android на ${formatVoc(value)}` : value < 0 ? `ниже Android на ${formatVoc(-value)}` : 'вровень с Android');
+  const headline = gap === null ? 'VOC iOS и Android по месяцам'
+    : `iOS ${side(gap)}${before === null ? '' : `, месяцем раньше — ${side(before)}`}`;
+  /*
+    Обе ОС — на одном графике, потому что их сравнивают: одна шкала, две линии своих тонов (iOS — серая, Android —
+    фиолетовая; зелёный на дашборде значит «хорошо»), коридор плана полосой за ними. Значения месяца — в легенде
+  */
+  const content = element('div', 'digest-platforms');
+  content.append(element('p', 'digest-headline', headline));
+  const [ios, android] = detail.platforms;
+  const tones = { [ios.code]: 'neutral', [android.code]: 'purple' };
+  const legendText = (platform) => {
+    const last = platform.months.at(-1);
+    return `${platform.name} · ${vocText(last.voc)} · ${formatRatings(last.count)}${last.count && last.count < MINIMUM_RATINGS ? ', мало' : ''}`;
+  };
+  content.append(legendList([
+    ...detail.platforms.map((platform) => legendItem(legendText(platform), tones[platform.code], 'line')),
+    ...(band ? [legendItem(`План ${formatVoc(plan.min)}–${formatVoc(plan.max)}`, 'positive', 'band')] : []),
+  ], 'digest-platforms__legend'));
+  const chart = element('div', 'digest-platforms__chart');
+  chart.append(...detail.platforms.map((platform, index) => sparkline(platform.months.map(({ voc: value }) => value),
+    { tone: tones[platform.code], wide: true, fill: true, domain, band: index === 0 ? band : null, zones: false, glow: true })));
+  content.append(chart, element('p', 'digest-caption', `${monthShort(detail.months[0])} — ${monthShort(detail.months.at(-1))} · VOC с поправкой`));
   block.setContent(content);
 }
 
@@ -315,10 +444,15 @@ export function renderRoles(block, context) {
   block.setContent(element('p', 'digest-caption roles-caption', `Дельты — к прошлому месяцу · ${span}${planText(data.plan)}`));
 }
 
-/* J-172: дельты нет, потому что в прошлом месяце нет оценок, — тире с пояснением, а не пустое место */
+/*
+  J-172: дельты нет, потому что в прошлом месяце нет оценок, — прочерк с пояснением, а не пустое место. Прочерк — общий
+  компонент «нет значения» (emptyValue): один вид на всех страницах; стрелка ↗ / ↘ у дельт — из общего delta()
+*/
 function roleLead(value, hasPrevious, options) {
   if (hasPrevious) return leadNode(value, options);
-  const dash = element('span', 'metric__lead metric__meta', '—');
+  const reason = 'в прошлом месяце оценок нет — сравнить не с чем';
+  const dash = emptyValue(reason);
+  dash.classList.add('metric__lead');
   dash.title = 'В прошлом месяце оценок нет — сравнить не с чем';
   return dash;
 }
@@ -391,6 +525,8 @@ export const digestRole = (index) => (block, context) => {
   const lead = element('div', 'role-card__lead');
   const content = element('div', 'role-card');
   if (!role.count) {
+    /* Пустая роль — сразу под шапкой карточки: место надписи не зависит от высоты соседней плитки в строке */
+    lead.classList.add('role-card__lead--empty');
     lead.append(element('p', 'role-card__none', 'Нет оценок за месяц'));
     content.append(lead);
     block.setContent(content);

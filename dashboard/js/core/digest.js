@@ -7,11 +7,14 @@ import { complaintValues } from './analytical-causes.js';
 import { CATEGORY_CUT } from './antidrivers.js';
 import { dashboardRows } from './cashback.js';
 import { latestDate, shiftDay, weekdayOf } from './dates.js';
-import { metricSegments } from './dimensions.js';
+import { periodFactors } from './conclusions.js';
+import { DIMENSIONS, MOBILE_CHANNEL, OS_ANDROID, OS_IOS, metricSegments, osCode, osName } from './dimensions.js';
 import { normalizeLabel } from './labels.js';
 import { voc } from './metrics.js';
 import { calendarRange } from './period.js';
 import { planFor } from './plan.js';
+import { roundImpact } from './round.js';
+import { MINIMUM_RATINGS } from './sufficiency.js';
 import { damageOf, negativeBase, negativeShare } from './verbatim.js';
 import { buildTimeSeries } from './timeseries.js';
 
@@ -22,10 +25,13 @@ const TREND_MONTHS = 6;
 const TABLE_MONTHS = 3;
 /* Вывод сегмента называет категории, доля негатива которых сдвинулась хотя бы на 1 п. п. */
 const NOTE_SHIFT = 0.01;
-const TOPIC_MIN_COMPLAINTS = 5;
+/* Триггеров в каждую сторону — пять, как в «Драйверах и антидрайверах канала» ежемесячного дайджеста */
+const TRIGGER_FACTORS = 5;
 /* J-153: в группе ДКО — до трёх самых частых категорий; группа «Прочее» не показывается */
 const GROUP_CATEGORIES = 3;
 const HIDDEN_GROUPS = new Set(['прочее']);
+
+const TRIGGER = DIMENSIONS.find(({ key }) => key === 'trigger');
 
 const MONTH_RE = /^\d{4}-\d{2}$/;
 
@@ -138,10 +144,9 @@ export function buildDigest({ rows, month, reference, channel }) {
   const { from, to } = monthRange(month);
 
   const weeks = monthWeeks(month);
-  const segments = digestSegments({ rows, weeks, current, previous, byMonth, trendMonths, reference });
+  const segments = digestSegments({ rows, weeks, current, previous, byMonth, trendMonths, reference, channel });
   const sharesBy = new Map(tableMonths.map((key) => [key, categoryShares(byMonth.get(key), reference)]));
   const nowShares = sharesBy.get(month);
-  const topics = digestTopics(nowShares, categoryShares(previous, reference));
 
   return {
     channel,
@@ -155,13 +160,11 @@ export function buildDigest({ rows, month, reference, channel }) {
     segments,
     groups: digestGroups(nowShares, sharesBy, tableMonths),
     stability: trendMonths.map((key) => ({ month: key, damage: stabilityDamage(byMonth.get(key), reference) })),
-    topics: topics.map(({ name }) => name),
-    defaultTopic: topics[0]?.name ?? null,
   };
 }
 
 /* J-153: линия сегмента — по неделям, целиком покрывающим месяц (5–6 точек), с коридором плана канала на месяц */
-function digestSegments({ rows, weeks, current, previous, byMonth, trendMonths, reference }) {
+function digestSegments({ rows, weeks, current, previous, byMonth, trendMonths, reference, channel }) {
   const weekBuckets = weekBucketsOf(rows, weeks);
   return metricSegments().map((code) => {
     const pick = (list) => list.filter((row) => segmentOf(row) === code);
@@ -175,6 +178,9 @@ function digestSegments({ rows, weeks, current, previous, byMonth, trendMonths, 
       countDelta: mine.count - was.count,
       trend: trendMonths.map((key) => ({ month: key, ...vocPair(pick(byMonth.get(key)), reference) })),
       weekly,
+      /* У мобильного канала сегмент с оценками меньше порога «Мало оценок» показывает оценки 5…1, а не линию недель */
+      /* Оценки 5…1 и порог — по тем же оценкам, что VOC карточки (с поправкой на кэшбек), иначе таблица спорит с числом */
+      spread: channel === MOBILE_CHANNEL && mine.count < MINIMUM_RATINGS ? markSpread(dashboardRows(pick(current), { includeCashback: false }, reference)) : null,
       note: mine.count ? segmentNote(categoryShares(pick(current), reference), categoryShares(pick(previous), reference)) : null,
     };
   });
@@ -202,43 +208,52 @@ function digestGroups(nowShares, sharesBy, tableMonths) {
     }));
 }
 
-/* Тема детализации — кастомная аналитика месяца: по умолчанию категория с самым сильным ростом доли негатива */
-function digestTopics(nowShares, previousShares) {
-  return [...nowShares.categories].filter(([, item]) => item.count >= TOPIC_MIN_COMPLAINTS)
-    .map(([name, item]) => ({ name, growth: item.share - (previousShares.categories.get(name)?.share ?? 0), count: item.count }))
-    .sort((left, right) => right.growth - left.growth || right.count - left.count);
+/* Жалоба — сниженная оценка 1–4 с размеченной проблемой: число жалоб по проблемам */
+function problemCounts(list, reference) {
+  const found = new Map();
+  for (const row of list.filter(({ mark }) => mark <= 4)) for (const problem of complaintValues(row, 'problem', reference)) found.set(problem, (found.get(problem) ?? 0) + 1);
+  return found;
 }
 
-/** Детализация темы: доля негатива категории по полугоду и её проблемы по кварталу с числом жалоб. */
-export function buildTopic({ rows, month, reference, topic }) {
+/**
+ * Триггеры: драйверы и антидрайверы месяца — вклад триггера в изменение VOC с поправкой к прошлому месяцу (`D-10`,
+ * `periodFactors` «Главного вывода»): до пяти сильнейших вверх и вниз.
+ */
+export function buildTriggers({ rows, month, reference, label }) {
+  const corrected = (list) => dashboardRows(list, { includeCashback: false }, reference);
+  const factors = periodFactors(corrected(inMonth(rows, shiftMonth(month, -1))), corrected(inMonth(rows, month)),
+    (row) => TRIGGER.values(row, reference), label);
+  /* Вклад, который округляется до нуля, не показываем: «Снизили VOC» с «0,000» спорит само с собой */
+  const pick = (list) => list.filter(({ impact }) => roundImpact(impact) !== 0).slice(0, TRIGGER_FACTORS)
+    .map(({ name, impact, voc: value, ratings }) => ({ name, impact, voc: value, ratings }));
+  return { delta: factors.delta, drivers: pick(factors.positive), antidrivers: pick(factors.negative) };
+}
+
+/**
+ * Карточка «iOS / Android» мобильного канала: VOC с поправкой каждой ОС по полугоду, оценки и разрыв iOS − Android
+ * в выбранном и прошлом месяце.
+ */
+export function buildPlatforms({ rows, month, reference }) {
   const trendMonths = Array.from({ length: TREND_MONTHS }, (_, index) => shiftMonth(month, index - TREND_MONTHS + 1));
-  const tableMonths = trendMonths.slice(-TABLE_MONTHS);
-  const values = dkoValues(reference);
-  const mentions = (list) => list.filter((row) => values(row).includes(topic));
-  const shares = trendMonths.map((key) => {
-    const list = inMonth(rows, key);
-    return { month: key, share: negativeShare(mentions(list), negativeBase(list, values)) };
-  });
-  const problems = new Map();
-  const totals = tableMonths.map((key) => {
-    const list = mentions(inMonth(rows, key));
-    for (const row of list) {
-      for (const problem of complaintValues(row, 'problem', reference)) {
-        if (!problems.has(problem)) problems.set(problem, tableMonths.map(() => 0));
-        problems.get(problem)[tableMonths.indexOf(key)] += 1;
-      }
-    }
-    return list.length;
-  });
-  return {
-    topic,
-    shares,
-    months: tableMonths,
-    problems: [...problems].map(([name, counts]) => ({ name, counts }))
-      .sort((left, right) => right.counts.reduce((a, b) => a + b, 0) - left.counts.reduce((a, b) => a + b, 0) || left.name.localeCompare(right.name, 'ru'))
-      .slice(0, 8),
-    totals,
+  const byMonth = new Map([...trendMonths, shiftMonth(month, -TREND_MONTHS)].map((key) => [key, inMonth(rows, key)]));
+  const platforms = [OS_IOS, OS_ANDROID].map((code) => ({
+    code,
+    name: osName(code),
+    months: trendMonths.map((key) => ({ month: key, ...vocPair(byMonth.get(key).filter((row) => osCode(row.device_os) === code), reference) })),
+  }));
+  const gapAt = (index) => {
+    const [ios, android] = platforms.map(({ months }) => months.at(index)?.voc ?? null);
+    return ios === null || android === null ? null : ios - android;
   };
+  return { months: trendMonths, platforms, gap: gapAt(-1), previousGap: gapAt(-2) };
+}
+
+/* Сегмент мобильного канала, у которого оценок за месяц меньше порога «Мало оценок» (`D-25`): вместо линии недель — оценки 5…1 */
+export function markSpread(rows) {
+  return [5, 4, 3, 2, 1].map((mark) => {
+    const count = rows.filter((row) => row.mark === mark).length;
+    return { score: mark, count, share: rows.length ? count / rows.length : null };
+  });
 }
 
 /*
@@ -263,12 +278,6 @@ export function buildRoles({ rows, month, reference, channel }) {
   /* Четыре роли всегда на своих местах сетки: роль без оценок — плитка «Нет оценок за месяц», а не дыра */
   const roles = rows.some((row) => ROLE_ORDER.includes(row.role)) ? ROLE_ORDER : [];
   const { from, to } = monthRange(month);
-  const problemCounts = (list) => {
-    const found = new Map();
-    /* Жалоба — сниженная оценка 1–4 с размеченной проблемой */
-    for (const row of list.filter(({ mark }) => mark <= 4)) for (const problem of complaintValues(row, 'problem', reference)) found.set(problem, (found.get(problem) ?? 0) + 1);
-    return found;
-  };
   return {
     channel,
     month,
@@ -279,8 +288,8 @@ export function buildRoles({ rows, month, reference, channel }) {
       const pick = (list) => list.filter((row) => row.role === role);
       const now = vocPair(pick(current), reference);
       const was = vocPair(pick(previous), reference);
-      const problemsNow = problemCounts(pick(current));
-      const problemsBefore = problemCounts(pick(previous));
+      const problemsNow = problemCounts(pick(current), reference);
+      const problemsBefore = problemCounts(pick(previous), reference);
       return {
         role,
         ...now,

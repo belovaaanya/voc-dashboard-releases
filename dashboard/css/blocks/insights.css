@@ -48,7 +48,7 @@
   /* Ревью 13.11: контролы ленты — одной высоты с остальными контролами страницы (J-192) */
   height: var(--control-height);
   padding: 0 var(--space-2);
-  border: var(--divider-width) solid var(--color-control-border);
+  border: var(--hairline) solid var(--color-control-border);
   border-radius: var(--radius-pill);
   background: var(--control-raised);
   box-shadow: var(--control-raised-edge);
@@ -79,6 +79,8 @@
   border-radius: var(--radius-pill);
   background: none;
   color: var(--color-text-tertiary);
+  /* Шрифт кнопки — роль подписи, а не 13,33 px браузера */
+  font: var(--type-caption);
   cursor: pointer;
 }
 
@@ -298,7 +300,8 @@
   flex: 1 1 auto;
   min-width: 0;
   height: var(--control-height);
-  padding: 0 var(--space-3);
+  /* Аудит 13.11: поле — как поиск «Топ проблем» */
+  padding: 0 var(--space-4);
   border: var(--hairline) solid var(--color-control-border);
   border-radius: var(--radius-pill);
   background: var(--control-surface);

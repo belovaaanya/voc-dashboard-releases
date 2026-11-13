@@ -1,7 +1,7 @@
 /*
-  J-148: кнопка боковой колонки на линии раздела — одна для ленты отзывов «Топ проблем» и календаря событий.
-  Развёрнутая колонка — круглая кнопка со стрелкой вправо на линии; свёрнутая — кнопка с подписью колонки и стрелкой
-  влево у правого края. Контейнер задаёт место линии свойством `--side-toggle-at` и класс свёрнутого вида.
+  Кнопка боковой колонки — одна для ленты отзывов «Топ проблем» и календаря событий (J-148).
+  Круг со стрелкой стоит в правом верхнем углу контейнера в обоих видах; свёрнутая колонка — полоса у правого края
+  с подписью под кругом. Контейнер — position: relative, класс свёрнутого вида — `side-toggle-host--collapsed`.
 */
 import { element } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
@@ -10,13 +10,20 @@ export function sideToggle({ label, controls, isHidden, onToggle }) {
   const button = element('button', 'side-toggle');
   button.type = 'button';
   button.setAttribute('aria-controls', controls);
+  const knob = element('span', 'side-toggle__knob');
+  knob.append(icon('chevron-down', 'side-toggle__icon'));
+  button.append(knob);
+  const caption = element('span', 'side-toggle__label', label);
+  /* Круг не пересоздаётся: стрелка поворачивается, а не подменяется; подпись — только у свёрнутой колонки */
   const paint = () => {
     const hidden = isHidden();
+    const name = label.toLowerCase();
+    if (hidden) button.append(caption);
+    else caption.remove();
     button.classList.toggle('side-toggle--collapsed', hidden);
-    button.replaceChildren(icon('chevron-down', 'side-toggle__icon'), ...(hidden ? [element('span', 'side-toggle__label', label)] : []));
     button.setAttribute('aria-expanded', String(!hidden));
-    button.setAttribute('aria-label', hidden ? `Показать: ${label.toLowerCase()}` : `Скрыть: ${label.toLowerCase()}`);
-    button.title = hidden ? `Показать: ${label.toLowerCase()}` : `Скрыть: ${label.toLowerCase()} — остальное во всю ширину`;
+    button.setAttribute('aria-label', hidden ? `Показать: ${name}` : `Скрыть: ${name}`);
+    button.title = hidden ? `Показать: ${name}` : `Скрыть: ${name} — остальное во всю ширину`;
   };
   button.addEventListener('click', () => {
     onToggle();

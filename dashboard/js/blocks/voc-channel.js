@@ -23,11 +23,10 @@ import { planFor } from '../core/plan.js';
 import { withFilter } from '../state/url-state.js';
 import {
   badgeNode,
-  countDeltaNode,
-  countNode,
-  figureNode,
+  countGroupNode,
   leadNode,
   metaRowNode,
+  pairNode,
   planCaptionNode,
   sufficiencyNode,
 } from './metric-card.js';
@@ -57,7 +56,8 @@ function emptyCaption() {
 function channelView({ slice, previousSlice, state, select }) {
   if (state.filters?.segment?.length !== 1) return { rows: slice, previous: previousSlice, state };
   const filters = withFilter(state.filters, 'segment', []);
-  return { ...select({ filters }), state: { ...state, filters } };
+  /* Только читаемые ключи: копия всего состояния сделала бы карточку зависимой от даты и выбора (docs/ui-shell.md) */
+  return { ...select({ filters }), state: { channel: state.channel, filters } };
 }
 
 export function renderVocChannel(block, context) {
@@ -83,12 +83,14 @@ export function renderVocChannel(block, context) {
   block.setHead({ note: badgeNode(value, plan) });
 
   /*
-    Дельта VOC — справа сверху от числа, как у сегментов; без сравнения слот пуст и держит место (B-07).
-    Под числом строка — коридор плана, объём и сразу за ним дельта объёма, пометка выборки
+    Анатомия сегментов: дельта VOC справа сверху от числа; без сравнения слот пуст и держит место (B-07).
+    Нижняя строка — как у сегментов: объём с дельтой и пометка выборки; коридор плана — своей строкой над
+    ней, а не через точку: в узкой карточке строка переносилась и начиналась с разделителя
   */
-  const caption = metaRowNode(planCaptionNode(plan), countNode(slice.length), countDeltaNode(slice.length, previousSlice?.length), sufficiencyNode(slice, { focusable: true }))
+  const planRow = metaRowNode(planCaptionNode(plan));
+  const caption = metaRowNode(countGroupNode(slice.length, previousSlice?.length), sufficiencyNode(slice, { focusable: true }))
     ?? emptyCaption();
   const layout = element('div', 'metric metric--big');
-  appendAll(layout, figureNode(formatVoc(value), leadNode(vocDelta(slice, previousSlice), { large: true }), 'metric__value--big'), caption);
+  appendAll(layout, pairNode(formatVoc(value), leadNode(vocDelta(slice, previousSlice), { large: true }), 'metric__value--big'), planRow, caption);
   block.setContent(layout);
 }

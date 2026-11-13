@@ -21,6 +21,14 @@
 
 .tone--neutral {
   --tone: var(--color-neutral);
+  /* Нейтральный текст (дельта объёма, «В плане») — обычный уровень текста, а не отдельный серый #A4A4A5 */
+  --tone-ink: var(--color-text-secondary);
+}
+
+/* Нейтральное без своего серого: второй серый текста. Бейдж «В плане» и рост числа оценок в шапке — не четвёртый серый
+   карточки. Не `tone--muted`: тот ниже — цвет рамки, и одноимённое правило перебивало это */
+.tone--quiet {
+  --tone: var(--color-text-secondary);
 }
 
 .tone--orange {
@@ -99,6 +107,8 @@
 
 .delta--plain {
   color: var(--color-text-strong);
+  /* Число — величина, а не изменение: обычного веса, как соседние числа строки (аудит 13.11) */
+  font: var(--type-caption);
 }
 
 .delta--plain .delta__arrow {
@@ -180,5 +190,50 @@
   overflow-wrap: anywhere;
 }
 
-/* J-191: проблема со сбором оценок — пропажа данных, релиз без оценок или с задержкой: жёлтый «спада числа оценок» */
-.insights .tone--data-loss { --tone: var(--color-yellow); }
+/*
+  J-191: проблема со сбором оценок — провал оценок, релиз без оценок или с задержкой. Аудит 13.11: жёлтый путался со
+  светлым концом шкалы аварий (J-25), поэтому тон — холодный бирюзовый между фиолетовым «Нового среза» и зелёным:
+  в тёплой шкале аварий и снижений VOC такого нет
+*/
+.insights .tone--data-loss { --tone: color-mix(in oklab, var(--color-purple), var(--color-positive)); }
+/* В светлой теме бирюзовый текстом на белом тусклее 4,5:1 — текст тега тёмный, тон несёт заливка и точка (D-28) */
+:root[data-theme='light'] .insights .tone--data-loss { --tone-ink: var(--color-text-strong); }
+
+/* Значение и дельта — неразрывная пара: дельта справа в строке числа, не переносится под него (value-delta.js) */
+.value-delta {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  white-space: nowrap;
+}
+
+.value-delta__delta {
+  flex: none;
+}
+
+/* Прочерк «нет значения» — второстепенный цвет на всех страницах (empty-value.js) */
+.value-empty {
+  color: var(--color-text-tertiary);
+}
+
+/* Горизонтальная прокрутка: затухает край, за которым ещё есть содержимое (h-scroll.js) */
+.h-scroll {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+.h-scroll[data-fade-start='true'] {
+  -webkit-mask-image: var(--h-scroll-mask-start);
+  mask-image: var(--h-scroll-mask-start);
+}
+
+.h-scroll[data-fade-end='true'] {
+  -webkit-mask-image: var(--h-scroll-mask-end);
+  mask-image: var(--h-scroll-mask-end);
+}
+
+.h-scroll[data-fade-start='true'][data-fade-end='true'] {
+  -webkit-mask-image: var(--h-scroll-mask-both);
+  mask-image: var(--h-scroll-mask-both);
+}

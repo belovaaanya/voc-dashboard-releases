@@ -9,8 +9,6 @@
   --feed-width: calc(var(--rail-width) - 2 * var(--card-padding));
   --feed-gap: calc(var(--gap-section) + 2 * var(--card-padding));
   position: relative;
-  --side-toggle-at: calc(100% - var(--feed-width) - var(--feed-gap) / 2);
-  --side-toggle-reserve: calc(var(--space-10) * 2 + var(--space-4));
   /* J-146: линия между таблицей и лентой — посередине зазора, как у календаря событий */
   background-image: linear-gradient(var(--color-card-border), var(--color-card-border));
   background-repeat: no-repeat;
@@ -27,7 +25,7 @@
 /* J-136: лента скрыта — таблица забирает её место */
 .verbatim-problems--no-feed {
   grid-template-columns: minmax(0, 1fr);
-  /* Свёрнутая лента — кнопка «Отзывы» у правого края (J-148): линия — у левого края полосы под неё */
+  /* Свёрнутая лента — полоса с кнопкой «Отзывы» у правого края (J-148): линия — левее круга, не через него */
   background-position: calc(100% - var(--side-toggle-reserve) + var(--space-4)) 0;
 }
 
@@ -37,18 +35,37 @@
   display: none;
 }
 
-/* Узкий блок — лента под таблицей, а не рядом */
-@container verbatim-problems (max-width: 1100px) {
+/* Узкий блок — лента под таблицей; на минимальной ширине страницы (D-29) она ещё рядом, как календарь событий выше */
+@container verbatim-problems (max-width: 960px) {
   .verbatim-problems {
     grid-template-columns: minmax(0, 1fr);
     background-image: none;
   }
 
-  /* Лента под таблицей: кнопка — обычной строкой перед ней, без линии раздела */
+  /* Лента под таблицей: кнопка — строкой над ней, подпись свёрнутой ленты — слева от круга */
+  /* Не static: кнопка остаётся опорой своей зоны нажатия `::before` */
   .verbatim-problems > .side-toggle {
-    position: static;
+    position: relative;
+    order: 1;
+    width: auto;
+    flex-direction: row-reverse;
     justify-self: end;
-    transform: none;
+  }
+
+  .verbatim-problems > .side-toggle .side-toggle__label {
+    writing-mode: horizontal-tb;
+  }
+
+  .verbatim-problems__feed {
+    order: 2;
+  }
+
+  .verbatim-problems__feed > .verbatim-feed {
+    inset-block-start: 0;
+  }
+
+  .side-toggle-host--collapsed.verbatim-problems:has(> .side-toggle) {
+    padding-inline-end: 0;
   }
 
   .verbatim-problems__feed {
@@ -67,6 +84,8 @@
 .verbatim-problems__feed > .verbatim-feed {
   position: absolute;
   inset: 0;
+  /* Верхняя строка колонки — под кнопку ленты: прокрученные комментарии не проходят под ней */
+  inset-block-start: calc(var(--control-height) + var(--space-3));
   overflow-y: auto;
 }
 
@@ -152,6 +171,8 @@
 
 .verbatim-feed--skeleton {
   visibility: hidden;
+  /* Как у загруженной ленты: её верхняя строка — под кнопку ленты */
+  margin-block-start: calc(var(--control-height) + var(--space-3));
 }
 
 
@@ -170,12 +191,13 @@
 
 .problem-table__stack strong {
   color: var(--color-text-strong);
-  font: var(--type-caption-strong);
+  /* Аудит 13.11: числа строки — одного веса: жалобы и доля не жирнее урона, сегментов и шагов */
+  font: var(--type-caption);
 }
 
 .problem-table__was {
   color: var(--color-text-tertiary);
-  font: var(--type-axis);
+  font: var(--type-caption);
 }
 
 /* Скелет — те же строки со скрытым содержимым: высота совпадает с загруженной по построению */
@@ -433,6 +455,20 @@
   padding-block-end: var(--space-2);
 }
 
+/*
+  Левый край не затухает: там закреплённая колонка названий, маска погасила бы её. Продолжение слева видно по самой
+  колонке, справа — затуханием края hScroll
+*/
+.problem-table-scroll[data-fade-start='true'] {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.problem-table-scroll[data-fade-start='true'][data-fade-end='true'] {
+  -webkit-mask-image: var(--h-scroll-mask-end);
+  mask-image: var(--h-scroll-mask-end);
+}
+
 .problem-table {
   width: max-content;
   min-width: 100%;
@@ -454,7 +490,8 @@
 
 .problem-table__head {
   color: var(--color-text-tertiary);
-  font: var(--type-axis);
+  /* Аудит 13.11: шапка таблицы — подпись, а не ось графика: роль --type-caption, как у остальных таблиц */
+  font: var(--type-caption);
 }
 
 /* Первая колонка — подпись проблемы: прилипает при прокрутке, текст переносится по словам */
@@ -481,6 +518,15 @@
   font: var(--type-caption);
   text-align: start;
   cursor: pointer;
+}
+
+/* Аудит 13.11: строки одной высоты — название не длиннее двух строк, полное — в подсказке */
+.problem-table__name-text {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 /* Выбранная проблема — жирнее и подложкой строки, а не только цветом (D-26) */

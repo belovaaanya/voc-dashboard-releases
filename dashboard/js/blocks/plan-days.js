@@ -8,6 +8,10 @@ import { EMPTY } from '../shell/block.js';
 import { element } from '../ui/dom.js';
 import { formatCount } from '../core/format.js';
 import { ABOVE_PLAN, BELOW_PLAN, IN_PLAN, planDays } from '../core/plan.js';
+import { isWholeMonth } from '../core/conversion.js';
+import { renderConversion } from './conversion.js';
+
+export const PLAN_DAYS_TITLE = 'Дни относительно плана';
 
 const PARTS = [
   { status: BELOW_PLAN, caption: 'Ниже плана' },
@@ -52,7 +56,16 @@ function legendNode(days) {
   return legend;
 }
 
-export function renderPlanDays(block, { slice, state, reference }) {
+/* За целый месяц на этом месте — «Конверсия опроса» (решение пользователя); за другой период — дни плана */
+export function renderPlanDays(block, context) {
+  const wholeMonth = isWholeMonth(context.period, context.rows);
+  block.element?.classList.toggle('card--conversion', wholeMonth);
+  if (wholeMonth) {
+    renderConversion(block, context);
+    return;
+  }
+  block.setTitle?.(PLAN_DAYS_TITLE);
+  const { slice, state, reference } = context;
   block.setHead();
   if (slice.length === 0) {
     block.setState(EMPTY);

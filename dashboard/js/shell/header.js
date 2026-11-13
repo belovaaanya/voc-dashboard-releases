@@ -18,9 +18,15 @@ import { appUpdateControl } from './app-update.js';
 import { segmented } from '../components/segmented.js';
 import { triggerChoices } from '../components/trigger-choices.js';
 import { filterPopover } from '../components/filter-popover.js';
+import { bindPopover } from '../ui/popover.js';
 
 /* J-26: дирекции скрыты в шапке; полный набор измерений расчётов сохраняется. */
 const HEADER_DIMENSIONS = ['segment', 'role', 'product', 'trigger', 'os'];
+/* Редкие фильтры — за кнопкой «Ещё фильтры»: на виду канал, период, сегмент, продукт и триггер. Выбранный редкий фильтр
+   виден всегда — чипом, как остальные: активный срез не прячется */
+const MORE_DIMENSIONS = ['role', 'os'];
+/* Раскрыт ли список «Ещё фильтры»: шапка перерисовывается после каждого выбора, а список остаётся открытым */
+let moreOpen = false;
 
 /* J-45: подпись «Канал» видна, а не только в имени переключателя — сразу понятно, что выбран канал и что его можно сменить */
 export function renderChannels(channels, state, label, onChange) {
@@ -128,7 +134,7 @@ function renderPeriod(period, manifestPeriod, onPeriodChange) {
   return group;
 }
 
-/* J-115: «С кэшбеком» — переключатель в строке фильтров: он сужает все расчёты, как фильтр (J-21, J-103) */
+/* J-115: «С кэшбеком» сужает все расчёты, как фильтр (J-21, J-103); переключатель — в настройках шапки, не в строке фильтров */
 function cashbackSwitch(state, onCashbackChange) {
   const item = element('label', 'filters__item filters__switch');
   const input = element('input', 'filters__switch-input');
@@ -152,21 +158,62 @@ function resetFilters(onFiltersReset) {
   return reset;
 }
 
-/* J-174: `keys` — какие фильтры показать; страница ролей показывает только ОС (у АБМ) и без кэшбека */
-function renderFilters(dimensions, state, label, onFilterChange, reference, onCashbackChange, onFiltersReset, { keys = HEADER_DIMENSIONS, cashback = true } = {}) {
+/* Кнопка раскрывает редкие фильтры в той же строке: у них те же списки и чипы, без вложенного popover */
+function moreFiltersButton(hidden) {
+  const button = element('button', 'filters__control filters__more');
+  button.type = 'button';
+  button.dataset.action = 'more-filters';
+  const sync = () => {
+    button.setAttribute('aria-expanded', String(moreOpen));
+    button.replaceChildren(element('span', 'filters__control-label', moreOpen ? 'Меньше фильтров' : 'Ещё фильтры'),
+      icon('chevron-down', 'filters__more-icon'));
+    for (const node of hidden) node.hidden = !moreOpen;
+  };
+  button.addEventListener('click', () => {
+    moreOpen = !moreOpen;
+    sync();
+  });
+  sync();
+  return button;
+}
+
+/* J-174: `keys` — какие фильтры показать; страница ролей показывает только ОС (у АБМ). `more` — редкие фильтры за кнопкой */
+function renderFilters(dimensions, state, label, onFilterChange, reference, onFiltersReset, { keys = HEADER_DIMENSIONS, more = MORE_DIMENSIONS } = {}) {
   const bar = element('div', 'filters');
   bar.setAttribute('role', 'group');
   bar.setAttribute('aria-label', 'Фильтры среза');
   const controls = keys.map((key) => dimensions.find((candidate) => candidate.key === key)).filter(Boolean);
-  if (!controls.length && !cashback) return null;
+  if (!controls.length) return null;
+  const folded = [];
   controls.forEach((dimension, index) => {
-    if (index) bar.append(renderDivider());
-    bar.append(filterControl(dimension, state, label, onFilterChange, reference));
+    const nodes = [...(index ? [renderDivider()] : []), filterControl(dimension, state, label, onFilterChange, reference)];
+    /* Редкий фильтр без выбора — за кнопкой; с выбором — чип на виду */
+    if (more.includes(dimension.key) && !state.filters?.[dimension.key]?.length && controls.length > 1) folded.push(...nodes);
+    bar.append(...nodes);
   });
-  if (cashback) bar.append(renderDivider(), cashbackSwitch(state, onCashbackChange));
+  if (folded.length) bar.append(renderDivider(), moreFiltersButton(folded));
   const shown = keys.filter((key) => dimensions.some((candidate) => candidate.key === key));
   if (shown.some((key) => state.filters?.[key]?.length)) bar.append(resetFilters(onFiltersReset));
   return bar;
+}
+
+/* Настройки шапки — иконка-шестерёнка с popover: «С кэшбеком» по умолчанию включён, как раньше в строке фильтров */
+function settingsControl(state, onCashbackChange) {
+  const item = element('div', 'shell-head__action shell-head__settings');
+  const trigger = element('button', 'shell-head__button shell-head__button--icon');
+  trigger.type = 'button';
+  trigger.dataset.action = 'settings';
+  trigger.setAttribute('aria-label', 'Настройки расчёта');
+  trigger.title = 'Настройки расчёта';
+  trigger.append(icon('settings', 'shell-head__icon'));
+  const panel = element('div', 'control-popover glass shell-head__settings-popover');
+  panel.id = 'settings-popover';
+  panel.setAttribute('aria-label', 'Настройки расчёта');
+  panel.append(element('h2', 'control-popover__title', 'Настройки расчёта'), cashbackSwitch(state, onCashbackChange),
+    element('p', 'shell-head__settings-note', 'Выключите, чтобы считать VOC без оценок по операциям с кэшбеком.'));
+  item.append(trigger, panel);
+  bindPopover(item, trigger, panel);
+  return item;
 }
 
 /*
@@ -224,6 +271,7 @@ export function renderHeader(host, context) {
     onCashbackChange,
     onFiltersReset,
     slim = false,
+    toolbar = null,
   } = context;
 
   const head = element('header', 'shell-head');
@@ -238,15 +286,21 @@ export function renderHeader(host, context) {
   bar.append(renderChannels(channels, state, label, onChannelChange));
   /* Период — тот же разрешённый период, по которому считают карточки: иначе шапка и цифры расходятся */
   bar.append(renderPeriod(period, manifest.period, onPeriodChange));
-  if (!slim) bar.append(renderFilters(dimensions, state, label, onFilterChange, reference, onCashbackChange, onFiltersReset));
-  else {
-    /* J-174: на странице ролей из фильтров — только ОС, она есть лишь у АБМ */
-    const osFilter = renderFilters(dimensions, state, label, onFilterChange, reference, onCashbackChange, onFiltersReset, { keys: ['os'], cashback: false });
+  if (!slim) {
+    const filters = renderFilters(dimensions, state, label, onFilterChange, reference, onFiltersReset);
+    if (filters) bar.append(filters);
+  } else {
+    /* J-174: на странице ролей из фильтров — только ОС, она есть лишь у АБМ; за кнопку её не прячем */
+    const osFilter = renderFilters(dimensions, state, label, onFilterChange, reference, onFiltersReset, { keys: ['os'], more: [] });
     if (osFilter) bar.append(osFilter);
   }
-  /* Ссылка на срез — справа в строке шапки: она про всю страницу, как переключатели над данными.
-     На странице ролей её нет (J-168): фильтры на страницу не действуют */
-  if (!slim) bar.append(copyLinkControl());
+  /* Ссылка на срез — про всю страницу, как переключатели над данными. С макетом дизайнера 11.11 — в строке действий
+     над панелью, без неё (тесты, пустое приложение) — справа в строке шапки. На странице ролей её нет (J-168) */
+  const link = slim ? null : copyLinkControl();
+  if (toolbar) toolbar.replaceChildren(...(link ? [link] : []));
+  else if (link) bar.append(link);
+  /* Настройки расчёта: «С кэшбеком» — не фильтр среза, а правило подсчёта; на странице ролей не действует (J-168) */
+  if (!slim) bar.append(settingsControl(state, onCashbackChange));
   /* J-75: загрузка CSV — только в десктопном приложении, справа в строке шапки перед темой:
      в служебной строке места нет, она переносилась бы на вторую строку */
   const dataImport = dataImportControl();
@@ -270,7 +324,11 @@ export function renderHeader(host, context) {
   host.replaceChildren(head);
   /* После сброса кнопки нет: фокус — на первый фильтр, а не в начало страницы */
   if (focusedReset) head.querySelector('.filters:not(.filters--period) .filters__control')?.focus();
-  else if (focusedCashback) head.querySelector('[data-action="cashback"]')?.focus();
+  else if (focusedCashback) {
+    /* Переключатель живёт в popover настроек: после перерисовки он снова открыт, фокус на месте */
+    head.querySelector('[data-action="settings"]')?.click();
+    head.querySelector('[data-action="cashback"]')?.focus();
+  }
   else if (focusedDimension) {
     [...head.querySelectorAll('.filters__control')].find((control) => control.dataset.dimension === focusedDimension)?.focus();
   }

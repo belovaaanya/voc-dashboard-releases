@@ -161,6 +161,22 @@ export function metricsBase(period, rows) {
   return comparedPeriod(period, rows);
 }
 
+/**
+ * Окно сравнения «равное число дней»: неполный календарный период (месяц, квартал по сегодня) сравнивается не
+ * с прошлым целиком (J-85), а с тем же числом дней прошлого периода от его начала: 01.11–09.11 → 01.10–09.10.
+ * Окно не выходит за конец прошлого периода: 30 дней марта → весь февраль. Полный период и произвольный диапазон
+ * (прошлый — уже той же длины, вплотную перед ним) сравниваются с прошлым целиком. `dataFrom` — начало выгрузки:
+ * окно, которое начинается раньше, — null, сравнивать не с чем
+ */
+export function equalDaysPeriod(period, previous, dataFrom = null) {
+  if (!period || !previous) return null;
+  const end = period.complete === false
+    ? isoDate(addDays(parseIso(previous.from), dayCount(period) - 1))
+    : previous.to;
+  const range = { ...previous, to: end < previous.to ? end : previous.to };
+  return dataFrom && range.from < dataFrom ? null : range;
+}
+
 export function comparedPeriod(period, rows) {
   if (!period || !rows?.length) return period;
   const first = earliestDate(rows);

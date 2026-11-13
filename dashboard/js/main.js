@@ -17,24 +17,25 @@ import { renderAntidrivers } from './blocks/antidrivers.js';
 import { renderInsights } from './blocks/insights.js';
 import { calendarReady, conclusionReady } from './state/event-analysis.js';
 import { renderDistribution } from './blocks/distribution.js';
-import { conclusionPlaceholder, renderConclusion } from './blocks/conclusion.js';
+import { conclusionPlaceholder, detachConclusion, renderConclusion } from './blocks/conclusion.js';
 import { renderVerbatimCards } from './blocks/verbatim-cards.js';
 import { renderVerbatimTable } from './blocks/verbatim-table.js';
-import { digestSegment, renderDigestDko, renderDigestStability, renderDigestSummary, renderDigestTopic, renderRoles, digestRole } from './blocks/digest.js';
+import { digestSegment, renderDigestDko, renderDigestPlatforms, renderDigestStability, renderDigestSummary, renderDigestTriggers, renderRoles, digestRole } from './blocks/digest.js';
 import { vocSegment } from './blocks/voc-segment.js';
 import { renderPlanDays } from './blocks/plan-days.js';
 import { channelsOf, metricSegments } from './core/dimensions.js';
 import { renderEmptyHeader, renderHeader } from './shell/header.js';
 import { renderSideNav } from './shell/side-nav.js';
+import { alignHeaderAmbient } from './shell/header-ambient.js';
 import { sideToggle } from './components/side-toggle.js';
 import { mountFeedback } from './shell/feedback.js';
 import { createLabels } from './core/labels.js';
 import { SOURCE_EMPTY, loadVerbatim as loadVerbatimFile, startLoading } from './io/loader.js';
 import { defaultPeriod, metricsBase } from './core/period.js';
 import { createSelector } from './state/selection.js';
-import { CARD_BODIES, revealDashboard, snapshotCards } from './ui/motion.js';
+import { sameInputs, staleInputs, watchInputs } from './shell/inputs.js';
 import { ROLE_SLOTS } from './core/digest.js';
-import { LOCAL_PERIOD_BLOCKS, onStateChange, readState, syncState, toSearch, withFilter, writeState } from './state/url-state.js';
+import { ANALYST_PAGE, DEFAULT_PAGE, LOCAL_PERIOD_BLOCKS, onStateChange, readState, syncState, toSearch, viewOf, withFilter, writeState } from './state/url-state.js';
 import { SHARED_PERIOD, resolveState } from './state/resolve-state.js';
 import { validateVerbatim } from './core/verbatim.js';
 
@@ -47,7 +48,7 @@ const BLOCKS = [
   { id: 'voc-segment-3', title: 'VOC сегмента', host: 'metrics', modifier: 'card--metric card--metric-segment', compact: true, render: vocSegment(2) },
   { id: 'plan-days', title: 'Дни относительно плана', host: 'metrics', modifier: 'card--metric card--metric-plan-days', compact: true, render: renderPlanDays },
   { id: 'distribution', title: 'Распределение оценок', host: 'metrics', modifier: 'card--distribution', render: renderDistribution },
-  { id: 'summary', title: 'Главный вывод', host: 'metrics', modifier: 'card--summary', render: renderConclusion, ready: conclusionReady, placeholder: conclusionPlaceholder },
+  { id: 'summary', title: 'Главный вывод', host: 'metrics', modifier: 'card--summary', render: renderConclusion, ready: conclusionReady, placeholder: conclusionPlaceholder, detach: detachConclusion },
   { id: 'dynamics', title: 'Динамика VOC', host: 'main', modifier: 'card--dynamics card--fill', render: renderDynamics },
   { id: 'antidrivers', title: 'Антидрайверы', host: 'drivers', modifier: 'card--antidrivers', render: renderAntidrivers },
   { id: 'verbatim-cards', title: 'Топ проблем', host: 'problems', modifier: 'card--verbatim', render: renderVerbatimCards, verbatim: true },
@@ -55,19 +56,20 @@ const BLOCKS = [
   /* J-151: таблица прямой речи — на странице «Обратная связь» */
   { id: 'verbatim-table', title: 'Прямая речь: детализация', host: 'full', modifier: 'card--verbatim-table', page: 'feedback', render: renderVerbatimTable, verbatim: true },
   /* J-151: VOC-дайджест — месяц канала по макету */
-  { id: 'digest-summary', title: 'VOC-дайджест', host: 'digest-top', modifier: 'card--digest-summary card--bare', render: renderDigestSummary, page: 'digest' },
+  { id: 'digest-summary', title: 'VOC-дайджест', host: 'digest-top', modifier: 'card--digest-summary card--page-head card--bare', render: renderDigestSummary, page: 'digest' },
   { id: 'digest-segment-1', title: 'Сегмент', host: 'digest-segments', modifier: 'card--digest-segment', render: digestSegment(0), page: 'digest' },
   { id: 'digest-segment-2', title: 'Сегмент', host: 'digest-segments', modifier: 'card--digest-segment', render: digestSegment(1), page: 'digest' },
   { id: 'digest-segment-3', title: 'Сегмент', host: 'digest-segments', modifier: 'card--digest-segment', render: digestSegment(2), page: 'digest' },
   { id: 'digest-dko', title: 'ДКО: антидрайверы', host: 'digest-dko', modifier: 'card--digest-dko', render: renderDigestDko, page: 'digest' },
+  { id: 'digest-triggers', title: 'Триггеры: драйверы и антидрайверы', host: 'digest-side', modifier: 'card--digest-triggers', render: renderDigestTriggers, page: 'digest' },
   { id: 'digest-stability', title: 'ДКО: стабильность', host: 'digest-side', modifier: 'card--digest-stability', render: renderDigestStability, page: 'digest' },
-  { id: 'digest-topic', title: 'Детализация', host: 'digest-side', modifier: 'card--digest-topic', render: renderDigestTopic, page: 'digest' },
+  { id: 'digest-os', title: 'iOS / Android', host: 'digest-dko', modifier: 'card--digest-os', render: renderDigestPlatforms, page: 'digest' },
   { id: 'roles', title: 'VOC ролей', host: 'roles', modifier: 'card--roles card--page-head card--bare', render: renderRoles, page: 'roles' },
   /* J-197: плитка на роль, сетка 2×2 — по слоту на каждую из ROLE_SLOTS ролей */
   ...Array.from({ length: ROLE_SLOTS }, (_, index) => ({ id: `role-${index + 1}`, title: 'Роль', host: 'roles', modifier: 'card--role card--avatar-head', render: digestRole(index), page: 'roles' })),
 ];
 /* J-151: страница блока; без поля — главная «VOC ЦК» */
-const pageOf = (spec) => spec.page ?? 'voc';
+const pageOf = (spec) => spec.page ?? DEFAULT_PAGE;
 /* Оценки канала до переключателя кэшбека: дайджест показывает VOC и с поправкой, и без */
 const channelRowsCache = new WeakMap();
 function channelRowsOf(rows, channel) {
@@ -120,7 +122,7 @@ function keepScrollClearOfHeader(header) {
   шапке группы, выбор живёт до закрытия страницы. Графики сами перерисовываются по новой ширине (ResizeObserver)
 */
 let eventsHidden = false;
-/* J-148: кнопка календаря — та же, что у ленты отзывов: на линии раздела группы, свёрнутый — «События» у правого края */
+/* J-148: кнопка календаря — та же, что у ленты отзывов: круг в правом верхнем углу строки группы, свёрнутый календарь — полоса «События» */
 function eventsToggle(row) {
   const paint = () => {
     row.classList.toggle('group-row--no-rail', eventsHidden);
@@ -154,6 +156,8 @@ const HOST_IDS = ['header', 'metrics', 'main', 'rail-main', 'drivers', 'problems
 function pageHosts() {
   const hosts = Object.fromEntries(HOST_IDS.map((id) => [id, document.getElementById(id)]));
   hosts.nav = document.getElementById('side-nav');
+  /* Строка действий над панелью рабочей области: в ней ссылка на срез (макет дизайнера 11.11) */
+  hosts.toolbar = document.getElementById('workspace-toolbar');
   return hosts;
 }
 
@@ -175,6 +179,9 @@ function mountCards(hosts) {
     analysis.setHead();
     verbatimGroup.setHead();
     for (const block of blocks.values()) {
+      /* Отложенный блок мог остаться без действий (`inert`) до кадра, который ошибка отменила */
+      const body = block.element.querySelector('.card__body');
+      if (body) body.inert = false;
       block.setHead();
       block.setState(state, detail);
     }
@@ -212,6 +219,8 @@ function sliceContext(env, { state, period, eligible, dimensions }, { setState, 
   const select = createSelector({ rows: eligible, state, period, dimensions, reference: env.reference });
   const current = select();
   const context = {
+    /* Режим «Для аналитика»: та же главная, блоки сами решают, что показать (docs/ui-shell.md) */
+    analyst: state.page === ANALYST_PAGE,
     rows: eligible,
     slice: current.rows,
     previousSlice: current.previous,
@@ -232,16 +241,24 @@ function sliceContext(env, { state, period, eligible, dimensions }, { setState, 
 }
 
 /* Боковое меню и шапка страницы: их действия пишут состояние через тот же setState, что и блоки */
-function renderChrome(env, context) {
-  const { hosts, source, channels, label, reference } = env;
-  const { state, setState, period, dimensions } = context;
+function renderNav(env, context) {
+  const { hosts, source } = env;
+  const { state, setState } = context;
   renderSideNav(hosts.nav, { manifest: source.manifest, source: source.source, dataError: source.dataError, rowsInSlice: context.slice.length,
     page: state.page,
     onNavigate: (page) => {
+      const sameView = viewOf(page) === viewOf(state.page);
       setState({ ...state, page });
-      globalThis.scrollTo?.({ top: 0 });
+      /* Новая страница читается с начала; «VOC ЦК» ↔ «Для аналитика» — та же страница, прокрутка остаётся */
+      if (!sameView) globalThis.scrollTo?.({ top: 0 });
     } });
+}
+
+function renderPageHeader(env, context) {
+  const { hosts, source, channels, label, reference } = env;
+  const { state, setState, period, dimensions } = context;
   renderHeader(hosts.header, {
+    toolbar: hosts.toolbar,
     /* J-168: на странице ролей фильтры, кэшбек и база дельт не действуют — в шапке только канал и период */
     slim: state.page === 'roles',
     channels,
@@ -267,22 +284,28 @@ function renderChrome(env, context) {
   });
 }
 
+/* Чей `state.local` читает контекст группы — для входов, блокам не виден */
+const periodIds = new WeakMap();
+const periodOf = (context, id) => (periodIds.set(context, id), context);
+
 /* Блок со своим периодом получает контекст того же среза, но со своим периодом и своим select */
 function localContext(env, { localPeriods, eligible, dimensions }, context, id) {
   const { state, setState } = context;
+  /* Выбор периода сохранённой шапки группы — поверх текущего состояния, а не состояния её отрисовки */
+  const latest = env.latest;
   const local = localPeriods[id] ?? null;
   /* Период группы снимает событие из календаря, иначе таблица осталась бы на его днях */
   const selectionReset = id === SHARED_PERIOD ? { days: [], focus: null, detailEvent: null, driver: null } : { detailEvent: null };
   const periodControl = {
     manifestPeriod: env.source.manifest.period,
     local: Boolean(local),
-    onChange: (next) => setState({ ...state, ...selectionReset, local: { ...state.local, [id]: { preset: next.preset, from: next.from, to: next.to } } }),
-    onReset: local ? () => setState({ ...state, ...selectionReset, local: Object.fromEntries(Object.entries(state.local).filter(([key]) => key !== id)) }) : null,
+    onChange: (next) => setState({ ...latest(), ...selectionReset, local: { ...latest().local, [id]: { preset: next.preset, from: next.from, to: next.to } } }),
+    onReset: local ? () => setState({ ...latest(), ...selectionReset, local: Object.fromEntries(Object.entries(latest().local).filter(([key]) => key !== id)) }) : null,
   };
-  if (!local) return { ...context, periodControl };
+  if (!local) return periodOf({ ...context, periodControl }, id);
   const localSelect = createSelector({ rows: eligible, state, period: local, dimensions, reference: env.reference });
   const localSlice = localSelect();
-  return {
+  return periodOf({
     ...context,
     slice: localSlice.rows,
     previousSlice: localSlice.previous,
@@ -290,15 +313,15 @@ function localContext(env, { localPeriods, eligible, dimensions }, context, id) 
     previousPeriod: localSlice.previousPeriod,
     select: localSelect,
     periodControl,
-  };
+  }, id);
 }
 
 /* J-40: у трёх блоков аналитики один период — `dynamics`, его выбор в шапке группы; у прямой речи — свой */
 function groupContexts(env, resolved, context) {
-  const analysisContext = {
+  const analysisContext = periodOf({
     ...localContext(env, resolved, context, SHARED_PERIOD),
     previewPeriod: (range) => env.cards.analysis.previewPeriod(range),
-  };
+  }, SHARED_PERIOD);
   analysisContext.periodControl = { ...analysisContext.periodControl, shared: true };
   const verbatimContext = localContext(env, resolved, context, VERBATIM_PERIOD);
   verbatimContext.periodControl = { ...verbatimContext.periodControl, shared: true };
@@ -311,46 +334,88 @@ function groupContexts(env, resolved, context) {
 }
 
 /* Догрузка блоков шапки групп не меняет: перерисовка закрыла бы открытый выбор периода */
-function paintGroupHeads({ analysis, verbatimGroup }, { analysisContext, verbatimContext }) {
+function paintGroupHeads({ analysis, verbatimGroup }, { analysisContext, verbatimContext }, paint) {
   const analysisRow = analysis.element.querySelector('.group-row');
-  analysis.setHead({ period: { ...analysisContext.period, picker: analysisContext.periodControl } });
-  /* Кнопка календаря — в строке группы, у линии раздела; одна на строку */
+  paint('#analysis', analysisContext, (watched) => analysis.setHead({ period: { ...watched.period, picker: watched.periodControl } }), { local: periodIds.get(analysisContext) });
+  /* Кнопка календаря — в строке группы, одна на строку */
   if (analysisRow?.querySelector('#rail-main') && !analysisRow.querySelector(':scope > .side-toggle')) analysisRow.append(eventsToggle(analysisRow));
-  verbatimGroup.setHead({ period: { ...verbatimContext.period, picker: verbatimContext.periodControl } });
+  paint('#verbatim', verbatimContext, (watched) => verbatimGroup.setHead({ period: { ...watched.period, picker: watched.periodControl } }), { local: periodIds.get(verbatimContext) });
 }
 
-/* Блок с `ready`, чей долгий расчёт не в кэше, получает скелет и рисуется следующим кадром — остальная страница не ждёт */
-function renderBlocks(blocks, { only, mayDefer, page }, contextFor, context) {
+/* Блок с теми же входами стоит; блок с `ready` не из кэша рисуется следующим кадром, скелет — только у первой отрисовки */
+function renderBlocks(blocks, { only, mayDefer, page }, contextFor, context, paint) {
   const deferred = [];
   /* J-151: карточки скрытых страниц не считаются и не висят в загрузке — пусты, пока страницу не откроют */
   for (const spec of only.filter((item) => pageOf(item) !== page)) {
     const block = blocks.get(spec.id);
     if (block.element.querySelector('.state--loading')) {
+      paint.forget(spec.id);
       block.setHead();
       block.setContent(document.createElement('div'));
     }
   }
   for (const spec of only.filter((item) => pageOf(item) === page)) {
     const block = blocks.get(spec.id);
+    /* Копии контекста делят с общим состояние и тексты — сверка входов не строит срез своего периода */
+    if (paint.current(spec.id, context)) continue;
     const blockContext = contextFor(spec.id);
+    const body = block.element.querySelector('.card__body');
     if (mayDefer && spec.ready && !spec.ready(blockContext)) {
-      showPlaceholder(spec, block);
+      if (paint.painted(spec.id)) {
+        /* Прежнее содержимое до кадра — без действий: его обработчики помнят прошлый срез */
+        if (body) body.inert = true;
+        spec.detach?.(block);
+        paint.expire(spec.id);
+      } else showPlaceholder(spec, block);
       deferred.push(spec);
-    } else if (spec.render) spec.render(block, blockContext);
-    else block.setState(context.slice.length ? READY : EMPTY, context.slice.length ? NEXT_SLICE : undefined);
+      continue;
+    }
+    if (body?.inert) body.inert = false;
+    paint.draw(spec.id, blockContext, (watched) => {
+      if (spec.render) spec.render(block, watched);
+      else block.setState(watched.slice.length ? READY : EMPTY, watched.slice.length ? NEXT_SLICE : undefined);
+    }, { local: periodIds.get(blockContext), texts: Boolean(spec.verbatim) });
   }
   return deferred;
+}
+
+/* Части страницы рисуются заново, только если прочитанное прошлой отрисовкой изменилось (docs/ui-shell.md) */
+function createPainter(latest) {
+  const inputs = new Map();
+  const draw = (id, context, paintPart, options) => {
+    inputs.delete(id);
+    const watch = watchInputs(context, { ...options, latest });
+    paintPart(watch.context);
+    inputs.set(id, watch.seal());
+  };
+  const paint = (id, context, paintPart, options) => {
+    if (!sameInputs(inputs.get(id), context)) draw(id, context, paintPart, options);
+  };
+  Object.assign(paint, {
+    draw,
+    current: (id, context) => sameInputs(inputs.get(id), context),
+    painted: (id) => inputs.has(id),
+    expire: (id) => inputs.set(id, staleInputs()),
+    forget: (id) => inputs.delete(id),
+    clear: () => inputs.clear(),
+  });
+  return paint;
 }
 
 /* Отрисовка разрешённого состояния: контекст, страница, шапка и блоки; возвращает отложенные блоки */
 function paintPage(env, resolved, context, { only, withHeader, mayDefer }) {
   const { state } = context;
-  /* J-151: видна одна страница; блоки других страниц не считаются */
-  for (const view of document.querySelectorAll('.page-view')) view.hidden = view.dataset.page !== state.page;
-  if (withHeader) renderChrome(env, context);
+  const { paint } = env;
+  /* J-151: видна одна страница; блоки других страниц не считаются. «Для аналитика» показывает вид главной */
+  const view = viewOf(state.page);
+  for (const node of document.querySelectorAll('.page-view')) node.hidden = node.dataset.page !== view;
+  if (withHeader) {
+    paint('#nav', context, (watched) => renderNav(env, watched));
+    paint('#header', context, (watched) => renderPageHeader(env, watched));
+  }
   const groups = groupContexts(env, resolved, context);
-  if (withHeader) paintGroupHeads(env.cards, groups);
-  return renderBlocks(env.cards.blocks, { only, mayDefer, page: state.page }, groups.contextFor, context);
+  if (withHeader) paintGroupHeads(env.cards, groups, paint);
+  return renderBlocks(env.cards.blocks, { only, mayDefer, page: view }, groups.contextFor, context, paint);
 }
 
 function startDashboard(env) {
@@ -360,7 +425,10 @@ function startDashboard(env) {
   let verbatimPromise = null;
   /* Отложенный кадр устаревает, если до него прошла новая полная отрисовка: она запланировала свой */
   let generation = 0;
-  const bodyOf = (spec) => cards.blocks.get(spec.id).element.querySelector('.card__body');
+  /* Состояние последней полной отрисовки: его видят обработчики сохранённых блоков */
+  let current = null;
+  env.latest = () => current;
+  env.paint = createPainter(env.latest);
 
   function requestVerbatim() {
     if (verbatim.status !== 'idle') return verbatimPromise;
@@ -395,29 +463,26 @@ function startDashboard(env) {
     document.documentElement.style.minHeight = '';
   };
 
-  /* Изменённые действием карточки мягко проявляются, нетронутые не мигают (D-56); popstate и догрузка — без движения */
+  /* Новые данные встают на место прежних без проявления и скелета (D-56): движение — только у нажатого контрола */
   const setState = (next) => {
     holdPageHeight();
-    const before = snapshotCards();
     writeState(next);
-    const deferred = renderSafely(next, { reveal: { acted: before.acted } });
-    /* Скелет отложенной карточки не проявляется: проявится её содержимое следующим кадром */
-    revealDashboard(before, [...document.querySelectorAll(CARD_BODIES)].filter((body) => !deferred.has(body)));
+    renderSafely(next);
   };
 
   function render(requested, options) {
     const resolved = resolveState(requested, { rows, reference, channels: env.channels, fallbackPeriod: env.fallbackPeriod, manifestPeriod: source.manifest.period });
     keepUrlComplete(resolved.state);
+    if (options.withHeader) current = resolved.state;
     const context = sliceContext(env, resolved, { setState, verbatim, requestVerbatim });
     return paintPage(env, resolved, context, options);
   }
 
   /*
     Период живёт в URL и правится руками (D-31), поэтому вывернутый диапазон приходит и после загрузки — на popstate.
-    Ядро на нём падает намеренно, и падение обязано стать состоянием ошибки, а не необработанным исключением.
-    Возвращает тела отложенных карточек; `reveal` — действие пользователя, его карточка не проявляется (D-56)
+    Ядро на нём падает намеренно, и падение обязано стать состоянием ошибки, а не необработанным исключением
   */
-  function renderSafely(state, { only = BLOCKS, withHeader = true, mayDefer = true, reveal = null } = {}) {
+  function renderSafely(state, { only = BLOCKS, withHeader = true, mayDefer = true } = {}) {
     try {
       if (mayDefer) generation += 1;
       const deferred = render(state, { only, withHeader, mayDefer });
@@ -425,26 +490,22 @@ function startDashboard(env) {
       const scheduled = generation;
       if (deferred.length) afterPaint(() => {
         if (scheduled !== generation) return;
-        renderRest(deferred, reveal);
+        renderRest(deferred);
         releasePageHeight();
       });
       else if (mayDefer) releasePageHeight();
-      return new Set(deferred.map(bodyOf).filter(Boolean));
     } catch (error) {
       failed = true;
       releasePageHeight();
+      env.paint.clear();
       cards.setAll(ERROR, error.message);
-      return new Set();
     }
   }
 
   /* Догрузка перерисовывает только свои блоки; после ошибки того же состояния все уже в ошибке — не смешиваем с содержимым */
-  function renderRest(only, reveal = null) {
+  function renderRest(only) {
     if (failed) return;
-    const bodies = only.map(bodyOf).filter((body) => body && body !== reveal?.acted);
-    const before = reveal ? snapshotCards(bodies) : null;
     renderSafely(readState(), { only, withHeader: false, mayDefer: false });
-    if (before) revealDashboard(before, bodies);
   }
 
   renderSafely(readState());
@@ -454,6 +515,7 @@ function startDashboard(env) {
 function main() {
   const hosts = pageHosts();
   keepScrollClearOfHeader(hosts.header);
+  alignHeaderAmbient(hosts.header);
   const cards = mountCards(hosts);
 
   /* Загрузку обычно уже запустил boot.js */

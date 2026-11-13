@@ -13,7 +13,7 @@ import { dynamicsSheets, exportFileName } from '../core/export.js';
 import { downloadAction } from '../ui/download.js';
 import { planFor } from '../core/plan.js';
 import { roundVoc } from '../core/round.js';
-import { buildTimeSeries, recommendedScale, withDamage } from '../core/timeseries.js';
+import { SCALE_OPTIONS, buildTimeSeries, recommendedScale, withDamage } from '../core/timeseries.js';
 
 /* График рисуется в пикселях сцены, а не в растянутом viewBox: иначе на узкой странице текст мельче роли (B-17) */
 /* Сверху — место под подпись значения у точки на верхней границе шкалы (B-03) */
@@ -44,8 +44,19 @@ const MODE_DAMAGE = 'damage';
 const MODE_OPTIONS = [{ value: MODE_VOC, label: 'Средний VOC' }, { value: MODE_DAMAGE, label: 'Урон' }];
 /* Ручной масштаб — для периода, в котором его выбрали: новый период снова получает автоматический */
 const chartScale = periodScaleMemory();
-const scaleFor = (period) => chartScale.scaleFor(period, recommendedScale(period));
+/*
+  Главная облегчена (раздел «Для аналитика», J-228): режим «Урон» и масштаб «Кварталы» — только при
+  `context.analyst`. Выбор, сделанный в разделе аналитика, на главной не применяется: там всегда «Средний VOC»,
+  а квартальный масштаб становится месячным
+*/
+const MAIN_SCALES = SCALE_OPTIONS.filter(({ value }) => value !== 'quarter');
+const scaleFor = (period, analyst) => {
+  const scale = chartScale.scaleFor(period, recommendedScale(period));
+  return !analyst && scale === 'quarter' ? 'month' : scale;
+};
 let selectedMode = MODE_VOC;
+/* Режим отрисовки: на главной всегда «Средний VOC» */
+const modeOf = (context) => (context.analyst ? selectedMode : MODE_VOC);
 let chartSequence = 0;
 
 function svgText(className, text, attributes) {
@@ -57,6 +68,7 @@ function svgText(className, text, attributes) {
 function chartScaleTabs(block, context, scale) {
   return scaleTabs({
     label: 'Масштаб графика',
+    ...(context.analyst ? {} : { options: MAIN_SCALES }),
     selected: scale,
     onSelect: (value) => {
       chartScale.choose(value, context.period);
@@ -465,15 +477,20 @@ function appendPoints(block, marks, series, points, tooltip, plan, context, plot
 */
 function chartMode(block, context) {
   const lead = element('div', 'chart-legend__lead');
+  const count = element('span', 'chart-legend__count', `Оценки: ${formatCount(context.slice.length)}`);
+  if (!context.analyst) {
+    lead.append(count);
+    return lead;
+  }
   lead.append(segmented({
     label: 'Показатель графика',
     options: MODE_OPTIONS,
-    selected: selectedMode,
+    selected: modeOf(context),
     onSelect: (value) => {
       selectedMode = value;
       renderDynamics(block, context);
     },
-  }), element('span', 'chart-legend__count', `Оценки: ${formatCount(context.slice.length)}`));
+  }), count);
   return lead;
 }
 
@@ -482,7 +499,7 @@ function chartLegend(context, { plan, hasPrevious, previous }) {
   const legend = element('div', 'chart-legend');
   /* J-85: прошлый период шире неполного текущего, на графике видна только его часть — её и подписываем */
   const shownTo = [previous.at(-1)?.to ?? compared.to, compared.to].sort()[0];
-  legend.append(legendList(selectedMode === MODE_DAMAGE
+  legend.append(legendList(modeOf(context) === MODE_DAMAGE
     ? [legendItem(DAMAGE_CAPTION, 'negative', 'bar'), legendItem('VOC', 'neutral', 'line')]
     : [
       plan ? legendItem('VOC', null, 'zones') : legendItem('VOC', 'neutral', 'line'),
@@ -516,7 +533,7 @@ function chartBars(current, damageMode) {
 }
 
 function drawChart(block, context, stage, tooltip, model, size) {
-  const damageMode = selectedMode === MODE_DAMAGE;
+  const damageMode = modeOf(context) === MODE_DAMAGE;
   const { current, previous } = model;
   const bars = chartBars(current, damageMode);
   const frame = frameFor(size, bars);
@@ -575,7 +592,7 @@ function drawChart(block, context, stage, tooltip, model, size) {
 
 function renderChart(block, context, scale, plan) {
   const model = chartModel(context, scale, plan);
-  const chart = element('div', selectedMode === MODE_DAMAGE ? 'chart chart--damage' : 'chart');
+  const chart = element('div', modeOf(context) === MODE_DAMAGE ? 'chart chart--damage' : 'chart');
   chart.append(chartLegend(context, model));
   const stage = element('div', 'chart-stage');
   const tooltip = element('div', 'chart-tooltip glass');
@@ -600,7 +617,7 @@ export function renderDynamics(block, context) {
   const period = context.periodControl?.shared
     ? (block.isExpanded() ? { ...context.period } : null)
     : { ...context.period, ...(context.periodControl ? { picker: context.periodControl } : {}) };
-  const scale = scaleFor(context.period);
+  const scale = scaleFor(context.period, context.analyst);
   const plan = planFor(context.reference?.plan, {
     channel: context.state.channel,
     from: context.period.from,

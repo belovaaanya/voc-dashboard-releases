@@ -17,7 +17,7 @@ import { formatVoc } from '../core/format.js';
 import { voc, vocDelta } from '../core/metrics.js';
 import { withFilter } from '../state/url-state.js';
 import { planFor, planGlow } from '../core/plan.js';
-import { badgeNode, countDeltaNode, countNode, figureNode, leadNode, metaRowNode, sufficiencyNode } from './metric-card.js';
+import { badgeNode, countGroupNode, leadNode, metaRowNode, pairNode, sufficiencyNode, trendNode, valueRowNode } from './metric-card.js';
 
 const SEGMENT = 'segment';
 
@@ -86,7 +86,8 @@ function render(block, context, index) {
 
   /* J-94: пометка — иконка в строке объёма, отдельной строки нет: содержимое стоит у нижнего края, числа на общей линии (B-08) */
   const warning = sufficiencyNode(rows);
-  appendAll(toggle, figureNode(formatVoc(voc(rows)), leadNode(delta)), metaRowNode(countNode(rows.length), countDeltaNode(rows.length, previous?.length), warning));
+  /* Мини-тренд VOC — справа от числа и дельты, в строке значения */
+  appendAll(toggle, valueRowNode(pairNode(formatVoc(voc(rows)), leadNode(delta)), trendNode(rows, context.period)), metaRowNode(countGroupNode(rows.length, previous?.length), warning));
   /* aria-label кнопки заменяет её текст: пометку выборки screen reader иначе не услышит */
   if (warning) toggle.setAttribute('aria-label', `${toggle.getAttribute('aria-label')}. Мало оценок: ${warning.dataset.threshold.toLowerCase()}`);
 

@@ -50,10 +50,11 @@
   background: color-mix(in srgb, var(--tone) var(--tone-tint), transparent);
 }
 
+/* Текст вывода — обычного веса: белый 500 читался жирным; вес 500 — только у метки в цвете */
 .summary-row__text {
   min-width: 0;
   color: var(--color-text-strong);
-  font: var(--type-text-strong);
+  font: var(--type-text);
   overflow-wrap: break-word;
 }
 
@@ -80,8 +81,11 @@
   -webkit-line-clamp: 2;
 }
 
-.summary-row__lead {
+/* Метка «Драйвер:» / «Антидрайвер:» (и «Ключевой …:» у LLM) — 500 в цвете тона */
+.summary-row__lead,
+.summary-row__prefix {
   color: var(--tone-ink, var(--tone));
+  font: var(--type-text-strong);
 }
 
 .summary-note {

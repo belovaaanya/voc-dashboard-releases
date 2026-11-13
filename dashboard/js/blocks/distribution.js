@@ -30,21 +30,31 @@ function distributionRow({ mark, count, share }) {
   fill.style.setProperty('--distribution-share', `${share}%`);
   track.append(fill);
 
-  /* J-145: число и доля — своими колонками одной ширины во всех строках: числа по правому краю, доли — по левому */
+  /* Сначала доля, потом число оценок белым (решение пользователя); J-145: колонки одной ширины во всех строках, обе по правому краю */
   row.append(appendStars(element('span', 'distribution-row__mark'), `${mark}★`), track,
-    element('span', 'distribution-row__share', formatCount(count)),
-    element('span', 'distribution-row__percent', `(${formatShare(share)})`));
+    element('span', 'distribution-row__percent', formatShare(share)),
+    element('span', 'distribution-row__share', formatCount(count)));
   return row;
 }
 
+/*
+  Карточка — только в разделе «Для аналитика» (docs/ui-shell.md, «Объект контекста»): на главной блок прячет свою
+  карточку целиком, а не оставляет пустую — сетка шапки переразложится без дыры (shell.css, `.metrics-grid:has`)
+*/
 export function renderDistribution(block, context) {
+  if (block.element) block.element.hidden = !context.analyst;
   block.setHead();
+  if (!context.analyst) {
+    block.setContent(element('div', 'distribution'));
+    return;
+  }
   if (context.slice.length === 0) {
     block.setState(EMPTY);
     return;
   }
 
-  block.setHead({ note: formatRatings(context.slice.length) });
+  /* Число без слова: «оценок» уже в заголовке, а с ним подпись на 1280 переносила заголовок на две строки */
+  block.setHead({ note: formatCount(context.slice.length) });
   const chart = element('div', 'distribution');
   for (const bucket of distributionForDisplay(context.slice).reverse()) chart.append(distributionRow(bucket));
   block.setContent(chart);

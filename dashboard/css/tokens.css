@@ -85,6 +85,9 @@
   --color-orange: #FF8A3D;
   --color-yellow: #F2C94C;
   --color-purple: #B18CFF;
+  /* «Тонкий луч» конверсии: холодный край аудитории и тёплый край причины (стратегия VoC) */
+  --funnel-cool: #96BEFF;
+  --funnel-warm: #FFAA6E;
   /* Палитра календаря J-20: мятный, жёлтый и оранжевый тегов и точек ленты */
   --calendar-mint: #85E294;
   --calendar-yellow: #DBED99;
@@ -126,8 +129,9 @@
   --space-8: 32px;
   --space-10: 40px;
 
-  /* Два уровня зазоров (R-35): между блоками страницы и между плитками метрик внутри группы */
-  --gap-section: var(--space-4);
+  /* Зазор между карточками — 8, как у дизайнера (правка пользователя 13.11, было 16): карточки на панели рабочей области
+     читаются одной сеткой. Между плитками внутри карточки — тот же шаг */
+  --gap-section: var(--space-2);
   --gap-tile: var(--space-2);
   /* Поле карточки — одно на все карточки */
   --card-padding: var(--space-5);
@@ -167,10 +171,16 @@
   --type-text-strong: 500 14px/1.4 var(--font-sans);
   --type-caption: 400 12px/1.4 var(--font-sans);
   --type-caption-strong: 500 12px/1.4 var(--font-sans);
+  /* Выбранный канал — светлая плашка: тёмный текст на ней жирнее, чтобы не тонуть (макет дизайнера 11.11) */
+  --type-caption-bold: 600 12px/1.4 var(--font-sans);
   --type-quote: italic 500 12px/1.4 var(--font-sans);
   --type-axis: 400 11px/1.2 var(--font-sans);
+  /* Значения «Конверсии опроса» — тонкие, как в стратегии VoC: луч несёт форму, числа не спорят с ним */
+  --type-funnel-value: 200 18px/1 var(--font-sans);
 
   --tracking-display: -8px;
+  /* Подписи ступеней капсом — разрядка, иначе капс слипается */
+  --tracking-caps: 0.06em;
   /* Трекинг --type-display-fit — в em (−8 px при 96), число ужимается целиком */
   --tracking-display-fit: -0.083em;
   --tracking-value: -2px;
@@ -233,12 +243,18 @@
   --row-hover: color-mix(in srgb, var(--color-text-strong) var(--row-hover-strength), transparent);
   --row-selected: color-mix(in srgb, var(--color-text-strong) var(--row-selected-strength), transparent);
   /* Шапка при скролле — стекло тона страницы: на месте она не выделяется полосой, а нижний край растворяется */
-  /* Шапка плотнее окон: при умеренном размытии заголовки блоков под ней иначе читались бы сквозь строку фильтров */
-  --header-opacity: 90%;
-  --header-fill: color-mix(in srgb, var(--color-bg) var(--header-opacity), transparent);
+  /* Шапка непрозрачна (аудит 13.11): с 90 % при прокрутке текст карточек просвечивал сквозь строку фильтров */
+  --header-opacity: 100%;
+  /* Прилипшая шапка — тон панели рабочей области, под которой она лежит */
+  --header-fill: color-mix(in srgb, var(--workspace-solid) var(--header-opacity), transparent);
   /* Растворяется только нижнее поле шапки: строка под фильтрами остаётся на плотном стекле */
   --header-pad: var(--space-3);
   --header-fade: linear-gradient(to bottom, #000 calc(100% - var(--header-pad)), transparent);
+  /* Горизонтальная прокрутка (h-scroll.js): затухает край, за которым ещё есть содержимое */
+  --h-scroll-fade: var(--space-8);
+  --h-scroll-mask-start: linear-gradient(to right, transparent, #000 var(--h-scroll-fade));
+  --h-scroll-mask-end: linear-gradient(to left, transparent, #000 var(--h-scroll-fade));
+  --h-scroll-mask-both: linear-gradient(to right, transparent, #000 var(--h-scroll-fade), #000 calc(100% - var(--h-scroll-fade)), transparent);
   --glass-shadow: var(--glass-highlight), var(--shadow-contact), 0 8px 24px -8px rgba(0, 0, 0, 0.48), 0 24px 56px -16px rgba(0, 0, 0, 0.56);
   --color-control-border: rgba(255, 255, 255, 0.1);
   --ai-badge-surface: radial-gradient(circle at 42% 46%, rgba(157, 157, 182, 0.16), rgba(20, 22, 27, 0) 70%);
@@ -273,6 +289,36 @@
   --switch-height: 20px;
   --switch-knob: 16px;
   --switch-inset: 2px;
+
+  /* Рабочая область (макет дизайнера 11.11): шапка и содержимое — на одной панели, над ней строка действий */
+  --workspace-pad: var(--space-6);
+  --workspace-radius: calc(var(--radius-card) + var(--space-1));
+  /* Панель не светлее карточек на ней (правка пользователя 13.11): с 6,5 % белого (≈ #1B1B1D) карточки ролей и
+     дайджеста читались темнее подложки; 2 % ≈ #101012 — на уровне поверхности карточек */
+  --workspace-fill: rgba(255, 255, 255, 0.02);
+  /* Плотный тон панели — тот же цвет, что полупрозрачная заливка поверх тона страницы: для прилипшей шапки и запасного вида */
+  --workspace-solid: #101012;
+  --workspace-edge: rgba(255, 255, 255, 0.06);
+  --workspace-highlight: rgba(255, 255, 255, 0.015);
+  --workspace-shadow: rgba(0, 0, 0, 0.6);
+  --workspace-toolbar-height: var(--space-8);
+  /* Управление в шапке — канал, период, фильтры — одной высоты и на одной поверхности */
+  --header-control-height: var(--control-height-lg);
+  --filter-surface: linear-gradient(180deg, rgba(13, 14, 17, 0.74), rgba(16, 17, 21, 0.88));
+  --filter-edge: rgba(255, 255, 255, 0.16);
+  --filter-highlight: rgba(255, 255, 255, 0.025);
+  /* Выбранный канал — светлая плашка с тёмным текстом, на 3 px от краёв дорожки: дорожка 2 px + рамка 1 px */
+  --channel-track-inset: 2px;
+  --channel-tab-height: calc(var(--header-control-height) - 2 * var(--channel-track-inset) - 2 * var(--divider-width));
+  --channel-selected: #FFFFFF;
+  --channel-selected-text: #17181C;
+  --channel-selected-edge: rgba(0, 0, 0, 0.06);
+  --channel-selected-shadow: rgba(0, 0, 0, 0.12);
+  /* Пункт меню на фоне страницы (макет дизайнера 11.11): текущий — мягкий блик слева направо и тонкая рамка */
+  --nav-selected: linear-gradient(112deg, rgba(255, 255, 255, 0.025) 20%, rgba(255, 255, 255, 0.09));
+  --nav-selected-edge: rgba(255, 255, 255, 0.12);
+  --nav-selected-highlight: rgba(255, 255, 255, 0.09);
+  --filter-surface-solid: #0F1013;
 
   /* Индикаторы, легенда и sparkline (C-04, C-05): доли цвета тона и размеры из макета */
   --tone-tint: 12%;
@@ -326,7 +372,8 @@
   --sparkline-fill-opacity: 0.24;
 
   /* Радиусы */
-  --radius-card: 20px;
+  /* Скругление карточки — 24 (правка пользователя 13.11, было 20); панель рабочей области на шаг больше — вложенное меньше */
+  --radius-card: 24px;
   --radius-problem-card: 12px;
   /* Строки, подложки, поля внутри карточки и окна — один уровень вложенности, один радиус (J-63: было 10) */
   --radius-control: 8px;
@@ -419,6 +466,24 @@
 :root[data-theme='light'] {
   --color-scheme: light;
 
+  --workspace-fill: rgba(245, 246, 249, 0.97);
+  --workspace-solid: #F3F4F6;
+  --workspace-edge: rgba(255, 255, 255, 0.5);
+  --workspace-highlight: rgba(255, 255, 255, 0.7);
+  --workspace-shadow: rgba(17, 24, 39, 0.18);
+  --filter-surface: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(248, 249, 251, 0.94));
+  --filter-edge: rgba(22, 23, 26, 0.16);
+  --filter-highlight: rgba(255, 255, 255, 0.8);
+  --filter-surface-solid: #FFFFFF;
+  /* Выбранный канал в светлой теме — тёмная плашка со светлым текстом: белая на почти белой дорожке не читалась */
+  --channel-selected: #25262C;
+  --channel-selected-text: #FFFFFF;
+  --channel-selected-edge: rgba(0, 0, 0, 0.2);
+  --channel-selected-shadow: rgba(17, 24, 39, 0.24);
+  --nav-selected: linear-gradient(112deg, rgba(255, 255, 255, 0.6) 20%, rgba(255, 255, 255, 0.95));
+  --nav-selected-edge: rgba(22, 23, 26, 0.1);
+  --nav-selected-highlight: rgba(255, 255, 255, 0.9);
+
   --color-bg: #F3F4F6;
   --color-surface: #FFFFFF;
   --color-surface-sunken: #ECEEF1;
@@ -442,6 +507,8 @@
   --color-orange: #A64808;
   --color-yellow: #8A6500;
   --color-purple: #6F45D6;
+  --funnel-cool: #3D6FD9;
+  --funnel-warm: #C8641E;
   /* J-69, J-71: в светлой теме мятный и жёлтый плотнее, текст мятного и оранжевого — темнее; аварию сдвигает к янтарному */
   --calendar-mint: #2FBF71;
   --calendar-mint-ink: #00704B;

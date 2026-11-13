@@ -41,7 +41,7 @@ export const VERSION_CHANNEL = 'АБМ';
 export const VERSION_CUT = { key: 'app_version', title: 'Версии', fullTitle: 'Версии приложения' };
 export const NO_VERSION = 'Без версии';
 
-/* Порядок секций разреза «Версии»: Android сверху, iOS снизу */
+/* Порядок ОС в переключателе разреза «Версии» и в параметрах выгрузки (J-213) */
 const VERSION_OS_ORDER = [OS_ANDROID, OS_IOS];
 
 const textOf = (value) => (typeof value === 'string' ? value.trim() : '');
@@ -113,6 +113,21 @@ export function frequentElements(ratings, project, label, dimension = 'trigger')
   return breakdown(ratings, project)
     .filter(({ key }) => !ignoredCauseKey(dimension, key, label))
     .sort((left, right) => right.mentions - left.mentions || left.key.localeCompare(right.key, 'ru'));
+}
+
+/**
+  J-149 → один список: строки версий нескольких ОС — одной картой по частотности, как у одной ОС
+  (больше оценок — выше, при равенстве — по ключу). Ячейки каждая ОС считает сама: урон и влияние —
+  внутри своей платформы, номера версий iOS и Android независимы
+*/
+export function mergeVersionHeatmaps(parts) {
+  const ranked = parts.flatMap((part) => part.ranked)
+    .sort((left, right) => right.mentions - left.mentions || left.key.localeCompare(right.key, 'ru'));
+  const rows = new Map(parts.flatMap((part) => part.heatmap.rows.map((row) => [row.key, row])));
+  return {
+    ranked,
+    heatmap: { columns: parts[0].heatmap.columns, rows: ranked.map(({ key }) => rows.get(key)).filter(Boolean) },
+  };
 }
 
 export function buildHeatmap(ratings, period, scale, project, keys) {
@@ -245,7 +260,8 @@ function quantile(sorted, p) {
   return sorted[low] + (sorted[Math.ceil(index)] - sorted[low]) * (index - low);
 }
 
-function colourScale(values) {
+/** Шкала подсветки тепловой карты: ниже Q75 — только рамка (`muted`), выше — сила 0,25…1 до Q95. Её же берёт VOC-дайджест. */
+export function colourScale(values) {
   const sorted = values.filter(value => value > 0).sort((a, b) => a - b);
   if (!sorted.length) return () => ({ strength: 0, muted: false });
   const lower = sorted.length < 4 ? 0 : quantile(sorted, HEATMAP_CUTOFF_QUANTILE);

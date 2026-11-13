@@ -29,6 +29,7 @@ import { chipContent, focusChip } from '../components/focus-chip.js';
 import { statusDot } from '../components/status-dot.js';
 import { searchField } from '../components/search-field.js';
 import { statusPanel } from '../components/status-panel.js';
+import { emptyValue } from '../components/empty-value.js';
 import { tag } from '../components/tag.js';
 import { element } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
@@ -70,6 +71,18 @@ function releaseLag() {
   «Критическое снижение» → «Крит. снижение VOC», «Пропажа данных» → «Провал оценок»; раскатка подписана каналом
 */
 export const KIND_GROUPS = [{ value: 'ratings', label: 'По оценкам' }, { value: 'external', label: 'Внешние события' }];
+
+/*
+  Главная облегчена (раздел «Для аналитика», J-228): на ней — снижение VOC, аварии, релизы и раскатки;
+  провал оценок, новый срез и инцидент — только при `context.analyst`. Выбор типа, сделанный в разделе аналитика,
+  на главной не применяется к скрытым типам
+*/
+const MAIN_KINDS = new Set([ANOMALY_EVENT, INCIDENT_EVENT, RELEASE_EVENT, ROLLOUT_EVENT]);
+
+/** Типы событий страницы: в разделе аналитика — все, на главной — без продвинутых. */
+export function kindsOf(context) {
+  return context.analyst ? KINDS : KINDS.filter(({ value }) => MAIN_KINDS.has(value));
+}
 
 /** Подпись типа: у раскатки — с каналом («Раскатка НИБ»), остальные — как в `KINDS`. */
 export function kindLabel({ label, channelLabel }, channel) {
@@ -250,7 +263,7 @@ export function eventText(event, context) {
   J-143: значок «i» у заголовка — окно «Типы событий»: у каждого типа его метки цветом, как в ленте, и коротко —
   что считается событием. Окно — общий popover каркаса: Escape и клик вне закрывают
 */
-function kindsHelp(channel) {
+function kindsHelp(channel, kinds) {
   const item = element('span', 'insight-help');
   const trigger = element('button', 'insight-help__trigger');
   trigger.type = 'button';
@@ -264,7 +277,7 @@ function kindsHelp(channel) {
   for (const group of KIND_GROUPS) {
     panel.append(element('h3', 'insight-help__group', group.label));
     const list = element('dl', 'insight-help__list');
-    for (const kind of KINDS.filter((item) => item.group === group.value)) {
+    for (const kind of kinds.filter((item) => item.group === group.value)) {
       const label = kindLabel(kind, channel);
       const term = element('dt', 'insight-help__term');
       /* Метка раскатки в ленте — с каналом, как чип */
@@ -279,7 +292,7 @@ function kindsHelp(channel) {
   return item;
 }
 
-function kindChips(block, context, counts) {
+function kindChips(block, context, counts, kinds) {
   const chosen = selectedKinds.get(block) ?? new Set();
   const group = element('div', 'insight-kinds');
   group.setAttribute('role', 'group');
@@ -296,7 +309,7 @@ function kindChips(block, context, counts) {
     group.append(row);
     return [value, row];
   }));
-  for (const kind of KINDS) {
+  for (const kind of kinds) {
     const { value } = kind;
     const label = kindLabel(kind, context.state.channel);
     const pressed = chosen.has(value);
@@ -360,7 +373,11 @@ function eventRow(block, context, event, index) {
   for (const part of rest) slice.append(' ', part.length <= SHORT_PART ? element('span', 'insight-row__part', `· ${part}`) : `· ${part}`);
   detail.append(slice);
   if (text.value !== null) {
-    const value = element('span', 'insight-row__value', text.value);
+    /* Нет оценок за день — общий прочерк «нет значения» (аудит 13.11), а не своё тире */
+    const value = text.value === 'VOC —'
+      ? element('span', 'insight-row__value', 'VOC ')
+      : element('span', 'insight-row__value', text.value);
+    if (text.value === 'VOC —') value.append(emptyValue('нет оценок за день'));
     value.title = text.value === 'VOC —'
       ? 'За день события в этом разрезе нет оценок — VOC не рассчитывается.'
       : 'VOC разреза за день события.';
@@ -413,7 +430,11 @@ export function noDayEventsText(context) {
 const resetAction = (text, onClick) => ({ className: 'insight-search__reset', text, onClick });
 
 function noDayEvents(context) {
-  const [title, detail] = noDayEventsText(context);
+  /* Событие, выбранное в разделе «Для аналитика», на главной не показывается: строка это объясняет, а не «событий нет» */
+  const hidden = context.state.detailEvent?.kind && !kindsOf(context).some(({ value }) => value === context.state.detailEvent.kind);
+  const [title, detail] = hidden
+    ? [`Выбранное событие ${formatDate(context.state.focus ?? context.state.detailEvent.days?.at(-1))} — в разделе «Для аналитика»`, 'На главной этот тип событий не показывается. Сбросьте дату или откройте раздел «Для аналитика».']
+    : noDayEventsText(context);
   return statusPanel('insight-unavailable', {
     title,
     detail,
@@ -431,9 +452,9 @@ export function eventsOfFocus(events, focus) {
 /** Пустая лента за период: причина та же, что у снижений VOC (нет оценок, мало истории), иначе — событий нет ни одного типа. */
 export function noEventsText(context) {
   const [title, detail] = noAnomaliesText(context);
-  return title === NO_DROPS
-    ? ['Событий нет', 'За период VOC значимо не падал; релизов, раскаток, аварий, инцидентов и пропаж данных нет.']
-    : [title, detail];
+  /* На главной перечисляются только её типы: провалы оценок, инциденты и новые срезы там не ищутся (J-228) */
+  const rest = context.analyst ? 'релизов, раскаток, аварий, инцидентов и провалов оценок нет' : 'релизов, раскаток и аварий нет';
+  return title === NO_DROPS ? ['Событий нет', `За период VOC значимо не падал; ${rest}.`] : [title, detail];
 }
 
 function noEvents(context) {
@@ -504,19 +525,21 @@ export function renderInsights(block, context) {
   }
   context = eventSelectionContext(context);
   /* Лента — от свежей даты; серия и инцидент стоят по последнему дню (J-50) */
-  const all = sortEvents(calendarEventsOf(context), 'chronology');
+  const kinds = kindsOf(context);
+  const shownKinds = new Set(kinds.map(({ value }) => value));
+  const all = sortEvents(calendarEventsOf(context).filter(({ kind }) => shownKinds.has(kind)), 'chronology');
   const { focus } = context.state;
   const days = selectionDays(context.state);
   const inDays = eventsOfFocus(all, days);
-  const counts = new Map(KINDS.map(({ value }) => [value, inDays.filter(({ event }) => event.kind === value).length]));
-  const chosen = selectedKinds.get(block) ?? new Set();
+  const counts = new Map(kinds.map(({ value }) => [value, inDays.filter(({ event }) => event.kind === value).length]));
+  const chosen = new Set([...(selectedKinds.get(block) ?? [])].filter((kind) => shownKinds.has(kind)));
   const ofDay = chosen.size ? inDays.filter(({ event }) => chosen.has(event.kind)) : inDays;
   const content = element('div', 'insights');
   const toolbar = element('div', 'insights__toolbar');
   /* Ввод перестраивает только список: поле поиска не теряет фокус и курсор */
   const listHost = element('div', 'insights__results');
   /* Тип события — по правилу, без комментария агента: пометки «Сделано с AI» в календаре нет (R-43, D-33) */
-  block.setHead({ help: kindsHelp(context.state.channel), controls: context.state.days?.length ? daysChip(context) : focus ? focusChip(context) : null });
+  block.setHead({ help: kindsHelp(context.state.channel, kinds), controls: context.state.days?.length ? daysChip(context) : focus ? focusChip(context) : null });
   let status = feedStatus.get(block);
   if (!status) {
     status = element('span', 'visually-hidden');
@@ -557,7 +580,7 @@ export function renderInsights(block, context) {
     listHost.replaceChildren(list);
   };
   toolbar.append(eventSearch(block, fill));
-  content.append(kindChips(block, context, counts), status, toolbar, listHost);
+  content.append(kindChips(block, context, counts, kinds), status, toolbar, listHost);
   /* Список прокручивается внутри карточки (D-55): перерисовка сохраняет прокрутку; выросший список браузер может поджать к концу */
   const scrolled = block.element.querySelector('.insight-list')?.scrollTop ?? 0;
   fill();

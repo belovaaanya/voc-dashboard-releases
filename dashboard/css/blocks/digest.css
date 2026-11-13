@@ -1,31 +1,70 @@
 /* ── J-151: VOC-дайджест — месяц канала; части — карточки метрик, sparkline и пилюли тепловой карты дашборда ── */
 
+/*
+  Раскладка: итог месяца на всю ширину, под ним три колонки — сегменты друг под другом; антидрайверы ДКО и (у АБМ)
+  iOS / Android; триггеры и стабильность. Колонки — host'ы страницы, их порядок в разметке не меняется
+*/
 .digest {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) minmax(0, 1fr);
+  grid-template-areas:
+    'top top top'
+    'segments dko side';
   gap: var(--gap-section);
+  /* Колонки одной высоты: нижние края карточек на одной линии */
+  align-items: stretch;
 }
 
-/* J-154: стабильность и детализация — рядом в одну строку: треть и две трети, карточки одной высоты */
+.digest__top {
+  grid-area: top;
+}
+
+/*
+  Ритм колонок (C-06 без card--fill: в колонке сегментов три карточки): колонка — сетка строк. Сегменты делят высоту
+  поровну; в центре остаток забирает антидрайверы, справа — стабильность (последняя строка). Скрытая карточка
+  (`hidden`, «iOS / Android» не у АБМ) строкой сетки не считается
+*/
+.digest__segments,
+.digest__dko,
 .digest__pair {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
   gap: var(--gap-section);
-  align-items: stretch;
+  min-width: 0;
 }
 
-/* J-154: три сегмента — в ряд, одной высоты, как карточки сегментов на главной */
 .digest__segments {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--gap-section);
-  align-items: stretch;
+  grid-area: segments;
+  /* Строки — по содержимому; лишнюю высоту колонки сетка делит между ними поровну (align-content: stretch) */
+  grid-auto-rows: auto;
+}
+
+.digest__dko {
+  grid-area: dko;
+  grid-template-rows: 1fr;
+  grid-auto-rows: auto;
+}
+
+.digest__pair {
+  grid-area: side;
+  grid-template-rows: auto 1fr;
+}
+
+/* Внутри карточки сегмента линия недель забирает остаток высоты */
+.card--digest-segment > .card__body,
+.digest-segment,
+.digest-segment__story {
+  flex: 1 1 auto;
+}
+
+/* Линия недель сегмента — от 80: колонка сегментов не выше соседних (у плиток ролей своя высота) */
+.digest-trend--fill.digest-trend--segment {
+  min-height: calc(var(--space-10) * 2);
 }
 
 @media (max-width: 1100px) {
-  .digest__pair,
-  .digest__segments {
+  .digest {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'top' 'segments' 'dko' 'side';
   }
 }
 
@@ -67,10 +106,31 @@
   min-width: 0;
 }
 
+/* Подписи вне графиков — роль подписи, а не оси (аудит 13.11); ось — только метки под столбиками */
 .digest-caption {
   margin: 0;
   color: var(--color-text-tertiary);
-  font: var(--type-axis);
+  font: var(--type-caption);
+}
+
+/*
+  Итог и база чисел — разные смысловые группы: между ними 24 и волосяная линия, иначе две серые строки подписей
+  (под числом и база) слипаются в одну
+*/
+.digest-summary__wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.digest-summary__base {
+  padding-top: var(--space-4);
+  border-top: var(--hairline) solid var(--color-card-border);
+}
+
+/* Подпись под крупным числом отходит от него, а не прилипает к нижней линии цифр */
+.digest-summary__voc.metric {
+  gap: var(--space-3);
 }
 
 /* Сегмент: слева числа, справа вывод и линия полугода */
@@ -78,17 +138,18 @@
   display: grid;
   /* J-159: числа — строкой сверху (VOC слева, оценки справа), линия недель — на всю ширину карточки под ними */
   grid-template-columns: minmax(0, 1fr);
+  /* Лишнюю высоту карточки забирает линия недель, а не строка чисел: без пустоты между ними */
+  grid-template-rows: auto minmax(0, 1fr);
   gap: var(--space-4);
-  align-items: start;
+  align-items: stretch;
 }
 
+/* Анатомия карточки сегмента главной: число с дельтой, под ним слева «N оценок» с дельтой (аудит 13.11, вместо строки J-159) */
 .digest-segment__numbers.metric {
   display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: var(--space-1) var(--space-4);
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
 }
 
 /* J-156: дельта VOC — справа сверху от числа, объём и его дельта — одной строкой */
@@ -108,11 +169,12 @@
   min-width: 0;
 }
 
+/* Подзаголовок внутри карточки — слабее заголовка карточки (14/300): подпись 12/500 (аудит 13.11) */
 .digest-segment__note,
 .digest-headline {
   margin: 0;
   color: var(--color-text-strong);
-  font: var(--type-text);
+  font: var(--type-caption-strong);
   text-wrap: pretty;
 }
 
@@ -123,50 +185,16 @@
   gap: var(--space-3);
 }
 
-/* J-155: детализация плотнее — заголовок темы, доля и таблица проблем идут одной группой */
-.digest-topic {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.digest-topic .digest-table th,
-.digest-topic .digest-table td {
-  padding-block: calc(var(--space-1) / 2);
-}
-
-/* J-154: группы — в три колонки на всю ширину страницы: таблица короче, группы читаются рядом */
-.digest-dko {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-6) var(--space-8);
-  align-content: start;
-}
-
-@media (max-width: 1100px) {
-  .digest-dko {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 700px) {
-  .digest-dko {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-/* Стабильность в карточке одной высоты с детализацией: столбики забирают остаток высоты, подпись — у нижнего края */
+/* Стабильность — последняя карточка правой колонки: столбики забирают остаток высоты, подпись — у нижнего края (как J-154) */
 .card--digest-stability > .card__body,
-.digest-stability {
-  flex: 1 1 auto;
-}
-
+.digest-stability,
 .digest-stability .digest-bars {
   flex: 1 1 auto;
 }
 
 .digest-stability .digest-bars__bar {
   height: auto;
+  min-height: var(--space-1);
   flex: 0 1 calc(var(--space-10) * 4 * var(--bar, 0));
 }
 
@@ -175,10 +203,10 @@
   align-self: stretch;
 }
 
-.digest-dko__title {
-  margin: 0 0 var(--space-1);
-  color: var(--color-text-strong);
-  font: var(--type-text);
+/* Антидрайверы ДКО — одна таблица: шапка месяцев сверху, группы — строками-подзаголовками */
+.digest-dko {
+  display: flex;
+  flex-direction: column;
 }
 
 .digest-table {
@@ -202,36 +230,90 @@
 }
 
 .digest-table .digest-table__name {
+  padding-inline-end: var(--space-3);
   color: var(--color-text-strong);
   text-align: start;
 }
 
-.digest-table__total th,
-.digest-table__total td {
+.digest-table__name-col {
+  width: 44%;
+}
+
+.digest-table td:has(> .value-empty) {
+  text-align: center;
+}
+
+/*
+  Группа ДКО — строка-подзаголовок первого уровня текста (белый), над ней — волосяная линия-разделитель; категории под
+  ней — второй уровень (--color-text-secondary): белый не сливается в один массив
+*/
+.digest-table__group th {
+  padding-top: var(--space-3);
   border-top: var(--hairline) solid var(--color-card-border);
+  text-align: start;
+  color: var(--color-text-strong);
   font: var(--type-caption-strong);
 }
 
-/* Пилюля тепловой карты в узкой колонке месяца: ширина — по колонке таблицы, шесть месяцев помещаются в правую колонку */
+.digest-table tbody .digest-table__group:first-child th {
+  padding-top: var(--space-1);
+  border-top: none;
+}
+
+.digest-table tbody tr:has(+ .digest-table__group) td,
+.digest-table tbody tr:has(+ .digest-table__group) th {
+  padding-bottom: var(--space-3);
+}
+
+.digest-table tbody tr:not(.digest-table__group) .digest-table__name {
+  color: var(--color-text-secondary);
+}
+
+/* Направление группы триггеров — цветом, продублированным словом и стрелкой */
+.digest-subhead--up,
+.digest-subhead--down {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.digest-subhead__icon {
+  width: var(--space-4);
+  height: var(--space-4);
+}
+
+.digest-subhead.digest-subhead--up {
+  color: var(--color-positive);
+}
+
+.digest-subhead.digest-subhead--down {
+  color: var(--color-negative);
+}
+
+/* Подзаголовок внутри карточки — слабее заголовка карточки (14/300) */
+.digest-subhead {
+  margin: 0;
+  color: var(--color-text-strong);
+  font: var(--type-caption-strong);
+}
+
+/*
+  Пилюля тепловой карты — овальный чип по числу, а не полоса во всю колонку месяца: высота 32, ширина от числа
+  с полем по бокам; стоит у правого края колонки, под подписью месяца
+*/
 .digest-pill.heatmap-cell {
-  width: 100%;
-  min-width: 0;
-  min-height: var(--space-6);
-  padding-inline: var(--space-1);
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  width: auto;
+  min-width: calc(var(--space-10) * 1.75);
+  min-height: var(--space-8);
+  padding-inline: var(--space-3);
   white-space: nowrap;
 }
 
 .digest-table {
   table-layout: fixed;
-}
-
-/* J-158: в антидрайверах ячейка — по высоте двух строк названия категории, пилюли не теряются рядом с подписью */
-.digest-dko .digest-pill.heatmap-cell {
-  min-height: var(--space-10);
-}
-
-.digest-table .digest-table__name {
-  width: 38%;
 }
 
 /* J-152: серые столбики месяцев (стабильность) — как на слайде: столбик гаснет книзу, значение и месяц под ним */
@@ -273,21 +355,98 @@
   font: var(--type-axis);
 }
 
-/* Выбор месяца и темы — нативный список в капсуле контрола */
-.digest-select__input {
-  max-width: calc(var(--space-10) * 6);
-  height: var(--tab-height);
-  padding: 0 var(--space-3);
-  border: var(--hairline) solid var(--color-control-border);
-  border-radius: var(--radius-pill);
-  background: var(--control-surface);
-  color: var(--color-text-strong);
-  font: var(--type-caption);
-  cursor: pointer;
+/*
+  Горизонтальные полосы (триггеры, оценки 5…1): строка «название · полоса · число» в ритме строк таблиц дайджеста;
+  полоса растёт от нуля, длина — доля от самого длинного значения, цвет — направление
+*/
+/* Смысловые группы карточки (итог, «Подняли», «Снизили», подпись) — через 24, строки внутри группы — плотно */
+.digest-triggers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
 }
 
-.digest-stub {
-  padding: var(--space-6) 0;
+.digest-triggers > .digest-hbars__head {
+  margin-bottom: calc(var(--space-6) * -1 + var(--space-2));
+}
+
+.digest-triggers__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.digest-triggers__group + .digest-triggers__group {
+  padding-top: var(--space-6);
+  border-top: var(--hairline) solid var(--color-card-border);
+}
+
+.digest-hbars {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.digest-hbars__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(var(--space-10), 0.5fr) var(--space-10) calc(var(--space-10) * 1.25);
+  gap: var(--space-3);
+  align-items: center;
+  min-height: var(--space-6);
+}
+
+/* Название триггера переносится на вторую строку, а не режется многоточием: на 1280 колонка узкая */
+.digest-hbars__name {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font: var(--type-caption);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.digest-hbars__track {
+  display: flex;
+  height: var(--space-2);
+  color: var(--color-text-tertiary);
+}
+
+.digest-hbars__bar {
+  width: calc(100% * var(--bar, 0));
+  min-width: var(--space-2);
+  border-radius: var(--radius-pill);
+  /* Полоса гаснет к основанию и насыщена на кончике: глаз идёт к значению, а не к нулю */
+  background: linear-gradient(to right, transparent, currentColor);
+}
+
+.digest-hbars__row--up .digest-hbars__track,
+.digest-hbars__row--up .digest-hbars__impact {
+  color: var(--color-positive);
+}
+
+.digest-hbars__row--down .digest-hbars__track,
+.digest-hbars__row--down .digest-hbars__impact {
+  color: var(--color-negative);
+}
+
+/* Шапка колонок — одна над обеими группами, тише строк */
+.digest-hbars__head {
+  min-height: auto;
+}
+
+.digest-hbars__head > * {
+  color: var(--color-text-tertiary);
+}
+
+.digest-hbars__value {
+  color: var(--color-text-secondary);
+  font: var(--type-caption);
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+  white-space: nowrap;
 }
 
 /*
@@ -324,8 +483,10 @@
   display: contents;
 }
 
+/* Подзаголовок страницы — подпись, а не подпись оси: --type-caption (аудит 13.11) */
 .roles-caption {
   margin: 0;
+  font: var(--type-caption);
 }
 
 .role-card__lead {
@@ -415,6 +576,7 @@
   font: var(--type-caption);
 }
 
+/* Роли текста — как в «Топ проблем» главной: заголовки колонок — подпись второстепенным цветом (роль оси — только у графиков), названия и числа — подпись основным */
 .role-card__problems th {
   padding-block-end: var(--space-2);
   color: var(--color-text-tertiary);
@@ -437,6 +599,10 @@
 
 .role-card__problem-name {
   overflow-wrap: anywhere;
+}
+
+.role-card__lead--empty {
+  justify-content: flex-start;
 }
 
 .role-card__none {
@@ -467,3 +633,53 @@
     content: none;
   }
 }
+
+/* Оценки 5…1 сегмента с малым числом оценок: оценка — рядом серых звёзд, строки — через волосяную линию, нули — тише */
+.digest-spread td,
+.digest-spread th {
+  padding-block: calc(var(--space-1) / 2);
+  border-bottom: var(--hairline) solid var(--color-card-border);
+}
+
+.digest-spread tbody tr:last-child td,
+.digest-spread tbody tr:last-child th {
+  border-bottom: none;
+}
+
+.digest-spread__stars {
+  display: flex;
+  gap: var(--space-1);
+  color: var(--color-text-tertiary);
+}
+
+.digest-spread__star {
+  width: var(--space-4);
+  height: var(--space-4);
+}
+
+.digest-spread__row--zero td {
+  color: var(--color-text-tertiary);
+}
+
+/* «iOS / Android» — только у АБМ: у других каналов карточка скрыта */
+.card--digest-os[hidden] {
+  display: none;
+}
+
+/* «iOS / Android»: подпись ОС слева, линия полугода, оценки месяца справа; линии на одной шкале */
+.digest-platforms {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* Две линии на одной сцене: вторая лежит поверх первой, шкала у обеих одна (domain) */
+.digest-platforms__chart {
+  display: grid;
+  min-height: calc(var(--space-10) * 3);
+}
+
+.digest-platforms__chart > * {
+  grid-area: 1 / 1;
+}
+

@@ -14,19 +14,28 @@ import { pagingButtons } from '../components/paging.js';
 import { scaleTabs } from '../components/scale-tabs.js';
 import { searchField } from '../components/search-field.js';
 import { statusPanel } from '../components/status-panel.js';
+import { hScroll } from '../components/h-scroll.js';
+import { emptyValue } from '../components/empty-value.js';
 import { buildTimeSeries } from '../core/timeseries.js';
+import { equalDaysPeriod } from '../core/period.js';
+import { earliestDate } from '../core/dates.js';
 import { FEW_COMPLAINTS, NO_CATEGORY_GROUP, NO_DOMAIN, PEAK_RULE, POSITIVE_GROUP, buildProblemCards, damageOf, negativeShare } from '../core/verbatim.js';
 
 let selectedCut = 'domainProblem';
 /*
-  J-142: итог за период показывает всё сразу — жалобы с «было» и долей, урон; переключатель «Динамика» меняет только
-  колонки шагов: жалобы, доля негатива или урон. По умолчанию — главная метрика разреза: у ФО и проблематики —
+  J-142: итог за период — жалобы с «было» и долей, у аналитика ещё урон; переключатель «Динамика» (только у аналитика)
+  меняет только колонки шагов: жалобы, доля негатива или урон. По умолчанию — главная метрика разреза: у ФО и проблематики —
   жалобы, у ДКО — урон; смена разреза возвращает умолчание. Порядок строк — по той же главной метрике разреза
 */
 /* J-150: у ДКО по умолчанию в шаге сразу урон и жалобы — их смотрят вместе, переключаться неудобно */
 /* Режима «Урон и жалобы» больше нет: число жалоб — подписью в каждом шаге; у ДКО по умолчанию — урон */
 const DYNAMICS_DEFAULT = { domainProblem: 'count', categoryPair: 'damage' };
 let selectedDynamics = DYNAMICS_DEFAULT.domainProblem;
+/*
+  Главная облегчена: «Урон», сегменты, ОС с версиями, «Есть ли закономерность?» и режимы динамики «Доля / Урон» —
+  только в разделе «Для аналитика» (`context.analyst`). На главной динамика — частотность, выбор аналитика не теряется
+*/
+const shownDynamics = (context) => (context.analyst ? selectedDynamics : 'count');
 /* J-146: после смены динамики таблица сама прокручивается к шагам — иначе смена не видна за правым краем */
 let revealSteps = false;
 /* J-114: шаг частотности — недели или месяцы; дней нет */
@@ -248,8 +257,12 @@ const pointsCaption = (share, base) => {
   return damage === null ? '' : `VOC без этих жалоб — выше примерно на ${formatNumber(roundImpact(damage), 3)}`;
 };
 /* J-128: пустое значение — серым прочерком, а не цветом числа */
+/* Пустое значение — общий прочерк emptyValue (аудит 13.11): один вид на всех страницах */
 function valueCell(text, className = 'problem-table__count') {
-  return text === null ? element('td', `${className} problem-table__none`, '—') : element('td', className, text);
+  if (text !== null) return element('td', className, text);
+  const cell = element('td', `${className} problem-table__none`);
+  cell.append(emptyValue());
+  return cell;
 }
 const countCell = (value) => valueCell(value ? formatCount(value) : null);
 const bucketCaption = (bucket) => (selectedScale === 'month' ? formatBucket(bucket.from, 'month') : formatInterval(bucket));
@@ -269,24 +282,26 @@ export function stepValue(bucket, positive, gap, metric = selectedDynamics) {
   if (positive || bucket.negativeShare === null) return null;
   return metric === 'share' ? bucket.negativeShare : damageOf(bucket.negativeShare, { gap });
 }
-const stepText = (value, metric = selectedDynamics) => {
+const stepText = (value, metric) => {
   if (value === null) return null;
   if (metric === 'count') return formatCount(value);
   return metric === 'share' ? formatNegative(value) : formatImpact(-roundImpact(value));
 };
 /* J-142: шаг подсвечен тоном негатива по силе: чем больше жалоб, доли или урона, тем краснее — как карта антидрайверов */
-function bucketCell(bucket, positive, gap, heatMax) {
-  const value = stepValue(bucket, positive, gap);
+function bucketCell(bucket, positive, gap, heatMax, metric) {
+  const value = stepValue(bucket, positive, gap, metric);
   let cell;
-  const main = stepText(value);
+  const main = stepText(value, metric);
   /*
     Доля и урон — значение крупно, число жалоб шага под ним тише: частотность видна в любом режиме. В «Частотности»
     значение и есть число жалоб — второй строки нет. У похвалы доли и урона нет — прочерк и жалобы под ним
   */
-  if (selectedDynamics === 'count' || (main === null && !bucket.count)) cell = valueCell(main, 'problem-table__count problem-table__step');
+  if (metric === 'count' || (main === null && !bucket.count)) cell = valueCell(main, 'problem-table__count problem-table__step');
   else {
     cell = element('td', 'problem-table__count problem-table__step problem-table__step--with-count');
-    cell.append(element('span', main === null ? 'problem-table__step-main problem-table__none' : 'problem-table__step-main', main ?? '—'),
+    const value = element('span', main === null ? 'problem-table__step-main problem-table__none' : 'problem-table__step-main', main ?? '');
+    if (main === null) value.append(emptyValue());
+    cell.append(value,
       element('small', 'problem-table__step-sub', bucket.count ? complaints(bucket.count) : 'нет жалоб'));
   }
   if (value !== null && heatMax > 0) cell.style.setProperty('--step-heat', `${Math.round(Math.min(1, value / heatMax) * 100)}%`);
@@ -333,8 +348,8 @@ function textCell(text, className = 'problem-table__text') {
 
 /*
   J-114, J-128: строка — значение разреза. Первая колонка — кнопка выбора (лента справа, D-26: выбор — подложкой строки
-  и жирным названием); дальше группа, жалобы с долей и треугольником (J-29), урон в его режиме, шаги периода числами,
-  сегменты, iOS / Android и частая версия у АБМ, частый триггер и когда чаще
+  и жирным названием); дальше группа, жалобы и доля с треугольником (J-29), у аналитика — урон, сегменты, iOS / Android
+  и частая версия у АБМ, «Есть ли закономерность?»; затем шаги периода
 */
 function problemRow(item, { columns, selected, onSelect, base }) {
   const { previousPeriod } = columns;
@@ -350,12 +365,16 @@ function problemRow(item, { columns, selected, onSelect, base }) {
   button.setAttribute('aria-controls', FEED_ID);
   const few = item.count < FEW_COMPLAINTS;
   const damage = damageOf(item.negativeShare, base);
-  const shareText = damage === null ? '' : `, урон ${formatImpact(-roundImpact(damage))}`;
+  /* Урон в имени строки — только там, где его колонка видна */
+  const shareText = damage === null || !columns.analyst ? '' : `, урон ${formatImpact(-roundImpact(damage))}`;
   /* J-132: значения нет в прошлом периоде — «было —» без стрелки, а не «было 0» с ростом */
   const absent = item.previousCount === 0;
   const was = !Number.isFinite(item.previousCount) ? '' : absent ? ', в прошлом периоде не было' : `, было ${formatCount(item.previousCount)}`;
   button.setAttribute('aria-label', `${item.group ? `${item.group}: ` : ''}${nameOf(item)}. ${complaints(item.count)} за период${was}, ${formatShare(item.currentShare)}${absent ? '' : `, ${trend.label}`}${shareText}. ${comments(item.feed.length)}. Показать комментарии`);
-  button.append(nameOf(item));
+  /* Название длиннее двух строк обрезается многоточием (на внутреннем span: у button clamp работает не везде) — целиком в подсказке */
+  const label = element('span', 'problem-table__name-text', nameOf(item));
+  label.title = nameOf(item);
+  button.append(label);
   head.append(button);
 
   /*
@@ -386,7 +405,7 @@ function problemRow(item, { columns, selected, onSelect, base }) {
   const damageCell = valueCell(damage === null ? null : formatImpact(-roundImpact(damage)), 'problem-table__count problem-table__damage');
   if (damage !== null) damageCell.title = [`Доля негатива ${formatNegative(item.negativeShare)}`, pointsCaption(item.negativeShare, base),
     few ? `меньше ${FEW_COMPLAINTS} жалоб — доля неустойчива` : ''].filter(Boolean).join('. ');
-  row.append(damageCell);
+  if (columns.analyst) row.append(damageCell);
   row.append(...columns.segments.map((code) => countCell(bySegment.get(code))));
   if (columns.os) {
     row.append(countCell(item.os.ios), versionCell(item.versions.ios, 'iOS', item.positive),
@@ -406,10 +425,10 @@ function problemRow(item, { columns, selected, onSelect, base }) {
     if (item.peak.title) lines.title = `${item.peak.label}. ${item.peak.title}`;
     peak.append(lines);
   } else peak.title = item.peak.kind === 'few' ? `Меньше ${complaints(PEAK_RULE.minComplaints)} — закономерность не ищется` : 'Закономерности нет';
-  row.append(peak);
+  if (columns.analyst) row.append(peak);
   /* J-142: динамика — после итога за период, правой частью таблицы */
   item.buckets.forEach((bucket, index) => {
-    const cell = bucketCell(bucket, item.positive, columns.bucketGaps[index], columns.heatMax);
+    const cell = bucketCell(bucket, item.positive, columns.bucketGaps[index], columns.heatMax, columns.metric);
     if (index === 0) cell.classList.add('problem-table__step--first');
     row.append(cell);
   });
@@ -436,9 +455,9 @@ function tableHead(context, columns) {
     return cell;
   };
   /* Название и группа — без подписи части; итог — жалобы, доля, урон, сегменты, ОС с версиями и «Когда чаще» */
-  const summarySpan = 2 + 3 + columns.segments.length + (columns.os ? 4 : 0) + 1;
+  const summarySpan = 2 + 2 + (columns.analyst ? 2 : 0) + columns.segments.length + (columns.os ? 4 : 0);
   parts.append(part('', 2, 'problem-table__part--lead'), part('За период', summarySpan - 2),
-    part(`Динамика · ${DYNAMICS[selectedDynamics].label.toLowerCase()} ${selectedScale === 'month' ? 'по месяцам' : 'по неделям'}`, columns.buckets.length, 'problem-table__part--steps'));
+    part(`Динамика · ${DYNAMICS[columns.metric].label.toLowerCase()} ${selectedScale === 'month' ? 'по месяцам' : 'по неделям'}`, columns.buckets.length, 'problem-table__part--steps'));
   head.append(parts);
   row.append(th(nameHead, nameTitle), th(groupHead, groupTitle));
   /* J-139: «было» — за какой период. J-195: период — в подсказке шапки и «было», а не второй строкой шапки */
@@ -446,7 +465,7 @@ function tableHead(context, columns) {
   row.append(th('Жалоб', `Жалоб за период${was ? `; ${was}` : ''}`),
     th('Доля', 'Доля жалоб — от кейсов с обратной связью, где проблема выявлена: без недозвонов, «без категории» и «Невозможно выделить проблему». Треугольник — изменение доли к прошлому периоду'));
   const coverage = columns.coverage === null ? '' : `. Размечено ${formatNegative(columns.coverage)} оценок 1–4`;
-  row.append(th('Урон', `${DAMAGE_TITLE}${coverage}`));
+  if (columns.analyst) row.append(th('Урон', `${DAMAGE_TITLE}${coverage}`));
   for (const code of columns.segments) row.append(th(code, context.label('segment', code)));
   if (columns.os) {
     const versionHead = (os) => th(`Версия ${os}`, `Частая версия ${os} в жалобах проблемы. Круг — её доля среди жалоб проблемы с ${os}: закрашенная часть — доля`);
@@ -455,9 +474,9 @@ function tableHead(context, columns) {
   /* J-139: колонки «Частый триггер» нет — по просьбе заказчика */
   const peakHead = th(PATTERN_HEAD, `Доля жалоб в день недели, часть месяца или конкретную дату против среза: от ${PEAK_RULE.minComplaints} жалоб, перекос от ${formatNumber(PEAK_RULE.ratio, 1)} раза, у даты — от ${formatNumber(PEAK_RULE.dateRatio, 1)} раза. Времени оценки в выгрузке нет. Прочерк — меньше ${complaints(PEAK_RULE.minComplaints)} или закономерности нет`);
   peakHead.classList.add('problem-table__peak-head');
-  row.append(peakHead);
+  if (columns.analyst) row.append(peakHead);
   columns.buckets.forEach((bucket, index) => {
-    const cell = th(headCaption(bucket), `${DYNAMICS[selectedDynamics].of} за ${bucketCaption(bucket)}`);
+    const cell = th(headCaption(bucket), `${DYNAMICS[columns.metric].of} за ${bucketCaption(bucket)}`);
     if (index === 0) cell.classList.add('problem-table__step--first');
     row.append(cell);
   });
@@ -565,7 +584,12 @@ function skeleton() {
   return content;
 }
 
-const unavailable = (title, detail) => statusPanel('verbatim-unavailable', { title, detail });
+/* Пустой разрез — тоже без проявления: переключение туда и обратно меняет только содержимое (data-steady) */
+function unavailable(title, detail) {
+  const panel = statusPanel('verbatim-unavailable', { title, detail });
+  panel.setAttribute('data-steady', '');
+  return panel;
+}
 
 /* Тексты прямой речи грузятся отдельно: до них — скелетон, при ошибке — состояние ошибки */
 function waitingForTexts(block, context, head) {
@@ -583,14 +607,15 @@ function waitingForTexts(block, context, head) {
 }
 
 /* J-139: группа строки — её место в сортировке по группам; «Позитив» и «Без ФО» / «Без группы» — после жалоб (J-123) */
-function problemOrder(cards) {
+function problemOrder(cards, analyst) {
   const groupRank = new Map(sideGroups(cards).map(({ name }, index) => [name, index]));
   const byGroup = (left, right) => (groupRank.get(left.group) ?? 0) - (groupRank.get(right.group) ?? 0);
   const base = cards.negative?.base ?? null;
   /* J-142: порядок — по главной метрике разреза: у ДКО — по урону, у ФО и проблематики — по жалобам */
   const rankDamage = (item) => damageOf(item.negativeShare, base) ?? -1;
   const complaintCards = cards.filter((item) => !item.positive);
-  if (selectedCut === 'categoryPair') complaintCards.sort((left, right) => rankDamage(right) - rankDamage(left) || right.count - left.count);
+  /* На главной урона не видно — порядок ДКО по жалобам, как у ФО и проблематики */
+  if (selectedCut === 'categoryPair' && analyst) complaintCards.sort((left, right) => rankDamage(right) - rankDamage(left) || right.count - left.count);
   const praise = cards.filter((item) => item.positive);
   /* Похвала — после жалоб: без списка групп слева иначе её не найти */
   const ordered = () => (selectedOrder === 'group'
@@ -599,18 +624,20 @@ function problemOrder(cards) {
   return { base, complaintCards, ordered };
 }
 
-function problemColumns(context, { cards, complaintCards, buckets, previous, base }) {
+function problemColumns(context, { cards, complaintCards, buckets, previous, compared, base }) {
   const columns = {
-    segments: segmentColumns(cards),
-    os: context.state.channel === CHANNEL_WITH_OS,
+    analyst: Boolean(context.analyst),
+    metric: shownDynamics(context),
+    segments: context.analyst ? segmentColumns(cards) : [],
+    os: Boolean(context.analyst) && context.state.channel === CHANNEL_WITH_OS,
     buckets,
-    previousPeriod: previous.length ? context.previousPeriod ?? null : null,
+    previousPeriod: previous.length ? compared : null,
     coverage: base?.coverage ?? null,
     bucketGaps: buckets.map((_, index) => cards.negative?.buckets?.[index]?.gap ?? 0),
   };
   /* Шкала подсветки шагов — по всем жалобам списка, а не по показанным: «Показать ещё» цвета не меняет */
   columns.heatMax = Math.max(0, ...complaintCards.flatMap((item) => item.buckets
-    .map((bucket, index) => stepValue(bucket, false, columns.bucketGaps[index]) ?? 0)));
+    .map((bucket, index) => stepValue(bucket, false, columns.bucketGaps[index], columns.metric) ?? 0)));
   return columns;
 }
 
@@ -633,11 +660,11 @@ function problemTable(context, state, { cards, ordered, columns, base }) {
     state.feedShown = FEED_PAGE;
   };
   keepSelection();
-  const scroll = element('div', 'problem-table-scroll');
   const table = element('table', 'problem-table');
   const body = element('tbody');
   table.append(tableHead(context, columns), body);
-  scroll.append(table);
+  /* Аудит 13.11: таблица шире видимой — общая прокрутка с затуханием края (hScroll), колонка не режется посреди слова */
+  const scroll = hScroll(table, { className: 'problem-table-scroll', label: 'Таблица топа проблем' });
   const buttons = element('div', 'verbatim-problems__actions');
   const feedSlot = element('div', 'verbatim-problems__feed');
   const showFeed = () => {
@@ -701,7 +728,7 @@ function problemSearch(onChange) {
   }).field;
 }
 
-/* J-146, J-148: кнопка ленты — на линии раздела таблицы и ленты, общий компонент с календарём событий */
+/* J-146, J-148: кнопка ленты — круг в правом верхнем углу раскладки, общий компонент с календарём событий */
 function feedToggle(content, feedSlot) {
   const apply = () => {
     content.classList.toggle('verbatim-problems--no-feed', feedHidden);
@@ -744,8 +771,16 @@ export function renderVerbatimCards(block, context) {
   /* J-49: выбранный на графике день блок не сужает — только период группы. J-128: выбор антидрайвера — сужает */
   const current = driverRows(context.slice, driver, context.reference);
   /* У ячейки свой интервал: прошлого периода для сравнения доли у неё нет */
-  const previous = driver?.from ? [] : driverRows(context.previousSlice, driver, context.reference);
-  const controls = () => [driverChip(context), cutTabs(block, context), dynamicsTabs(block, context), stepTabs(block, context)].filter(Boolean);
+  /*
+    «Было» и изменение доли — за равное число дней прошлого периода от его начала: неполный месяц не сравнивается
+    с полным (equalDaysPeriod). Окно раньше начала выгрузки — сравнения нет
+  */
+  const dataFrom = context.periodControl?.manifestPeriod?.from ?? (earliestDate(context.rows ?? []) || null);
+  const compared = driver?.from ? null : equalDaysPeriod(context.period, context.previousPeriod, dataFrom);
+  const previous = compared ? driverRows(context.previousSlice, driver, context.reference)
+    .filter(({ appeal_date: date }) => date >= compared.from && date <= compared.to) : [];
+  const metricTabs = () => (context.analyst ? dynamicsTabs(block, context) : null);
+  const controls = () => [driverChip(context), cutTabs(block, context), metricTabs(), stepTabs(block, context)].filter(Boolean);
   const head = (extra = {}) => block.setHead({ controls: controls(), ...extra });
   if (current.length === 0) {
     head();
@@ -767,18 +802,23 @@ export function renderVerbatimCards(block, context) {
     return;
   }
 
-  const { base, complaintCards, ordered } = problemOrder(cards);
-  const columns = problemColumns(context, { cards, complaintCards, buckets, previous, base });
+  const { base, complaintCards, ordered } = problemOrder(cards, Boolean(context.analyst));
+  const columns = problemColumns(context, { cards, complaintCards, buckets, previous, compared, base });
   const { scroll, buttons, feedSlot, refilter } = problemTable(context, state, { cards, ordered, columns, base });
   /*
     J-136: разрез, числа и шаг — в строке поиска, а не в шапке блока: лента справа начинается от шапки и занимает всю
-    высоту. Кнопка, которая прячет ленту и отдаёт её место таблице, — в шапке над лентой
+    высоту. Кнопка, которая прячет ленту и отдаёт её место таблице, — в верхней строке колонки ленты
   */
   const toolbar = element('div', 'problem-toolbar');
-  toolbar.append(problemSearch(refilter), cutTabs(block, context), orderTabs(block, context), dynamicsTabs(block, context), stepTabs(block, context));
+  toolbar.append(...[problemSearch(refilter), cutTabs(block, context), orderTabs(block, context), metricTabs(), stepTabs(block, context)].filter(Boolean));
   const column = element('div', 'verbatim-problems__list');
   column.append(toolbar, scroll, ...(columns.os ? [versionLegend()] : []), buttons);
   const content = element('div', 'verbatim-problems');
+  /*
+    Переключатели блока перестраивают его целиком, но проявление (D-56) здесь не нужно: поиск, табы и кнопки мигали
+    бы при каждом клике, а таблица и лента — с пустого кадра. Меняются только данные; выбор показывает рамка таба
+  */
+  content.setAttribute('data-steady', '');
   content.append(column, feedSlot, feedToggle(content, feedSlot));
   /* J-147: метки «Сделано с AI» у «Топ проблем» пока нет — по просьбе заказчика; лента отзывов начинается от заголовка */
   head({ controls: [driverChip(context)].filter(Boolean) });

@@ -11,6 +11,9 @@
 
 import { badge } from '../components/badge.js';
 import { delta } from '../components/delta.js';
+import { valueDelta } from '../components/value-delta.js';
+import { sparkline } from '../components/sparkline.js';
+import { buildTimeSeries, SCALE_OPTIONS, sparklineScale } from '../core/timeseries.js';
 import { hoverTooltip } from '../components/hover-tooltip.js';
 import { statusDot } from '../components/status-dot.js';
 import { element } from '../ui/dom.js';
@@ -45,6 +48,9 @@ export const GROWTH = {
   volume: { up: 'neutral', down: 'negative', flat: 'neutral' },
 };
 
+/* Объём оценок в шапке: рост — вторым серым текста, а не --color-neutral (четвёртый серый карточки) */
+const HEADER_VOLUME = { up: 'quiet', down: 'negative', flat: 'quiet' };
+
 const TREND_CAPTION = {
   up: 'рост к предыдущему периоду',
   down: 'падение к предыдущему периоду',
@@ -53,7 +59,7 @@ const TREND_CAPTION = {
 
 /* «В плане» — нейтральный: в коридоре нечему радоваться или тревожиться; цвет — у отклонений, слово называет любое состояние (D-26) */
 const PLAN_BADGE = {
-  [IN_PLAN]: { caption: 'В плане', tone: 'neutral' },
+  [IN_PLAN]: { caption: 'В плане', tone: 'quiet' },
   [ABOVE_PLAN]: { caption: 'Выше плана', tone: 'positive' },
   [BELOW_PLAN]: { caption: 'Ниже плана', tone: 'negative' },
 };
@@ -84,6 +90,41 @@ export function figureNode(valueText, lead, modifier) {
   const figure = element('span', 'metric__figure');
   figure.append(valueNode(valueText, modifier), lead);
   return figure;
+}
+
+/**
+ * Карточки шапки: число и дельта VOC — общий компонент `valueDelta` (аудит 13.11): пара не разрывается,
+ * дельта всегда справа в строке числа, а не под ним. Дайджест и роли пока на `figureNode`.
+ */
+export function pairNode(valueText, lead, modifier) {
+  return valueDelta(valueNode(valueText, modifier), lead, { className: 'metric__pair' });
+}
+
+/* Шаг мини-тренда словом — для подсказки: «по дням», «по неделям» */
+const TREND_STEP = { day: 'по дням', week: 'по неделям', month: 'по месяцам', quarter: 'по кварталам' };
+
+/**
+ * Мини-тренд VOC сегмента (решение пользователя, отменяет J-107): VOC по шагам выбранного периода — шаг по длине
+ * периода, не больше 16 точек (`sparklineScale`, D-52): месяц — дни, квартал — недели. Нейтральный, без осей;
+ * меньше двух шагов с оценками — тренда нет. Справа в строке значения, на всё свободное место.
+ */
+export function trendNode(rows, period) {
+  if (!period?.from || !period?.to) return null;
+  const scale = sparklineScale(period);
+  const values = buildTimeSeries(rows, period, scale).map(({ voc: value }) => value);
+  if (values.filter((value) => value !== null).length < 2) return null;
+  const trend = element('span', 'metric__trend');
+  trend.title = `VOC ${TREND_STEP[scale] ?? SCALE_OPTIONS.find(({ value }) => value === scale)?.label ?? ''} за период`;
+  trend.append(sparkline(values, { tone: 'neutral' }));
+  return trend;
+}
+
+/** Число с дельтой и мини-тренд справа — одна строка значения карточки сегмента. */
+export function valueRowNode(pair, trend) {
+  if (!trend) return pair;
+  const row = element('div', 'metric__value-row');
+  row.append(pair, trend);
+  return row;
 }
 
 /** J-65: одна строка подписи под числом — объём, коридор, пометка выборки; пустые части пропускаются. */
@@ -146,7 +187,12 @@ export function countNode(count) {
 /** Дельта числа оценок — сразу после «N оценок»; без предыдущего периода её нет. Рост объёма нейтрален, спад — тревога (D-49). */
 export function countDeltaNode(count, previousCount) {
   if (!previousCount) return null;
-  return deltaNode(count - previousCount, { shape: DELTA_SHAPES.count, growth: GROWTH.volume, className: 'metric__count-delta' });
+  return deltaNode(count - previousCount, { shape: DELTA_SHAPES.count, growth: HEADER_VOLUME, className: 'metric__count-delta' });
+}
+
+/** «N оценок» с дельтой — пара общего `valueDelta`: у карточки канала и сегментов одна анатомия, «+557» не уходит на строку ниже. */
+export function countGroupNode(count, previousCount) {
+  return valueDelta(countNode(count), countDeltaNode(count, previousCount), { className: 'metric__count' });
 }
 
 /**
