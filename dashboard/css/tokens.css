@@ -154,6 +154,8 @@
   --font-headings: "Styrene Headings", var(--font-sans);
 
   --type-display: 300 96px/1 var(--font-numbers);
+  /* Крупное значение карточки канала: до 96 px, пока справа помещается дельта (68 px с зазором); 100cqi — ширина карточки, «4,90» с запасом — 2,03 кегля */
+  --type-display-fit: 300 clamp(56px, calc((100cqi - 68px) / 2.03), 96px)/1 var(--font-numbers);
   --type-value: 300 48px/1 var(--font-numbers);
   /* J-165: VOC карточки роли — между значением карточки (48) и итогом дайджеста (96) */
   --type-value-lg: 300 72px/1 var(--font-numbers);
@@ -169,6 +171,8 @@
   --type-axis: 400 11px/1.2 var(--font-sans);
 
   --tracking-display: -8px;
+  /* Трекинг --type-display-fit — в em (−8 px при 96), число ужимается целиком */
+  --tracking-display-fit: -0.083em;
   --tracking-value: -2px;
   --tracking-value-lg: -4px;
   /* J-59: заголовки блоков плотнее — разрядка +0,02em читалась как широкий набор */

@@ -369,6 +369,7 @@ function roleTrend(role, data) {
   const values = points.map(({ voc }) => voc);
   const band = data.plan ? { min: data.plan.min, max: data.plan.max } : null;
   const wrap = element('div', 'digest-trend digest-trend--fill');
+  wrap.title = `VOC ${months ? 'по месяцам' : 'по неделям'}${band ? `; полоса — план ${formatVoc(band.min)}–${formatVoc(band.max)}` : ''}`;
   /* J-194: шкала круглым шагом, как у графика динамики — коридор плана полосой, а не фоном плитки */
   wrap.append(sparkline(values, { tone: 'neutral', wide: true, fill: true, label: vocText, band, domain: chartDomain(points, [], band),
     axis: points.map((point) => (months ? monthShort(point.month) : dayMonth(point.from))) }));
@@ -376,8 +377,8 @@ function roleTrend(role, data) {
 }
 
 /*
-  Плитка роли: в шапке — портрет и название роли (J-169, шапка одна на все карточки — C-02); ниже слева VOC с дельтой
-  и оценки, через разделитель справа — линия VOC с коридором плана и топ-3 проблем таблицей
+  Плитка роли: слева шапка карточки — портрет и название роли (J-169, шапка одна на все карточки — C-02), под ней внизу
+  VOC с дельтой и оценки; через разделитель справа с самого верха — линия VOC с коридором плана и топ-3 проблем таблицей
 */
 export const digestRole = (index) => (block, context) => {
   const data = rolesOf(context);
@@ -387,12 +388,14 @@ export const digestRole = (index) => (block, context) => {
   roleTiles.set(index, { block, context });
   block.setTitle(role.role);
   block.setHead({ marker: roleAvatar(role.role) });
-  if (!role.count) {
-    block.setContent(element('p', 'role-card__none', 'Нет оценок за месяц'));
-    return;
-  }
   const lead = element('div', 'role-card__lead');
   const content = element('div', 'role-card');
+  if (!role.count) {
+    lead.append(element('p', 'role-card__none', 'Нет оценок за месяц'));
+    content.append(lead);
+    block.setContent(content);
+    return;
+  }
   /* J-163, J-165: VOC — крупным числом 72 px с дельтой справа; оценки — мелкой строкой под ним */
   const vocFigure = element('div', 'metric');
   const hasPrevious = role.countDelta !== null;
@@ -401,8 +404,8 @@ export const digestRole = (index) => (block, context) => {
     ...(role.raw !== null && roundVoc(role.raw) !== roundVoc(role.voc) ? [metaRowNode(element('span', 'metric__meta', `${vocText(role.raw)} без поправки`))] : []));
   lead.append(vocFigure);
   const side = element('div', 'role-card__side');
-  const trendCaption = `${roleScale === 'months' ? 'По месяцам' : 'По неделям'}${planText(data.plan)}`;
-  side.append(element('span', 'role-card__caption', trendCaption), roleTrend(role, data), problemTable(role.problems));
+  /* Подписи «По неделям · план» над линией нет: шаг и план — в шапке страницы, план ещё и в подсказке линии */
+  side.append(roleTrend(role, data), problemTable(role.problems));
   content.append(lead, side);
   block.setContent(content);
 };

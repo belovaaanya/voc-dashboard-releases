@@ -460,7 +460,7 @@
 /* Первая колонка — подпись проблемы: прилипает при прокрутке, текст переносится по словам */
 /* Длинная проблема переносится по словам внутри липкой колонки: специфичность выше общего nowrap ячеек */
 .problem-table .problem-table__problem,
-.problem-table thead th:first-child {
+.problem-table thead tr:not(.problem-table__parts) th:first-child {
   position: sticky;
   inset-inline-start: 0;
   z-index: 1;
@@ -631,10 +631,8 @@
 }
 
 .problem-table .problem-table__part--lead {
-  position: sticky;
-  inset-inline-start: 0;
-  z-index: 1;
-  background: var(--color-surface);
+  /* Пустая ячейка над названием и ФО — без фона и не закреплена: плашка закреплённой колонки не выступает над шапкой */
+  background: none;
 }
 
 .problem-table .problem-table__step--first,
@@ -653,9 +651,9 @@
   background: color-mix(in srgb, var(--color-negative) calc(var(--step-heat, 0%) * 0.28), var(--row-selected));
 }
 
-/* J-150: шаг «Урон и жалобы» — урон крупно, число жалоб строкой ниже, тише */
-.problem-table__step--both .problem-table__step-main,
-.problem-table__step--both .problem-table__step-sub {
+/* Шаг доли и урона — значение крупно, число жалоб строкой ниже, тише */
+.problem-table__step--with-count .problem-table__step-main,
+.problem-table__step--with-count .problem-table__step-sub {
   display: block;
   white-space: nowrap;
 }

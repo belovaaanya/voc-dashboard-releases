@@ -308,23 +308,29 @@
   display: none;
 }
 
-.card--role > .card__body {
-  flex: 1 1 auto;
+/*
+  Карточка роли — сетка из двух колонок: шапка (портрет и название) встаёт сама в левую верхнюю ячейку, VOC — под ней,
+  линия и таблица — справа с самого верха, вровень с портретом. Тело и плитка — display: contents, их части — ячейки сетки
+*/
+.card--role:not([hidden]) {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  column-gap: var(--space-8);
+}
+
+.card--role > .card__body,
+.role-card {
+  display: contents;
 }
 
 .roles-caption {
   margin: 0;
 }
 
-/* Плитка роли: портрет и название — в шапке карточки (J-169); слева VOC внизу плитки, через разделитель справа — линия и топ-3 проблем */
-.role-card {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--space-8);
-  height: 100%;
-}
-
 .role-card__lead {
+  grid-column: 1;
+  grid-row: 2;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
@@ -333,6 +339,8 @@
 
 /* Разделитель колонок — посередине зазора, как календарь событий и лента отзывов на VOC ЦК (J-175) */
 .role-card__side {
+  grid-column: 2;
+  grid-row: 1 / -1;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -347,11 +355,6 @@
   inset-inline-start: calc(-1 * var(--space-8) / 2);
   width: var(--hairline);
   background: var(--color-card-border);
-}
-
-.role-card__caption {
-  color: var(--color-text-tertiary);
-  font: var(--type-caption);
 }
 
 .digest-trend--fill {
@@ -449,8 +452,15 @@
 }
 
 @media (max-width: 700px) {
-  .role-card {
+  .card--role:not([hidden]) {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+  }
+
+  .role-card__lead,
+  .role-card__side {
+    grid-column: 1;
+    grid-row: auto;
   }
 
   .role-card__side::before {

@@ -32,7 +32,7 @@ export function chartTimeline(context, { onPreview, owner = DEFAULT_OWNER } = {}
   /*
     Ревью 13.11: выбранные даты уже в периоде шапки группы — подпись их не повторяет. «Вернуть общий период» —
     иконка той же кнопки действия, что в шапке карточки; название (J-37) — её имя и подсказка. Без своего окна
-    возвращать нечего — кнопки нет
+    возвращать нечего: кнопка невидима и недоступна, но место за ней держится — полоса не прыгает
   */
   const caption = element('span', 'chart-timeline__caption', 'Вся история');
   const reset = element('button', 'card__action chart-timeline__reset');
@@ -40,7 +40,12 @@ export function chartTimeline(context, { onPreview, owner = DEFAULT_OWNER } = {}
   reset.setAttribute('aria-label', 'Вернуть общий период');
   reset.title = 'Вернуть общий период';
   reset.append(icon('reset', 'card__icon'));
-  reset.hidden = !context.periodControl?.local;
+  const idle = !context.periodControl?.local;
+  reset.disabled = idle;
+  if (idle) {
+    reset.setAttribute('data-idle', '');
+    reset.setAttribute('aria-hidden', 'true');
+  }
   /* Кнопка исчезает вместе со своим окном: с клавиатуры (detail 0) фокус переходит на левую ручку новой шкалы, а не на body */
   reset.addEventListener('click', (event) => {
     if (!event?.detail) refocusByOwner.set(owner, { edge: 'from', range: null });

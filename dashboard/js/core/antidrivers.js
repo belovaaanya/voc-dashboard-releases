@@ -41,7 +41,8 @@ export const VERSION_CHANNEL = 'АБМ';
 export const VERSION_CUT = { key: 'app_version', title: 'Версии', fullTitle: 'Версии приложения' };
 export const NO_VERSION = 'Без версии';
 
-const VERSION_OS_ORDER = [OS_IOS, OS_ANDROID];
+/* Порядок секций разреза «Версии»: Android сверху, iOS снизу */
+const VERSION_OS_ORDER = [OS_ANDROID, OS_IOS];
 
 const textOf = (value) => (typeof value === 'string' ? value.trim() : '');
 

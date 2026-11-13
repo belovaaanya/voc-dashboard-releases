@@ -14,6 +14,7 @@ import {
   DATA_LOSS_EVENT,
   INCIDENT_EVENT,
   NEW_SLICE_EVENT,
+  NEW_SLICE_MIN_DAILY,
   RELEASE_EVENT,
   RELEASE_LAG_DAYS,
   ROLLOUT_EVENT,
@@ -63,21 +64,33 @@ function releaseLag() {
   J-138: у каждого типа — пояснение, что считается событием. J-143: пояснения — не в чипах, а в окне по значку «i» у
   заголовка блока, у каждого типа — его цветные метки из ленты (`tags`)
 */
+/*
+  Ревью 13.11: чипы и окно «Типы событий» — двумя группами: сначала то, что считается из оценок (снижение VOC,
+  провал числа оценок, инцидент, новый срез), потом внешние события из листов (авария, релизы, раскатки).
+  «Критическое снижение» → «Крит. снижение VOC», «Пропажа данных» → «Провал оценок»; раскатка подписана каналом
+*/
+export const KIND_GROUPS = [{ value: 'ratings', label: 'По оценкам' }, { value: 'external', label: 'Внешние события' }];
+
+/** Подпись типа: у раскатки — с каналом («Раскатка НИБ»), остальные — как в `KINDS`. */
+export function kindLabel({ label, channelLabel }, channel) {
+  return channelLabel && channel ? `${label} ${channel}` : label;
+}
+
 export const KINDS = [
-  { value: ANOMALY_EVENT, label: 'Критическое снижение', tags: [{ label: 'Снижение VOC ниже плана', color: 'negative' }, { label: 'Снижение VOC', color: 'orange' }],
-    hint: 'VOC за день по каналу, сегменту, триггеру, продукту или ОС ниже средней за предыдущие 10 дней на 0,1 и больше, и при таком числе оценок это почти не бывает случайно (вероятность меньше 1 %). Нужно не меньше 100 оценок разреза за период' },
-  { value: DATA_LOSS_EVENT, label: 'Пропажа данных', tags: [{ label: 'Пропажа данных', color: 'data-loss' }],
-    hint: 'Разрез — весь срез, ОС, сегмент, продукт, триггер, роль или версия приложения — обычно получает оценки каждый рабочий день (в среднем от 5 за предыдущие 10 рабочих дней), а в этот день их нет или в три раза меньше, и случайно так почти не бывает (вероятность меньше 1 %). Дни подряд — одна строка' },
-  { value: INCIDENT_EVENT, label: 'Авария', tags: [{ label: 'Авария', color: 'negative' }],
-    hint: 'Сбой из листа аварий: начало, конец и доля затронутых пользователей. Показываются аварии всех каналов — авария соседнего канала тоже может сдвинуть VOC' },
-  { value: RELEASE_EVENT, label: 'Релизы АБМ', tags: [{ label: 'Релиз АБМ', color: 'neutral' }, { label: 'Релиз без оценок', color: 'data-loss' }, { label: 'Релиз: оценки через 5\u00a0дн', color: 'data-loss' }],
-    hint: `Версия приложения: дата релиза из листа раскаток и день, с которого по ней пошли оценки. Сигнал — оценок нет через ${releaseLag()} после релиза или они пришли позже. Версия, по которой оценки появились, а релиза в листе нет, — без даты релиза` },
-  { value: ROLLOUT_EVENT, label: 'Раскатка', tags: [{ label: 'Раскатка', color: 'neutral' }],
-    hint: 'Выпуск фичи без версии приложения из листа раскаток: дата, название, число пинов' },
-  { value: SUSTAINED_EVENT, label: 'Инцидент', tags: [{ label: 'Инцидент 3\u00a0дн', color: 'negative' }],
-    hint: 'Триггер из топ-15 по числу оценок три рабочих дня подряд и дольше держит VOC ниже нижней границы плана больше чем на 0,05' },
-  { value: NEW_SLICE_EVENT, label: 'Новый срез', tags: [{ label: 'Новый срез', color: 'purple' }],
-    hint: 'Начали приходить оценки по триггеру, роли, сегменту или продукту, которых раньше в выгрузке не было. Дата — первый день с такими оценками. Новые версии приложения — в «Релизах АБМ»' },
+  { value: ANOMALY_EVENT, group: 'ratings', label: 'Крит. снижение VOC', tags: [{ label: 'Снижение VOC ниже плана', color: 'negative' }, { label: 'Снижение VOC', color: 'orange' }],
+    hint: 'VOC разреза за день ниже средней за 10 прошлых рабочих дней на 0,1 и больше; выходной — против 10 прошлых календарных дней. Падение не случайно: вероятность меньше 1 %. Разрез — от 100 оценок за период' },
+  { value: DATA_LOSS_EVENT, group: 'ratings', label: 'Провал оценок', tags: [{ label: 'Провал оценок', color: 'data-loss' }],
+    hint: 'Оценок разреза за день нет или в 3 раза меньше обычного. Обычное — средняя за 10 прошлых дней того же типа: будни против будней, выходные и праздники против выходных; от 5 оценок в день. Падение не случайно: вероятность меньше 1 %' },
+  { value: SUSTAINED_EVENT, group: 'ratings', label: 'Инцидент', tags: [{ label: 'Инцидент 3\u00a0дн', color: 'negative' }],
+    hint: 'Триггер из топ-15 по оценкам за всю выгрузку канала: VOC за день ниже нижней границы плана больше чем на 0,05 три рабочих дня подряд и дольше' },
+  { value: NEW_SLICE_EVENT, group: 'ratings', label: 'Новый срез', tags: [{ label: 'Новый срез', color: 'purple' }],
+    hint: `Триггер, роль, сегмент или продукт, которых раньше не было, и по ним пошёл поток: за день от ${formatRatings(NEW_SLICE_MIN_DAILY)}. Дата — первый такой день. Единичные оценки и заглушки («Без сопоставления» и др.) не считаются` },
+  { value: INCIDENT_EVENT, group: 'external', label: 'Авария', tags: [{ label: 'Авария', color: 'negative' }],
+    hint: 'Сбой из листа аварий: начало, конец и доля затронутых пользователей. Ни с чем не сравнивается. Показываются аварии всех каналов: авария соседнего тоже может сдвинуть VOC' },
+  { value: RELEASE_EVENT, group: 'external', label: 'Релизы АБМ', tags: [{ label: 'Релиз АБМ', color: 'neutral' }, { label: 'Релиз без оценок', color: 'data-loss' }, { label: 'Релиз: оценки через 5\u00a0дн', color: 'data-loss' }],
+    hint: `Дата релиза версии из листа раскаток против дня первых оценок по ней. Сигнал — оценок нет через ${releaseLag()} или они пришли позже. Версия без строки в листе — релиз, только если она новее уже встречавшихся на своей ОС` },
+  { value: ROLLOUT_EVENT, group: 'external', label: 'Раскатка', channelLabel: true, tags: [{ label: 'Раскатка', color: 'neutral' }],
+    hint: 'Выпуск фичи из листа раскаток (строка без версии приложения): дата, название, число пинов. Ни с чем не сравнивается' },
 ];
 
 const NEW_SLICE_CAPTION = { trigger: 'Новый триггер', role: 'Новая роль', segment: 'Новый сегмент', product: 'Новый продукт' };
@@ -199,7 +212,7 @@ function dataLossText(event, context) {
   const before = formatNumber(Math.round(event.before));
   const after = event.full ? 'нет оценок' : `${formatNumber(Math.round(event.after))} в день`;
   const parts = [slice, `было ≈${before} в день, стало ${after}`, ...(event.startsBeforePeriod ? ['началась до периода'] : []), ...(event.ongoing ? ['продолжается'] : [])];
-  const window = `Продолжительность: ${workingDaysCaption(event.streak)}. Обычный поток — средняя за 10 предыдущих рабочих дней без пропажи; выходные не проверяются`;
+  const window = `Продолжительность: ${daysCaption(event.streak)}. Обычный поток — средняя за 10 прошлых дней того же типа без пропажи: будни — по будням, выходные и праздники — по выходным`;
   const detail = parts.join(' · ');
   return { date, title, color, comment: null, detail, value: null, delta: null, deltaTone: 'neutral', window, sentence: `${date}. ${title}. ${parts.join(', ')}. ${window}` };
 }
@@ -211,7 +224,7 @@ function newSliceText(event, context) {
   const name = context.label(event.dimension, event.key);
   const detail = [`${NEW_SLICE_CAPTION[event.dimension]}: ${name}`, formatRatings(event.ratings)].join(' · ');
   const value = `VOC ${formatVoc(roundVoc(event.value))}`;
-  const window = `Первые оценки — ${date}; раньше в выгрузке ${NEW_SLICE_SUBJECT[event.dimension]} не было. Оценки и VOC — с первого дня до конца периода`;
+  const window = `Поток с ${date}: ${formatRatings(event.dayRatings)} за день; раньше ${NEW_SLICE_SUBJECT[event.dimension]} в выгрузке не было или были единичные оценки. Оценки и VOC — с этого дня до конца периода`;
   return { date, title, color, comment: null, detail, value, delta: null, deltaTone: 'neutral', window, sentence: `${date}. ${title}. ${detail}. ${value}. ${window}` };
 }
 
@@ -227,7 +240,7 @@ export function eventText(event, context) {
     const detail = [`Триггер: ${context.label('trigger', event.key)}`,
       ...(event.startsBeforePeriod ? ['начался до периода'] : []), formatRatings(event.ratings)].join(' · ');
     const value = `VOC ${formatVoc(roundVoc(event.value))}`;
-    const window = `Продолжительность: ${workingDaysCaption(event.streak)}. Ниже нижней границы плана более чем на 0,05; триггер входит в топ-15 по числу оценок за период. План последнего дня: ${formatVoc(roundVoc(event.plan.min))}.`;
+    const window = `Продолжительность: ${workingDaysCaption(event.streak)}. Ниже нижней границы плана более чем на 0,05; триггер входит в топ-15 по числу оценок за всю выгрузку канала. План последнего дня: ${formatVoc(roundVoc(event.plan.min))}.`;
     return { date, title, color, detail, value, delta: null, window, sentence: `${date}. ${title}. ${detail}. ${value}. ${window}` };
   }
   return event.kind === ROLLOUT_EVENT || event.kind === INCIDENT_EVENT ? channelEventText(event, context) : insightText(event, context);
@@ -237,7 +250,7 @@ export function eventText(event, context) {
   J-143: значок «i» у заголовка — окно «Типы событий»: у каждого типа его метки цветом, как в ленте, и коротко —
   что считается событием. Окно — общий popover каркаса: Escape и клик вне закрывают
 */
-function kindsHelp() {
+function kindsHelp(channel) {
   const item = element('span', 'insight-help');
   const trigger = element('button', 'insight-help__trigger');
   trigger.type = 'button';
@@ -248,14 +261,19 @@ function kindsHelp() {
   panel.id = 'insight-kinds-help';
   panel.setAttribute('aria-label', 'Типы событий');
   panel.append(element('h2', 'control-popover__title', 'Типы событий'));
-  const list = element('dl', 'insight-help__list');
-  for (const { label, hint, tags } of KINDS) {
-    const term = element('dt', 'insight-help__term');
-    term.append(...tags.map(({ label: text, color }) => tag(text, color)));
-    term.setAttribute('aria-label', label);
-    list.append(term, element('dd', 'insight-help__text', hint));
+  for (const group of KIND_GROUPS) {
+    panel.append(element('h3', 'insight-help__group', group.label));
+    const list = element('dl', 'insight-help__list');
+    for (const kind of KINDS.filter((item) => item.group === group.value)) {
+      const label = kindLabel(kind, channel);
+      const term = element('dt', 'insight-help__term');
+      /* Метка раскатки в ленте — с каналом, как чип */
+      term.append(...kind.tags.map(({ label: text, color }) => tag(kind.channelLabel ? label : text, color)));
+      term.setAttribute('aria-label', label);
+      list.append(term, element('dd', 'insight-help__text', kind.hint));
+    }
+    panel.append(list);
   }
-  panel.append(list);
   item.append(trigger, panel);
   bindPopover(item, trigger, panel);
   return item;
@@ -266,7 +284,21 @@ function kindChips(block, context, counts) {
   const group = element('div', 'insight-kinds');
   group.setAttribute('role', 'group');
   group.setAttribute('aria-label', 'Типы событий');
-  for (const { value, label } of KINDS) {
+  /* Две группы — строкой каждая, с подписью: из оценок и внешние события */
+  const rows = new Map(KIND_GROUPS.map(({ value, label }) => {
+    const row = element('div', 'insight-kinds__group');
+    const caption = element('span', 'insight-kinds__caption', label);
+    /* Имя группы — её видимая подпись: screen reader читает его один раз */
+    caption.id = `insight-kinds-${value}`;
+    row.setAttribute('role', 'group');
+    row.setAttribute('aria-labelledby', caption.id);
+    row.append(caption);
+    group.append(row);
+    return [value, row];
+  }));
+  for (const kind of KINDS) {
+    const { value } = kind;
+    const label = kindLabel(kind, context.state.channel);
     const pressed = chosen.has(value);
     const count = counts.get(value) ?? 0;
     const chip = element('button', 'insight-kind');
@@ -291,7 +323,7 @@ function kindChips(block, context, counts) {
       const again = block.element.querySelector(`.insight-kind[data-kind="${value}"]`);
       (again && !again.disabled ? again : [...block.element.querySelectorAll('.insight-kind')].find((node) => !node.disabled))?.focus?.();
     });
-    group.append(chip);
+    rows.get(kind.group).append(chip);
   }
   return group;
 }
@@ -484,7 +516,7 @@ export function renderInsights(block, context) {
   /* Ввод перестраивает только список: поле поиска не теряет фокус и курсор */
   const listHost = element('div', 'insights__results');
   /* Тип события — по правилу, без комментария агента: пометки «Сделано с AI» в календаре нет (R-43, D-33) */
-  block.setHead({ help: kindsHelp(), controls: context.state.days?.length ? daysChip(context) : focus ? focusChip(context) : null });
+  block.setHead({ help: kindsHelp(context.state.channel), controls: context.state.days?.length ? daysChip(context) : focus ? focusChip(context) : null });
   let status = feedStatus.get(block);
   if (!status) {
     status = element('span', 'visually-hidden');

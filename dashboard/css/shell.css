@@ -24,6 +24,8 @@ body {
   min-width: calc(var(--content-min) + var(--nav-current, var(--nav-width)));
   padding: var(--space-10) var(--page-gutter);
   background: var(--page-ambient), var(--color-bg);
+  /* Пятна подсветки закреплены за окном: шапка повторяет их на своём стекле, и шва на её краях нет */
+  background-attachment: fixed;
   color: var(--color-text-secondary);
   font: var(--type-text);
 }
@@ -322,9 +324,14 @@ body {
   grid-row: 1 / span 2;
 }
 
-/* Высоту второй строки задают дни плана и распределение: длинный вывод прокручивается в своей карточке (D-55) */
+/*
+  Высоту второй строки задаёт фиксированная высота вывода: две причины по две строки помещаются целиком
+  (поля 40 + шапка 24 + зазор 12 + две строки по 49 и зазор 8 = 182), строка не скачет при смене фильтров
+  и длины текста; дни плана и распределение растягиваются под неё. Лишнее прокручивается в карточке (D-55)
+*/
 .metrics-grid > .card--summary {
   contain: size;
+  height: calc(var(--space-10) * 4 + var(--space-8));
 }
 
 /* ── Карточка ──────────────────────────────────────────────────────── */
@@ -681,7 +688,11 @@ body {
   inset-block: 0;
   /* Полоса шире любой страницы, лишнее обрезает .page */
   inset-inline: calc(-1 * var(--content-max));
-  background: var(--header-fill);
+  /* Стекло шапки несёт те же пятна страницы, закреплённые за окном: без прокрутки под ним те же пиксели,
+     что вокруг, — тёмной плашки с краем у меню и под строкой фильтров нет. При прокрутке плотный тон
+     по-прежнему закрывает содержимое под фильтрами */
+  background: var(--page-ambient), var(--header-fill);
+  background-attachment: fixed;
   -webkit-mask-image: var(--header-fade);
   mask-image: var(--header-fade);
   -webkit-backdrop-filter: var(--glass-blur);
@@ -1530,7 +1541,8 @@ body {
   }
 
   #header::before {
-    background: var(--color-bg);
+    background: var(--page-ambient), var(--color-bg);
+    background-attachment: fixed;
   }
 }
 
@@ -1546,7 +1558,8 @@ body {
   }
 
   #header::before {
-    background: var(--color-bg);
+    background: var(--page-ambient), var(--color-bg);
+    background-attachment: fixed;
   }
 
   .card,

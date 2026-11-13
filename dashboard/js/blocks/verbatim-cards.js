@@ -24,7 +24,8 @@ let selectedCut = 'domainProblem';
   жалобы, у ДКО — урон; смена разреза возвращает умолчание. Порядок строк — по той же главной метрике разреза
 */
 /* J-150: у ДКО по умолчанию в шаге сразу урон и жалобы — их смотрят вместе, переключаться неудобно */
-const DYNAMICS_DEFAULT = { domainProblem: 'count', categoryPair: 'both' };
+/* Режима «Урон и жалобы» больше нет: число жалоб — подписью в каждом шаге; у ДКО по умолчанию — урон */
+const DYNAMICS_DEFAULT = { domainProblem: 'count', categoryPair: 'damage' };
 let selectedDynamics = DYNAMICS_DEFAULT.domainProblem;
 /* J-146: после смены динамики таблица сама прокручивается к шагам — иначе смена не видна за правым краем */
 let revealSteps = false;
@@ -133,10 +134,9 @@ const SHARE_TITLE = 'Доля значения в потерях (5 − оцен
 
 const DAMAGE_TITLE = 'На сколько VOC был бы выше без этих жалоб, в пунктах VOC: доля негатива × (5 − VOC)';
 const DYNAMICS = {
-  count: { label: 'Жалобы', title: 'Число жалоб за шаг', of: 'Жалоб' },
-  share: { label: 'Доля', title: `Доля негатива за шаг. ${SHARE_TITLE}`, of: 'Доля негатива' },
-  damage: { label: 'Урон', title: `Урон за шаг. ${DAMAGE_TITLE}`, of: 'Урон' },
-  both: { label: 'Урон и жалобы', title: `Урон за шаг крупно, число жалоб под ним; подсветка — по урону. ${DAMAGE_TITLE}`, of: 'Урон и жалобы' },
+  count: { label: 'Частотность', title: 'Число жалоб за шаг', of: 'Жалоб' },
+  share: { label: 'Доля', title: `Доля негатива за шаг, под ней — число жалоб. ${SHARE_TITLE}`, of: 'Доля негатива' },
+  damage: { label: 'Урон', title: `Урон за шаг, под ним — число жалоб. ${DAMAGE_TITLE}`, of: 'Урон' },
 };
 
 /* J-142: что показывают колонки шагов; итог за период от выбора не зависит */
@@ -231,20 +231,14 @@ function stepTabs(block, context) {
 }
 
 /*
-  Колонки сегментов — по всем проблемам среза. J-120: порядок как у карточек метрик (J-42) — ММБ, СБ, КИБ;
-  прочие сегменты — за ними по убыванию жалоб. J-128: колонки «без сегмента» нет — такие оценки только в общем числе
+  Колонки сегментов — только ММБ, СБ, КИБ в порядке карточек метрик (J-42, J-120) и только те, что есть в срезе.
+  N/A, «Без сегмента» (J-128) и новые коды колонкой не выводятся — их оценки только в общем числе жалоб
 */
 const SEGMENT_ORDER = metricSegments();
-const segmentRank = (key) => (SEGMENT_ORDER.includes(key) ? SEGMENT_ORDER.indexOf(key) : SEGMENT_ORDER.length);
 
 function segmentColumns(cards) {
-  const totals = new Map();
-  for (const card of cards) for (const { code, count } of card.segments) {
-    if (segmentKey(code)) totals.set(segmentKey(code), (totals.get(segmentKey(code)) ?? 0) + count);
-  }
-  return [...totals].sort((left, right) => segmentRank(left[0]) - segmentRank(right[0])
-    || right[1] - left[1] || left[0].localeCompare(right[0], 'ru'))
-    .map(([key]) => key);
+  const present = new Set(cards.flatMap((card) => card.segments.map(({ code }) => segmentKey(code))));
+  return SEGMENT_ORDER.filter((code) => present.has(code));
 }
 
 const formatNegative = (value) => formatShare(value * 100);
@@ -272,8 +266,6 @@ const headCaption = (bucket) => (selectedScale === 'month' ? formatBucket(bucket
 /* J-142: значение шага по выбранной динамике; урон — доля негатива шага × разрыв VOC шага */
 export function stepValue(bucket, positive, gap, metric = selectedDynamics) {
   if (metric === 'count') return bucket.count || null;
-  /* J-150: в режиме «Урон и жалобы» значение шага для подсветки и сравнения — урон */
-  if (metric === 'both') return stepValue(bucket, positive, gap, 'damage');
   if (positive || bucket.negativeShare === null) return null;
   return metric === 'share' ? bucket.negativeShare : damageOf(bucket.negativeShare, { gap });
 }
@@ -286,17 +278,17 @@ const stepText = (value, metric = selectedDynamics) => {
 function bucketCell(bucket, positive, gap, heatMax) {
   const value = stepValue(bucket, positive, gap);
   let cell;
-  if (selectedDynamics === 'both') {
-    /* J-150: урон крупно, жалобы шага под ним тише; у похвалы урона нет — только жалобы */
-    const damage = stepText(value, 'damage');
-    const count = bucket.count ? formatCount(bucket.count) : null;
-    if (damage === null && count === null) cell = valueCell(null, 'problem-table__count problem-table__step');
-    else {
-      cell = element('td', 'problem-table__count problem-table__step problem-table__step--both');
-      cell.append(element('span', damage === null ? 'problem-table__step-main problem-table__none' : 'problem-table__step-main', damage ?? '—'),
-        element('small', 'problem-table__step-sub', count === null ? 'нет жалоб' : complaints(bucket.count)));
-    }
-  } else cell = valueCell(stepText(value), 'problem-table__count problem-table__step');
+  const main = stepText(value);
+  /*
+    Доля и урон — значение крупно, число жалоб шага под ним тише: частотность видна в любом режиме. В «Частотности»
+    значение и есть число жалоб — второй строки нет. У похвалы доли и урона нет — прочерк и жалобы под ним
+  */
+  if (selectedDynamics === 'count' || (main === null && !bucket.count)) cell = valueCell(main, 'problem-table__count problem-table__step');
+  else {
+    cell = element('td', 'problem-table__count problem-table__step problem-table__step--with-count');
+    cell.append(element('span', main === null ? 'problem-table__step-main problem-table__none' : 'problem-table__step-main', main ?? '—'),
+      element('small', 'problem-table__step-sub', bucket.count ? complaints(bucket.count) : 'нет жалоб'));
+  }
   if (value !== null && heatMax > 0) cell.style.setProperty('--step-heat', `${Math.round(Math.min(1, value / heatMax) * 100)}%`);
   return cell;
 }
@@ -326,6 +318,9 @@ function versionLegend() {
   legend.append(pie, element('span', null, `— ${VERSION_LEGEND}`));
   return legend;
 }
+
+export const PATTERN_HEAD = 'Есть ли закономерность?';
+const NO_PATTERN = new Set(['few', 'none']);
 
 function textCell(text, className = 'problem-table__text') {
   if (text === '—') return valueCell(null, className);
@@ -401,11 +396,16 @@ function problemRow(item, { columns, selected, onSelect, base }) {
     J-140: «Когда чаще» — до двух закономерностей; во сколько раз доля жалоб выше обычной — в подсказке.
     J-195: каждая закономерность — своей строкой, колонка по левому краю и отделена от соседней
   */
-  const peak = element('td', `problem-table__peak problem-table__peak--${item.peak.kind}`);
-  const lines = element('span', 'problem-table__peak-lines');
-  for (const line of item.peak.lines ?? [item.peak.label]) lines.append(element('span', null, line));
-  if (item.peak.title) lines.title = `${item.peak.label}. ${item.peak.title}`;
-  peak.append(lines);
+  /* Колонка «Есть ли закономерность?»: «мало жалоб» и «нет закономерности» — серым прочерком, причина — в подсказке */
+  const pattern = !NO_PATTERN.has(item.peak.kind);
+  const peak = pattern ? element('td', `problem-table__peak problem-table__peak--${item.peak.kind}`)
+    : valueCell(null, `problem-table__peak problem-table__peak--${item.peak.kind}`);
+  if (pattern) {
+    const lines = element('span', 'problem-table__peak-lines');
+    for (const line of item.peak.lines ?? [item.peak.label]) lines.append(element('span', null, line));
+    if (item.peak.title) lines.title = `${item.peak.label}. ${item.peak.title}`;
+    peak.append(lines);
+  } else peak.title = item.peak.kind === 'few' ? `Меньше ${complaints(PEAK_RULE.minComplaints)} — закономерность не ищется` : 'Закономерности нет';
   row.append(peak);
   /* J-142: динамика — после итога за период, правой частью таблицы */
   item.buckets.forEach((bucket, index) => {
@@ -453,7 +453,7 @@ function tableHead(context, columns) {
     row.append(th('iOS'), versionHead('iOS'), th('Android'), versionHead('Android'));
   }
   /* J-139: колонки «Частый триггер» нет — по просьбе заказчика */
-  const peakHead = th('Когда чаще', `Доля жалоб в день недели, часть месяца или конкретную дату против среза: от ${PEAK_RULE.minComplaints} жалоб, перекос от ${formatNumber(PEAK_RULE.ratio, 1)} раза, у даты — от ${formatNumber(PEAK_RULE.dateRatio, 1)} раза. Времени оценки в выгрузке нет`);
+  const peakHead = th(PATTERN_HEAD, `Доля жалоб в день недели, часть месяца или конкретную дату против среза: от ${PEAK_RULE.minComplaints} жалоб, перекос от ${formatNumber(PEAK_RULE.ratio, 1)} раза, у даты — от ${formatNumber(PEAK_RULE.dateRatio, 1)} раза. Времени оценки в выгрузке нет. Прочерк — меньше ${complaints(PEAK_RULE.minComplaints)} или закономерности нет`);
   peakHead.classList.add('problem-table__peak-head');
   row.append(peakHead);
   columns.buckets.forEach((bucket, index) => {

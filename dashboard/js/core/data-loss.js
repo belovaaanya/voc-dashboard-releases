@@ -1,18 +1,19 @@
 /*
-  J-191: «Пропажа данных» календаря. Разрез с регулярным потоком оценок в рабочий день получил их в разы меньше
+  J-191: «Пропажа данных» календаря. Разрез с регулярным потоком оценок в день получил их в разы меньше
   обычного или не получил совсем: так видно обрыв сбора по триггеру, версии, сегменту или всему срезу, о котором
   иначе узнают через недели. Методика — `docs/calc-core.md`, «Пропажа данных».
+  По выходным оценок обычно меньше, поэтому будний день сравнивается с буднями, а выходной и праздник — с выходными
 */
 
-import { workingDays } from './anomalies.js';
 import { numberedVersionKey, splitVersionKey } from './antidrivers.js';
 import { DATA_LOSS_EVENT, DATA_TONE } from './calendar.js';
-import { earliestDate } from './dates.js';
+import { daysBetween, earliestDate, shiftDay } from './dates.js';
 import { DIMENSIONS } from './dimensions.js';
+import { isRestDay } from './rest-days.js';
 
-/* Окно — предыдущие рабочие дни разреза; дни уже идущей пропажи в него не входят */
+/* Окно — предыдущие дни того же типа (будни или выходные); дни уже идущей пропажи в него не входят */
 export const DATA_LOSS_WINDOW = 10;
-/* Регулярный поток: в среднем не меньше пяти оценок в рабочий день и оценки хотя бы в 7 днях окна из 10 */
+/* Регулярный поток: в среднем не меньше пяти оценок в день и оценки хотя бы в 7 днях окна из 10 */
 export const DATA_LOSS_MIN_DAILY = 5;
 export const DATA_LOSS_MIN_ACTIVE_DAYS = 7;
 /* Резкое падение — в три раза и сильнее; ноль оценок — полная пропажа */
@@ -41,7 +42,16 @@ export function poissonAtMost(k, mean) {
   return Math.min(1, total);
 }
 
-/* Предыдущие рабочие дни без пропажи; короче окна — `null` */
+/* Дни отдыха — общее правило с таблицей аномалий (`rest-days.js`); экспорт оставлен для прежних импортов */
+export { isRestDay };
+
+function calendarDays(from, to) {
+  const days = [];
+  for (let day = from; day <= to; day = shiftDay(day, 1)) days.push(day);
+  return days;
+}
+
+/* Предыдущие дни ряда без пропажи; короче окна — `null`. Ряд — дни одного типа подряд */
 function recentDays(counts, flagged, index) {
   const recent = [];
   for (let day = index - 1; day >= 0 && recent.length < DATA_LOSS_WINDOW; day -= 1) {
@@ -50,14 +60,20 @@ function recentDays(counts, flagged, index) {
   return recent.length < DATA_LOSS_WINDOW ? null : recent;
 }
 
-/** Пропажа в день `index`: окно — предыдущие рабочие дни без пропажи; `null` — потока нет или день обычный. */
-export function lossVerdict(counts, flagged, index) {
+/** Обычный поток на день `index` ряда одного типа: средняя окна; `null` — окна нет или поток нерегулярный. */
+export function regularFlow(counts, flagged, index) {
   const recent = recentDays(counts, flagged, index);
   if (!recent) return null;
   const mean = recent.reduce((sum, count) => sum + count, 0) / DATA_LOSS_WINDOW;
   const active = recent.filter((count) => count > 0).length;
+  return mean < DATA_LOSS_MIN_DAILY || active < DATA_LOSS_MIN_ACTIVE_DAYS ? null : mean;
+}
+
+/** Пропажа в день `index` ряда одного типа: окно — предыдущие дни ряда без пропажи; `null` — потока нет или день обычный. */
+export function lossVerdict(counts, flagged, index) {
+  const mean = regularFlow(counts, flagged, index);
+  if (mean === null) return null;
   const count = counts[index];
-  if (mean < DATA_LOSS_MIN_DAILY || active < DATA_LOSS_MIN_ACTIVE_DAYS) return null;
   if (count > mean * DATA_LOSS_RATIO || poissonAtMost(count, mean) >= DATA_LOSS_ALPHA) return null;
   return { mean };
 }
@@ -107,10 +123,38 @@ export const VERSION_SHARE_OF_OS_LOSS = 0.5;
 
 function osLost(series, item, day) {
   const os = series.find((other) => other.dimension === 'os' && other.key === splitVersionKey(item.key).os);
-  const recent = os && recentDays(os.counts, os.flagged, day);
-  if (!recent) return true;
-  const expected = recent.reduce((sum, count) => sum + count, 0) / DATA_LOSS_WINDOW;
+  const expected = os?.means[day] ?? null;
+  if (expected === null) return true;
   return expected - os.counts[day] >= VERSION_SHARE_OF_OS_LOSS * (item.means[day] - item.counts[day]);
+}
+
+const LOSS = 'loss';
+const CLEAR = 'clear';
+/*
+  Оценить день нельзя (окна нет, поток нерегулярный — например, по выходным у разреза почти нет оценок) или оценок
+  втрое меньше обычного, но при малом потоке это ещё может быть случайно: серию не рвёт и в неё не входит
+*/
+const SKIP = 'skip';
+
+/*
+  Вердикт каждого дня — по ряду дней своего типа: будни с буднями, выходные и праздники с выходными. `means` —
+  обычный поток этого типа на день (база окна), он же ожидание для ОС у пропажи версии
+*/
+function assess(counts, kinds) {
+  const states = new Array(counts.length).fill(SKIP);
+  const means = new Array(counts.length).fill(null);
+  for (const positions of kinds) {
+    const sub = positions.map((position) => counts[position]);
+    const flagged = new Array(sub.length).fill(false);
+    sub.forEach((count, index) => {
+      const mean = regularFlow(sub, flagged, index);
+      if (mean === null) return;
+      means[positions[index]] = mean;
+      flagged[index] = Boolean(lossVerdict(sub, flagged, index));
+      states[positions[index]] = flagged[index] ? LOSS : count <= mean * DATA_LOSS_RATIO ? SKIP : CLEAR;
+    });
+  }
+  return { states, means };
 }
 
 /* Какой разрез объясняет пропажу другого: весь срез — любую, ОС — версии своей ОС */
@@ -120,28 +164,24 @@ function covers(parent, child) {
 }
 
 /**
- * Пропажи данных среза за период: серия рабочих дней подряд — одна строка с реальным началом, в том числе до периода.
- * Выходные не проверяются и серию не рвут. Пропажа, которую объясняет пропажа всего среза или ОС в тот же день, —
- * копия и не показывается; версия, оценки которой перешли к другой версии той же ОС, — не пропажа; разрез с теми же оценками за всю историю — копия, остаётся первый по порядку `CUTS`.
+ * Пропажи данных среза за период: дни пропажи подряд — одна строка с реальным началом, в том числе до периода.
+ * День сравнивается с днями своего типа: будний с буднями, выходной и праздник с выходными. День, который оценить
+ * нельзя (нет окна или регулярного потока этого типа), серию не рвёт и в неё не входит. Пропажа, которую объясняет
+ * пропажа всего среза или ОС в тот же день, — копия и не показывается; версия, оценки которой перешли к другой
+ * версии той же ОС, — не пропажа; разрез с теми же оценками за всю историю — копия, остаётся первый по порядку `CUTS`.
  */
 export function detectDataLoss({ rows, reference, period, channel, dataEnd }) {
   const start = earliestDate(rows);
   if (!start) return [];
   const end = dataEnd && dataEnd < period.to ? dataEnd : period.to;
-  const days = workingDays(start, end);
-  if (!days.length || days.at(-1) < period.from) return [];
+  if (end < period.from || end < start) return [];
+  const days = calendarDays(start, end);
   const index = new Map(days.map((day, position) => [day, position]));
+  const rest = days.flatMap((day, position) => (isRestDay(day) ? [position] : []));
+  const work = days.flatMap((day, position) => (isRestDay(day) ? [] : [position]));
   const series = dailyCounts(rows, reference, channel, index, days.length).map((item) => {
-    const flagged = new Array(days.length).fill(false);
-    const means = new Array(days.length).fill(null);
-    for (let day = 0; day < days.length; day += 1) {
-      const verdict = lossVerdict(item.counts, flagged, day);
-      if (verdict) {
-        flagged[day] = true;
-        means[day] = verdict.mean;
-      }
-    }
-    return { ...item, flagged, means };
+    const { states, means } = assess(item.counts, [work, rest]);
+    return { ...item, states, means, flagged: states.map((state) => state === LOSS) };
   });
 
   /* Разрез с теми же оценками за всю историю — копия (продукт из одного триггера): остаётся первый по `CUTS` */
@@ -162,23 +202,28 @@ export function detectDataLoss({ rows, reference, period, channel, dataEnd }) {
   const events = [];
   const exportEnds = !dataEnd || dataEnd <= period.to;
   distinct.forEach((item) => {
-    const flags = item.flagged;
+    const { states } = item;
     for (let day = 0; day < days.length; day += 1) {
-      if (!flags[day]) continue;
-      const first = day;
-      while (day + 1 < days.length && flags[day + 1]) day += 1;
+      if (states[day] !== LOSS) continue;
+      const lost = [day];
+      let next = day + 1;
+      while (next < days.length && states[next] !== CLEAR) {
+        if (states[next] === LOSS) lost.push(next);
+        next += 1;
+      }
+      day = lost.at(-1);
       if (days[day] < period.from) continue;
-      let copy = true;
-      for (let at = first; at <= day && copy; at += 1) copy = explained(item, at);
-      if (copy) continue;
-      const run = days.slice(first, day + 1);
-      const counts = item.counts.slice(first, day + 1);
+      if (lost.every((at) => explained(item, at))) continue;
+      const run = lost.map((at) => days[at]);
+      const counts = lost.map((at) => item.counts[at]);
       events.push({
         kind: DATA_LOSS_EVENT, dimension: item.dimension, key: item.key, channel,
-        from: run[0], date: run.at(-1), days: run, streak: run.length,
-        before: item.means[first], after: counts.reduce((sum, count) => sum + count, 0) / counts.length,
+        /* Длительность — календарные дни от первого до последнего дня пропажи, с выходными внутри */
+        from: run[0], date: run.at(-1), days: run, streak: daysBetween(run[0], run.at(-1)) + 1,
+        before: item.means[lost[0]], after: counts.reduce((sum, count) => sum + count, 0) / counts.length,
         ratings: counts.at(-1), full: counts.every((count) => count === 0),
-        ongoing: exportEnds && day === days.length - 1, startsBeforePeriod: run[0] < period.from,
+        /* После последнего дня пропажи до конца выгрузки нет ни одного обычного дня */
+        ongoing: exportEnds && next >= days.length, startsBeforePeriod: run[0] < period.from,
         tone: DATA_TONE, severity: null,
       });
     }

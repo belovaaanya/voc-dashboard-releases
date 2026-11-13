@@ -17,9 +17,28 @@
   выбранный чип — яркая рамка и подложка, как выбранная строка. Узкий рейл переносит чипы
 */
 .insight-kinds {
+  display: grid;
+  gap: var(--space-2);
+}
+
+/* Ревью 13.11: группа типов — подпись и чипы одной строкой с переносом */
+.insight-kinds__group {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: var(--space-1);
+}
+
+.insight-kinds__caption {
+  margin-inline-end: var(--space-1);
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+}
+
+.insight-help__group {
+  margin: var(--space-3) 0 var(--space-2);
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
 }
 
 .insight-kind {
@@ -241,6 +260,8 @@
 }
 
 .insight-row__value {
+  /* VOC — в зоне подписи у её последней строки: к строке даты и типа не поднимается */
+  align-self: flex-end;
   color: var(--color-text-secondary);
 }
 

@@ -3,6 +3,7 @@
 import { ABOVE, BELOW, VOC_METRIC, compareAnomalies, isWorkingDay, workingDays } from './anomalies.js';
 import { numberedVersionKey, splitVersionKey, versionKey } from './antidrivers.js';
 import { earliestDate, daysBetween, shiftDay } from './dates.js';
+import { UNLABELLED } from './breakdown.js';
 import { DIMENSIONS, osName } from './dimensions.js';
 import { formatCompactDuration, plural } from './format.js';
 import { accidentId, incidentSpan, isRetailIncident } from './incident-events.js';
@@ -45,9 +46,12 @@ export function eventType(event) {
     const duration = formatCompactDuration(event.duration_seconds);
     return { label: duration ? `Авария ${duration}` : 'Авария', color: 'accident' };
   }
-  if (event.kind === ROLLOUT_EVENT) return { label: 'Раскатка', color: 'neutral' };
+  if (event.kind === ROLLOUT_EVENT) {
+    const channel = event.channel ?? event.shownChannel;
+    return { label: channel ? `Раскатка ${channel}` : 'Раскатка', color: 'neutral' };
+  }
   if (event.kind === NEW_SLICE_EVENT) return { label: 'Новый срез', color: PURPLE };
-  if (event.kind === DATA_LOSS_EVENT) return { label: event.streak > 1 ? `Пропажа данных ${event.streak}\u00a0дн` : 'Пропажа данных', color: DATA_TONE };
+  if (event.kind === DATA_LOSS_EVENT) return { label: event.streak > 1 ? `Провал оценок ${event.streak}\u00a0дн` : 'Провал оценок', color: DATA_TONE };
   if (event.kind === RELEASE_EVENT) {
     if (event.status === 'missing') return { label: 'Релиз без оценок', color: DATA_TONE };
     if (event.status === 'late') return { label: `Релиз: оценки через ${event.lag}\u00a0дн`, color: DATA_TONE };
@@ -121,6 +125,40 @@ function belowPlanRun(members) {
   return earliest ? last.streak - earliest.streak + 1 : 0;
 }
 
+/** Номер версии покомпонентно: «16.2» новее «13.15.3», суффикс сборки («16.2.0 (1234)») не мешает; без числа в начале — `null`. */
+export function versionParts(version) {
+  const match = String(version ?? '').trim().match(/^\d+(\.\d+)*/);
+  return match ? match[0].split('.').map(Number) : null;
+}
+
+/* Версия, с которой сравнивают: хотя бы столько оценок за всю историю или строка релиза — случайная оценка бета-сборки «99.0» не прячет релизы ОС */
+export const RELEASE_BASELINE_RATINGS = 5;
+
+export function compareVersions(left, right) {
+  for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
+    const difference = (left[index] ?? 0) - (right[index] ?? 0);
+    if (difference) return difference;
+  }
+  return 0;
+}
+
+/*
+  J-191: версия без строки релиза — релиз, только если она новее всех версий своей ОС, у которых оценки были раньше.
+  Старая версия, впервые давшая оценку (у кого-то ещё стоит сборка 2023 года), — не релиз; нечисловой номер — тоже
+*/
+function newerThanSeen(key, first, versions, baseline) {
+  const { os, version } = splitVersionKey(key);
+  const parts = versionParts(version);
+  if (!parts) return false;
+  for (const [other, { first: otherFirst }] of versions) {
+    if (other === key || otherFirst >= first || !baseline.has(other)) continue;
+    const seen = splitVersionKey(other);
+    const seenParts = seen.os === os ? versionParts(seen.version) : null;
+    if (seenParts && compareVersions(parts, seenParts) <= 0) return false;
+  }
+  return true;
+}
+
 /* ОС ключа версии «iOS 15.1.1»: подписи ОС — одно слово (iOS, Android) */
 const versionOs = (key) => splitVersionKey(key).os;
 
@@ -130,7 +168,8 @@ const isRelease = (item) => Boolean(String(item.app_version ?? '').trim());
 export function channelEvents(reference, { channel, period }) {
   const inScope = (item) => (item.channel === null || item.channel === channel) && item.date >= period.from && item.date <= period.to;
   const rollouts = (reference?.rollouts ?? []).filter((item) => inScope(item) && !isRelease(item)).map((item) => ({
-    kind: ROLLOUT_EVENT, date: item.date, from: item.date, days: [item.date], channel: item.channel,
+    /* `shownChannel` — канал ленты: раскатка «на все каналы» подписана им, как чип («Раскатка НИБ») */
+    kind: ROLLOUT_EVENT, date: item.date, from: item.date, days: [item.date], channel: item.channel, shownChannel: channel ?? null,
     users: item.users, feature: item.feature ?? null, tone: NEUTRAL, severity: null,
     app_version: item.app_version ?? null, os: item.os ?? null,
   }));
@@ -150,7 +189,7 @@ export function channelEvents(reference, { channel, period }) {
 }
 
 /*
-  Первый день и оценки с ним до конца периода: по ним «Новый срез» и «Релиз АБМ» видят, когда значение появилось.
+  Первый день и оценки с ним до конца периода: по ним «Релиз АБМ» видит, когда версия появилась.
   Первый день ищется по всей переданной истории, в том числе после периода: релиз, оценки по которому пришли после
   конца периода, — не «без оценок»
 */
@@ -173,25 +212,54 @@ function firstSeen(rows, values, period) {
   return seen;
 }
 
-/*
-  J-138: новый срез — значение триггера, роли, сегмента или продукта, которого не было ни в одной оценке среза до
-  периода, а в периоде появилось. Дата — первый день с ним. Срез — фильтры шапки по всей истории.
-  Если первый день значения — первый день всей истории среза, новым его не назвать: раньше данных просто нет.
-  J-191: версии приложения ушли в «Релизы АБМ» — там первый день оценок сверяется с датой релиза
-*/
+/* J-138: новый срез — триггер, роль, сегмент или продукт; версии приложения с J-191 — в «Релизах АБМ» */
 const NEW_SLICE_CUTS = ['trigger', 'role', 'segment', 'product'].map((key) => DIMENSIONS.find((dimension) => dimension.key === key));
 
+/* Новый срез — когда по новому значению пошёл поток: в один день от стольких уникальных оценок (порог предложила заказчик) */
+export const NEW_SLICE_MIN_DAILY = 5;
+
+/* Служебные значения-заглушки разреза — не новые срезы: так подписаны оценки без сопоставления, сегмента, разметки */
+const PLACEHOLDERS = new Set([UNLABELLED, 'Без сопоставления', 'Без сегмента']);
+
+/*
+  Значение, которого раньше не было, считается новым срезом, когда по нему пошёл поток: первый день с
+  `NEW_SLICE_MIN_DAILY` уникальными оценками и больше, а до него — меньше этого числа оценок в сумме. Единичные
+  оценки нового значения событием не считаются. Значение из первого дня всей истории среза — не новое: раньше
+  данных просто нет. Оценки и VOC в строке — с дня потока до конца периода
+*/
 export function detectNewSlices({ rows, reference, period }) {
   const start = earliestDate(rows);
   if (!start) return [];
   const events = [];
   for (const { key: dimension, values } of NEW_SLICE_CUTS) {
-    const seen = firstSeen(rows, (row) => values(row, reference), period);
-    for (const [key, { first, ids, sum }] of seen) {
-      if (first <= start || first < period.from || first > period.to || !ids.size) continue;
+    const byKey = new Map();
+    for (const row of rows) {
+      const date = row.appeal_date;
+      if (typeof date !== 'string' || date > period.to) continue;
+      for (const key of new Set(values(row, reference))) {
+        if (!key || PLACEHOLDERS.has(key)) continue;
+        if (!byKey.has(key)) byKey.set(key, new Map());
+        const days = byKey.get(key);
+        if (!days.has(date)) days.set(date, new Map());
+        if (!days.get(date).has(row.voc_ccode)) days.get(date).set(row.voc_ccode, row.mark);
+      }
+    }
+    for (const [key, days] of byKey) {
+      const dates = [...days.keys()].sort();
+      if (dates[0] <= start) continue;
+      let before = 0;
+      const flow = dates.find((date) => {
+        if (days.get(date).size >= NEW_SLICE_MIN_DAILY) return true;
+        before += days.get(date).size;
+        return false;
+      });
+      if (!flow || flow < period.from || before >= NEW_SLICE_MIN_DAILY) continue;
+      const marks = new Map();
+      for (const date of dates) if (date >= flow) for (const [code, mark] of days.get(date)) marks.set(code, mark);
+      const total = [...marks.values()].reduce((sum, mark) => sum + mark, 0);
       events.push({
-        kind: NEW_SLICE_EVENT, dimension, key, date: first, from: first, days: [first],
-        ratings: ids.size, value: sum / ids.size, tone: NEUTRAL, severity: null,
+        kind: NEW_SLICE_EVENT, dimension, key, date: flow, from: flow, days: [flow], first: dates[0],
+        ratings: marks.size, dayRatings: days.get(flow).size, value: total / marks.size, tone: NEUTRAL, severity: null,
       });
     }
   }
@@ -247,9 +315,16 @@ export function detectReleases({ allRows = [], reference, period, channel, filte
       releaseDate: item.date, first, fromHistoryStart: Boolean(first) && first <= start, ratings: ids.size, sum, dataEnd,
     }));
   }
+  /* С чем сравнивать новую версию: версии с релизом в листе и версии с заметным числом оценок за всю историю */
+  const totals = new Map();
+  for (const row of rows) {
+    const key = numberedVersionKey(row);
+    if (key) (totals.get(key) ?? totals.set(key, new Set()).get(key)).add(row.voc_ccode);
+  }
+  const baseline = new Set([...matched, ...[...totals].filter(([, codes]) => codes.size >= RELEASE_BASELINE_RATINGS).map(([key]) => key)]);
   for (const [key, { first, ids, sum }] of versions) {
     const os = versionOs(key);
-    if (matched.has(key) || first <= start || !inPeriod(first) || !ids.size || !shown(os)) continue;
+    if (matched.has(key) || first <= start || !inPeriod(first) || !ids.size || !shown(os) || !newerThanSeen(key, first, versions, baseline)) continue;
     events.push(releaseEvent({ key, os, app_version: splitVersionKey(key).version, channel, releaseDate: null, first, ratings: ids.size, sum, dataEnd }));
   }
   return events;

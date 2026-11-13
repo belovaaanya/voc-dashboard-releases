@@ -62,7 +62,7 @@ const BLOCKS = [
   { id: 'digest-dko', title: 'ДКО: антидрайверы', host: 'digest-dko', modifier: 'card--digest-dko', render: renderDigestDko, page: 'digest' },
   { id: 'digest-stability', title: 'ДКО: стабильность', host: 'digest-side', modifier: 'card--digest-stability', render: renderDigestStability, page: 'digest' },
   { id: 'digest-topic', title: 'Детализация', host: 'digest-side', modifier: 'card--digest-topic', render: renderDigestTopic, page: 'digest' },
-  { id: 'roles', title: 'VOC ролей', host: 'roles', modifier: 'card--roles card--page-head', render: renderRoles, page: 'roles' },
+  { id: 'roles', title: 'VOC ролей', host: 'roles', modifier: 'card--roles card--page-head card--bare', render: renderRoles, page: 'roles' },
   /* J-197: плитка на роль, сетка 2×2 — по слоту на каждую из ROLE_SLOTS ролей */
   ...Array.from({ length: ROLE_SLOTS }, (_, index) => ({ id: `role-${index + 1}`, title: 'Роль', host: 'roles', modifier: 'card--role card--avatar-head', render: digestRole(index), page: 'roles' })),
 ];

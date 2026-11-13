@@ -51,8 +51,9 @@ const TREND_CAPTION = {
   flat: 'без изменений к предыдущему периоду',
 };
 
+/* «В плане» — нейтральный: в коридоре нечему радоваться или тревожиться; цвет — у отклонений, слово называет любое состояние (D-26) */
 const PLAN_BADGE = {
-  [IN_PLAN]: { caption: 'В плане', tone: 'positive' },
+  [IN_PLAN]: { caption: 'В плане', tone: 'neutral' },
   [ABOVE_PLAN]: { caption: 'Выше плана', tone: 'positive' },
   [BELOW_PLAN]: { caption: 'Ниже плана', tone: 'negative' },
 };
@@ -100,11 +101,17 @@ export function trendDotNode(value, { shape = DELTA_SHAPES.voc, growth = GROWTH.
   return direction ? statusDot(growth[direction], size) : null;
 }
 
-/** «В плане» и «Выше плана» одного тона: состояние называет текст бейджа, а не цвет (D-26). */
+/** Бейдж плана: состояние называет текст, а не цвет (D-26); сила отклонения — в подсказке и доступном имени (J-67). */
 export function badgeNode(value, plan) {
   const status = planStatus(value, plan);
   if (!status) return null;
-  return badge(PLAN_BADGE[status].caption, PLAN_BADGE[status].tone);
+  const node = badge(PLAN_BADGE[status].caption, PLAN_BADGE[status].tone);
+  const strong = STRONG_CAPTION[planGlow(value, plan)];
+  if (strong) {
+    node.title = strong;
+    node.setAttribute('aria-label', strong);
+  }
+  return node;
 }
 
 /* J-67: сила отклонения — словом, а не только плотностью свечения (D-26) */
@@ -118,7 +125,8 @@ export function planDotNode(value, plan) {
   const status = planStatus(value, plan);
   if (!status) return null;
   const caption = STRONG_CAPTION[planGlow(value, plan)] ?? PLAN_BADGE[status].caption;
-  const dot = statusDot(PLAN_BADGE[status].tone);
+  /* Точка дайджеста — прежнего тона: «В плане» нейтрален только у бейджа шапки */
+  const dot = statusDot(status === IN_PLAN ? 'positive' : PLAN_BADGE[status].tone);
   dot.title = caption;
   dot.removeAttribute('aria-hidden');
   dot.setAttribute('role', 'img');
@@ -133,6 +141,12 @@ export function planCaptionNode(plan) {
 
 export function countNode(count) {
   return element('span', 'metric__meta', `${formatCount(count)} ${pluralRatings(count)}`);
+}
+
+/** Дельта числа оценок — сразу после «N оценок»; без предыдущего периода её нет. Рост объёма нейтрален, спад — тревога (D-49). */
+export function countDeltaNode(count, previousCount) {
+  if (!previousCount) return null;
+  return deltaNode(count - previousCount, { shape: DELTA_SHAPES.count, growth: GROWTH.volume, className: 'metric__count-delta' });
 }
 
 /**

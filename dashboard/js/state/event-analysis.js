@@ -29,8 +29,7 @@ function analysisKey({ state, period, ...context }) {
 }
 
 function calendarKey({ state, period, ...context }) {
-  const rankingPeriod = context.rankingPeriod ?? period;
-  return JSON.stringify([state.channel, state.filters ?? {}, period.from, period.to, rankingPeriod.from, rankingPeriod.to, minimumOf(context)]);
+  return JSON.stringify([state.channel, state.filters ?? {}, period.from, period.to, minimumOf(context)]);
 }
 
 /** Аномалии среза уже посчитаны или не нужны (пустой срез): «Главный вывод» нарисуется без долгого расчёта. */
@@ -51,13 +50,14 @@ function analysisOf(context) {
   return analysisCache(rows, analysisKey(context), () => {
     const history = historyOf(context);
     const dataEnd = latestDate(rows);
-    /* События малых разрезов не показываются, у остальных — VOC дня и дельта к прошлому рабочему дню (R-25, R-27) */
+    /* События малых разрезов не показываются, у остальных — VOC дня и дельта к прошлому рабочему дню (R-25, R-27); праздник в будни — выходной */
     const insights = measureEvents({
-      anomalies: distinctAnomalies(detectAnomalies({ rows: history, reference, period, channel: state.channel, dataEnd })),
+      anomalies: distinctAnomalies(detectAnomalies({ rows: history, reference, period, channel: state.channel, dataEnd, holidaysAsRest: true })),
       rows: history,
       period,
       reference,
       minimumRatings,
+      holidaysAsRest: true,
     }).map(describeAnomaly);
     return {
       reference,
@@ -75,12 +75,11 @@ export function insightsOf(context) {
 /** События календаря (R-43 – R-45): серии аномалий одной строкой, раскатки, релизы и аварии канала, пропажи данных. */
 export function calendarEventsOf(context) {
   const { rows, state, period, reference } = context;
-  const rankingPeriod = context.rankingPeriod ?? period;
   const minimumRatings = minimumOf(context);
   return calendarCache(rows, calendarKey(context), () => {
     const history = rows.length ? historyOf(context) : [];
     /* Релизы сверяют версии по всем оценкам канала: сбор оценок по версии от фильтров шапки не зависит (J-191) */
-    const params = { rows: history, allRows: rows, reference, period, rankingPeriod, channel: state.channel, filters: state.filters, dataEnd: latestDate(rows), minimumRatings };
+    const params = { rows: history, allRows: rows, reference, period, channel: state.channel, filters: state.filters, dataEnd: latestDate(rows), minimumRatings };
     return { reference, events: [...calendarAnomalies(params), ...channelEvents(reference, params), ...detectReleases(params),
       ...detectDataLoss(params), ...detectIncidents(params), ...detectNewSlices(params)] };
   }, sameReference(reference)).events;
@@ -94,5 +93,5 @@ export function eventSelectionContext(context) {
   const to = days.at(-1) > context.period.to ? days.at(-1) : context.period.to;
   if (from === context.period.from && to === context.period.to) return context;
   const selected = context.select({ from, to });
-  return { ...context, period: selected.period, rankingPeriod: context.rankingPeriod ?? context.period, slice: selected.rows };
+  return { ...context, period: selected.period, slice: selected.rows };
 }

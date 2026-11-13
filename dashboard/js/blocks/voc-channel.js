@@ -2,8 +2,9 @@
   Большая карточка: VOC текущего среза, объём всех оценок среза (J-85), дельта к предыдущему
   аналогичному периоду и плановый коридор канала.
 
-  Композиция (J-65): заголовок и бейдж в шапке; внизу крупное значение, под
-  ним строкой — дельта, коридор плана и пометка выборки. Геометрия наша (V-01…V-03).
+  Композиция (J-65): заголовок и бейдж в шапке; внизу крупное значение, справа
+  сверху от него дельта VOC, под ним строкой — коридор плана, объём с дельтой
+  объёма и пометка выборки. Геометрия наша (V-01…V-03).
 
   Заголовок ставит сама карточка: он обязан называть тот же срез, который
   показан числом. «VOC канала» над значением одного сегмента — то же
@@ -22,12 +23,13 @@ import { planFor } from '../core/plan.js';
 import { withFilter } from '../state/url-state.js';
 import {
   badgeNode,
+  countDeltaNode,
   countNode,
-  deltaNode,
+  figureNode,
+  leadNode,
   metaRowNode,
   planCaptionNode,
   sufficiencyNode,
-  valueNode,
 } from './metric-card.js';
 
 /** Заголовок называет срез: канал, а при сужении одним сегментом — ещё и его; `full` — подписи только названных кодов (D-53). */
@@ -80,10 +82,13 @@ export function renderVocChannel(block, context) {
 
   block.setHead({ note: badgeNode(value, plan) });
 
-  /* J-65: значение и его подпись — одной группой у низа карточки; дельта первой в строке под числом; без сравнения её нет, а пустая строка держит высоту — число не прыгает (B-07) */
-  const caption = metaRowNode(deltaNode(vocDelta(slice, previousSlice), { className: 'metric__lead', large: true }), planCaptionNode(plan), countNode(slice.length), sufficiencyNode(slice, { focusable: true }))
+  /*
+    Дельта VOC — справа сверху от числа, как у сегментов; без сравнения слот пуст и держит место (B-07).
+    Под числом строка — коридор плана, объём и сразу за ним дельта объёма, пометка выборки
+  */
+  const caption = metaRowNode(planCaptionNode(plan), countNode(slice.length), countDeltaNode(slice.length, previousSlice?.length), sufficiencyNode(slice, { focusable: true }))
     ?? emptyCaption();
   const layout = element('div', 'metric metric--big');
-  appendAll(layout, valueNode(formatVoc(value), 'metric__value--big'), caption);
+  appendAll(layout, figureNode(formatVoc(value), leadNode(vocDelta(slice, previousSlice), { large: true }), 'metric__value--big'), caption);
   block.setContent(layout);
 }

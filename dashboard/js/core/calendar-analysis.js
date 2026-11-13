@@ -51,15 +51,31 @@ export function hasEvaluatedSlice({ rows, reference, period, day = null, dataEnd
   });
 }
 
-/** Top15 фиксируется по всему выбранному периоду, не по отдельному дню или истории серии. */
-export function detectIncidents({ rows, reference, period, rankingPeriod = period, channel, dataEnd = latestDate(rows) }) {
-  if (!rows.length) return [];
-  const project = (row) => row.operations ?? [];
+/**
+ * Топ-15 триггеров зафиксирован: по всей выгрузке канала, без фильтров шапки и без периода — список не меняется
+ * при смене периода, дней или фильтров. Серии VOC ниже плана ищутся по оценкам среза (`rows`).
+ */
+/* Топ зависит только от выгрузки, канала и справочника: смена периода и фильтров его не пересчитывает */
+const topCache = new WeakMap();
+
+function topTriggers(allRows, channel, reference) {
+  if (!topCache.has(allRows)) topCache.set(allRows, new Map());
+  const byChannel = topCache.get(allRows);
+  const cached = byChannel.get(channel ?? null);
+  if (cached?.reference === reference) return cached.ranked;
   const label = createLabels(reference);
-  const ranked = breakdown(rows.filter(({ appeal_date }) => appeal_date >= rankingPeriod.from && appeal_date <= rankingPeriod.to), project)
+  const ranked = breakdown(allRows.filter((row) => !channel || row.channel === channel), (row) => row.operations ?? [])
     .filter(({ key }) => key !== UNLABELLED && !ignoredCauseKey('trigger', key, label))
     .sort((a, b) => b.mentions - a.mentions || String(a.key).localeCompare(String(b.key), 'ru'))
     .slice(0, INCIDENT_TOP_TRIGGERS);
+  byChannel.set(channel ?? null, { reference, ranked });
+  return ranked;
+}
+
+export function detectIncidents({ rows, allRows = rows, reference, period, channel, dataEnd = latestDate(rows) }) {
+  if (!rows.length) return [];
+  const project = (row) => row.operations ?? [];
+  const ranked = topTriggers(allRows, channel, reference);
   const end = dataEnd < period.to ? dataEnd : period.to;
   const days = workingDays(earliestDate(rows), end);
   const byDay = new Map(days.map((date) => [date, []]));
@@ -67,7 +83,7 @@ export function detectIncidents({ rows, reference, period, rankingPeriod = perio
   const groups = new Map(days.map((date) => [date, new Map(breakdown(byDay.get(date), project).map((group) => [group.key, group]))]));
   const plans = new Map(days.map((date) => [date, planFor(reference?.plan, { channel, from: date, to: date })]));
   const events = [];
-  for (const { key, mentions: periodRatings } of ranked) {
+  for (const { key, mentions: totalRatings } of ranked) {
     let run = [];
     const flush = () => {
       if (run.length >= INCIDENT_MIN_DAYS && run.at(-1).date >= period.from) {
@@ -75,7 +91,7 @@ export function detectIncidents({ rows, reference, period, rankingPeriod = perio
         events.push({
           kind: SUSTAINED_EVENT, channel, dimension: 'trigger', key, metric: VOC_METRIC, direction: BELOW,
           from: run[0].date, date: last.date, days: run.map(({ date }) => date), streak: run.length,
-          startsBeforePeriod: run[0].date < period.from, periodRatings,
+          startsBeforePeriod: run[0].date < period.from, totalRatings,
           value: last.group.voc, dayVoc: last.group.voc, ratings: last.group.mentions,
           plan: last.plan, planStatus: BELOW_PLAN, planGap: last.plan.min - last.group.voc,
           tone: NEGATIVE, severity: CRITICAL,

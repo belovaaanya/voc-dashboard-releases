@@ -70,8 +70,10 @@
   list-style: none;
 }
 
-/* Одна причина в 3–10 слов (J-07): не больше двух строк, полный текст — в подсказке */
-.summary-group .summary-insight {
+/* Одна причина в 3–10 слов (J-07): не больше двух строк, полный текст — в подсказке. Строка LLM — так же:
+   длиннее — многоточие на второй строке, а не строка, срезанная краем карточки */
+.summary-group .summary-insight,
+.summary-insight--llm {
   display: -webkit-box;
   overflow: hidden;
   -webkit-box-orient: vertical;

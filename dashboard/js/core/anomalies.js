@@ -13,6 +13,7 @@ import { planFor, planStatus } from './plan.js';
 import { roundVoc } from './round.js';
 import { recentSources } from './recent.js';
 import { buildTimeSeries } from './timeseries.js';
+import { isRestDay } from './rest-days.js';
 
 export const ANOMALY_WINDOW_DAYS = 10;
 /** Ширина коридора в σ: «± корень квадратный» заказчика прочитан как √2 (`D-47`). */
@@ -52,7 +53,7 @@ export const ANOMALY_TRACKS = [
   { metric: FREQUENCY_METRIC, dimension: 'category', project: categoryValues, range: FREQUENCY_RANGE },
 ];
 
-/** Праздники не учитываются: производственного календаря в выгрузке нет. */
+/** Будний день по дню недели; праздники здесь не учитываются — их убирает `holidaysAsRest` таблицы аномалий. */
 export function isWorkingDay(isoDate) {
   const weekday = weekdayOf(isoDate);
   return weekday >= 1 && weekday <= 5;
@@ -121,6 +122,9 @@ export function bandVerdicts(
  * `rows` — оценки канала без обрезки по датам: окно первых дней лежит до периода.
  * `dataEnd` — последний день всей выгрузки: после него нули частотности выдуманы.
  * `verdictsOf` — другое правило по оценкам дней вместо коридора (`D-62`, только календарь).
+ * `holidaysAsRest` — праздник в будний день считается выходным (`isRestDay`): его нет ни в окне, ни среди оцениваемых
+ * дней, поэтому он не даёт провала частотности и не расширяет коридор. Только таблица аномалий главного вывода;
+ * календарь делит дни на будни и выходные по дню недели и опцию не передаёт.
  */
 export function detectAnomalies({
   rows,
@@ -132,10 +136,11 @@ export function detectAnomalies({
   window,
   includeWeekends = false,
   verdictsOf = null,
+  holidaysAsRest = false,
 }) {
   const end = dataEnd < period.to ? dataEnd : period.to;
   if (end < period.from) return [];
-  const history = dailyHistory(rows, end, includeWeekends, reference);
+  const history = dailyHistory(rows, end, includeWeekends, reference, holidaysAsRest && !includeWeekends);
   if (history.days === null) return [];
   const { days, rowsByDay } = history;
   const span = window ?? ANOMALY_WINDOW_DAYS;
@@ -200,14 +205,14 @@ export function sampledSeries({ rows, reference = null, end, tracks, includeWeek
 const HISTORY_LIMIT = 4;
 const histories = recentSources(HISTORY_LIMIT);
 
-function dailyHistory(rows, end, includeWeekends, reference) {
-  return histories(rows, `days|${end}|${includeWeekends}`, () => {
+function dailyHistory(rows, end, includeWeekends, reference, holidaysAsRest = false) {
+  return histories(rows, `days|${end}|${includeWeekends}|${holidaysAsRest}`, () => {
     const dated = rows.filter(({ appeal_date: date }) => date <= end);
     if (dated.length === 0) return { reference, days: null };
-    /* J-20: opt-in только для выходных календаря; таблица агента сохраняет рабочие дни. */
+    /* J-20: opt-in только для выходных календаря; таблица агента сохраняет рабочие дни, без праздников в будни. */
     const days = includeWeekends
       ? buildTimeSeries([], { from: earliestDate(dated), to: end }, 'day').map(({ from }) => from)
-      : workingDays(earliestDate(dated), end);
+      : workingDays(earliestDate(dated), end).filter((day) => !holidaysAsRest || !isRestDay(day));
     const rowsByDay = new Map(days.map((day) => [day, []]));
     for (const row of dated) rowsByDay.get(row.appeal_date)?.push(row);
     return { reference, days, rowsByDay, rowIndex: new Map(dated.map((row, index) => [row, index])), byProject: new Map(), samplesByProject: new Map() };
@@ -287,7 +292,9 @@ function periodRatingsIn({ days, dates }, period) {
  * Разрез события за период и за его день (R-25, R-27): оценок разреза за период, VOC разреза в день
  * события и в предыдущий рабочий день, когда у разреза были оценки. События малых разрезов отбрасываются.
  */
-export function measureEvents({ anomalies, rows, period, reference = null, minimumRatings = MIN_EVENT_RATINGS }) {
+/** `holidaysAsRest` — как у `detectAnomalies`: прошлый рабочий день для дельты VOC — не праздник. */
+export function measureEvents({ anomalies, rows, period, reference = null, minimumRatings = MIN_EVENT_RATINGS, holidaysAsRest = false }) {
+  const workday = holidaysAsRest ? (date) => !isRestDay(date) : isWorkingDay;
   /* Один проход по оценкам на разрез, а не на каждый ключ: событий много, оценок — десятки тысяч */
   const slicesByDimension = histories(rows, 'slices', () => ({ reference, byDimension: new Map() }),
     (cached) => cached.reference === reference).byDimension;
@@ -317,7 +324,7 @@ export function measureEvents({ anomalies, rows, period, reference = null, minim
     const { days, dates } = slice;
     const periodRatings = periodRatingsOf(anomaly, slice);
     if (periodRatings < minimumRatings) return [];
-    const previousDay = dates.filter((date) => date < anomaly.date && isWorkingDay(date)).at(-1) ?? null;
+    const previousDay = dates.filter((date) => date < anomaly.date && workday(date)).at(-1) ?? null;
     const dayVoc = days.has(anomaly.date) ? dayVocOf(slice, anomaly.key, anomaly.date) : null;
     const previousVoc = previousDay ? dayVocOf(slice, anomaly.key, previousDay) : null;
     return [{

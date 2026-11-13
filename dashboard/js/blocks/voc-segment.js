@@ -2,10 +2,9 @@
   Сегментная карточка: VOC сегмента, дельта, объём — и фильтр по сегменту
   по клику (P0 №7, D-31).
 
-  Композиция (J-65, J-94): заголовок и кольцо плана в шапке; внизу число с
-  дельтой рядом, под ним объём и иконка пометки выборки.
-  Планового бейджа в малой карточке нет — в макете коридор показан только у
-  карточки канала. Геометрия наша (V-01…V-03).
+  Композиция (J-65, J-94): заголовок и бейдж плана в шапке; внизу число,
+  дельта VOC справа сверху от него, под ним объём с дельтой объёма и иконка
+  пометки выборки. Геометрия наша (V-01…V-03).
 
   Карточка считает свой срез **без** фильтра по сегменту (D-43): иначе после
   первого же клика три карточки из четырёх показывают «нет данных», и выбрать
@@ -18,7 +17,7 @@ import { formatVoc } from '../core/format.js';
 import { voc, vocDelta } from '../core/metrics.js';
 import { withFilter } from '../state/url-state.js';
 import { planFor, planGlow } from '../core/plan.js';
-import { countNode, figureNode, leadNode, metaRowNode, sufficiencyNode, planDotNode } from './metric-card.js';
+import { badgeNode, countDeltaNode, countNode, figureNode, leadNode, metaRowNode, sufficiencyNode } from './metric-card.js';
 
 const SEGMENT = 'segment';
 
@@ -60,7 +59,8 @@ function render(block, context, index) {
 
   const delta = vocDelta(rows, previous);
   const plan = planFor(context.reference?.plan, { channel: state.channel, from: context.period?.from, to: context.period?.to });
-  block.setHead({ note: planDotNode(voc(rows), plan) });
+  /* Статус плана — бейджем словами справа в шапке, как у карточки канала (было — точка) */
+  block.setHead({ note: badgeNode(voc(rows), plan) });
   setGlow(block, planGlow(voc(rows), plan));
 
   /* Выбрана — когда фильтр равен ровно этому сегменту: при двух выбранных ни одна карточка не «нажата» */
@@ -86,7 +86,7 @@ function render(block, context, index) {
 
   /* J-94: пометка — иконка в строке объёма, отдельной строки нет: содержимое стоит у нижнего края, числа на общей линии (B-08) */
   const warning = sufficiencyNode(rows);
-  appendAll(toggle, figureNode(formatVoc(voc(rows)), leadNode(delta)), metaRowNode(countNode(rows.length), warning));
+  appendAll(toggle, figureNode(formatVoc(voc(rows)), leadNode(delta)), metaRowNode(countNode(rows.length), countDeltaNode(rows.length, previous?.length), warning));
   /* aria-label кнопки заменяет её текст: пометку выборки screen reader иначе не услышит */
   if (warning) toggle.setAttribute('aria-label', `${toggle.getAttribute('aria-label')}. Мало оценок: ${warning.dataset.threshold.toLowerCase()}`);
 
