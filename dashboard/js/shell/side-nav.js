@@ -20,13 +20,14 @@ export const NAV_KEY = 'voc.nav';
 const COLLAPSED = 'collapsed';
 const EXPANDED = 'expanded';
 /*
-  J-151: страницы — пункты меню. Главная — «VOC ЦК» со значком «1.0» вместо иконки; «VOC ролей» — пока заглушка,
-  «VOC-дайджест» — месячный дайджест канала, «Обратная связь» — таблица прямой речи. Страница живёт в URL (`page`)
+  J-151: страницы — пункты меню; «VOC ролей» — пока заглушка, «VOC-дайджест» — месячный дайджест канала,
+  «Обратная связь» — таблица прямой речи. Страница живёт в URL (`page`). Главная — «Главная» с домиком (было «VOC ЦК»
+  со значком «1.0»). `hint` — чем пункт отличается от соседнего: подсказка в обоих состояниях меню
 */
 export const SECTIONS = [
-  { id: 'voc', label: 'VOC ЦК', version: '1.0' },
+  { id: 'voc', label: 'Главная', icon: 'home' },
   /* Та же главная в режиме аналитика: продвинутые разрезы и колонки блоков (`context.analyst`) */
-  { id: 'analyst', label: 'Для аналитика', icon: 'analyst' },
+  { id: 'analyst', label: 'Для аналитика', icon: 'analyst', hint: 'Главная с продвинутыми режимами: урон, влияние, все типы событий и колонки' },
   { id: 'roles', label: 'VOC ролей', icon: 'users' },
   { id: 'digest', label: 'VOC-дайджест', icon: 'digest' },
   { id: 'feedback', label: 'Обратная связь', icon: 'chat' },
@@ -87,10 +88,12 @@ function toggleButton(nav) {
   return button;
 }
 
-/* В свёрнутом меню подписи скрыты визуально — название пункта остаётся подсказкой */
+/* В свёрнутом меню подписи скрыты визуально — название пункта остаётся подсказкой; пояснение пункта (`hint`) — в обоих */
 function syncTitles(nav) {
   for (const node of nav.querySelectorAll('[data-nav-title]')) {
-    if (isNavCollapsed()) node.title = node.dataset.navTitle;
+    const hint = node.dataset.navHint;
+    if (isNavCollapsed()) node.title = hint ? `${node.dataset.navTitle} — ${hint}` : node.dataset.navTitle;
+    else if (hint) node.title = hint;
     else node.removeAttribute('title');
   }
 }
@@ -105,11 +108,12 @@ function sourceLine(source, dataError) {
 }
 
 /* Дата актуальности — из манифеста (D-35); в свёрнутом меню — подсказкой иконки */
-function dataPanel({ manifest, source, dataError, rowsInSlice }) {
+function dataPanel({ manifest, source, dataError, rowsInSlice, page }) {
   const lines = [
     `Данные актуальны на ${formatBuildTime(manifest.generated_at)}`,
     `Выгрузка: ${formatDateRange(manifest.period?.from, manifest.period?.to)}`,
-    `Оценок в срезе: ${formatCount(rowsInSlice)}`,
+    /* У дайджеста среза нет — число по периоду шапки показало бы 0 рядом с полным месяцем канала */
+    ...(page === 'digest' ? [] : [`Оценок в срезе: ${formatCount(rowsInSlice)}`]),
   ];
   const panel = element('section', 'side-nav__data');
   panel.setAttribute('aria-label', 'Данные выгрузки');
@@ -129,7 +133,7 @@ function methodControl() {
   trigger.dataset.action = 'methodology';
   trigger.dataset.navTitle = 'Как считаются данные';
   trigger.append(icon('book', 'side-nav__icon'), navLabel('Как считаются данные'));
-  const panel = popoverPanel({ id: 'method-popover', title: 'Как считается', className: 'method-popover' });
+  const panel = popoverPanel({ id: 'method-popover', title: 'Как считаются данные', className: 'method-popover' });
   const list = element('dl', 'method-popover__list');
   for (const [term, text] of methodologyItems()) {
     list.append(element('dt', 'method-popover__term', term), element('dd', 'method-popover__text', bindShortWords(text)));
@@ -185,6 +189,7 @@ export function renderSideNav(host, context) {
     /* Настоящая ссылка: открывается в новой вкладке; обычный клик переключает страницу без перезагрузки */
     link.href = pageHref(globalThis.location?.search ?? '', section.id);
     link.dataset.navTitle = section.label;
+    if (section.hint) link.dataset.navHint = section.hint;
     link.dataset.page = section.id;
     link.dataset.action = `page-${section.id}`;
     if (section.id === page) link.setAttribute('aria-current', 'page');
@@ -194,15 +199,14 @@ export function renderSideNav(host, context) {
       event.preventDefault();
       if (section.id !== page) context.onNavigate(section.id);
     });
-    const mark = section.version ? element('span', 'side-nav__icon side-nav__version', section.version) : icon(section.icon, 'side-nav__icon');
-    if (section.version) mark.setAttribute('aria-hidden', 'true');
-    link.append(mark, navLabel(section.label));
+    link.append(icon(section.icon, 'side-nav__icon'), navLabel(section.label));
     item.append(link);
     list.append(item);
   }
 
   const foot = element('div', 'side-nav__foot');
-  if (context) foot.append(dataPanel(context), copyLinkControl(), methodControl());
+  /* Дайджест не сужается срезом — «Скопировать ссылку на срез» на его странице нечего копировать (неделя 16–22.11) */
+  if (context) foot.append(...[dataPanel(context), page === 'digest' ? null : copyLinkControl(), methodControl()].filter(Boolean));
   foot.append(toggleButton(host));
   host.replaceChildren(brand, list, foot);
   syncTitles(host);

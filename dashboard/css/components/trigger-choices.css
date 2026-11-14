@@ -9,6 +9,7 @@
   flex: 1;
   min-width: 0;
   font: var(--type-caption-strong);
+  letter-spacing: var(--tracking-caption-strong);
 }
 
 .trigger-choices__product span,

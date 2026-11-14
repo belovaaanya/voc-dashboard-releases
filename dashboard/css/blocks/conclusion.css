@@ -31,7 +31,7 @@
   margin: 0;
   color: var(--color-text-secondary);
   font: var(--type-caption);
-  letter-spacing: var(--tracking-airy);
+  letter-spacing: var(--tracking-caption);
 }
 
 .summary-cause__name {
@@ -39,8 +39,9 @@
   overflow: hidden;
   margin: 0;
   color: var(--color-text-strong);
-  font: var(--type-page-title);
-  letter-spacing: var(--tracking-airy);
+  /* Не 24 px заголовка страницы: обычная причина в 24 px не помещалась в две строки и обрезалась многоточием */
+  font: var(--type-cause);
+  letter-spacing: var(--tracking-cause);
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
@@ -50,13 +51,13 @@
   margin: 0;
   color: var(--color-text-secondary);
   font: var(--type-caption);
-  letter-spacing: var(--tracking-airy);
+  letter-spacing: var(--tracking-caption);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 /*
-  Карточка — то же стекло, что сегменты (J-67): свечение тона поднимается снизу, рамка тона и блик по верхней кромке;
+  Карточка светится тоном направления: купол от нижней кромки (рисунок пользователя), а не заливка всей карточки;
   рост — позитив, снижение — негатив, без изменений — нейтральный. Пока загрузка или пусто — тона нет
 */
 .card--summary[data-conclusion-tone]:not(:has(.state)) {
@@ -79,22 +80,7 @@
   inset: 0;
   z-index: -1;
   border-radius: inherit;
-  background: radial-gradient(var(--plan-glow-shape), color-mix(in srgb, var(--summary-tone) var(--plan-glow-strong), transparent), transparent);
-  pointer-events: none;
-}
-
-/* То же стекло, что у карточек метрик: рамка тона ярче внизу, по верхней кромке — блик */
-.card--summary[data-conclusion-tone]:not(:has(.state))::after {
-  content: '';
-  position: absolute;
-  inset: calc(-1 * var(--hairline));
-  z-index: -1;
-  padding: var(--hairline);
-  border-radius: inherit;
-  background: var(--glass-sheen), radial-gradient(var(--plan-glow-rim-shape), color-mix(in srgb, var(--summary-tone) var(--plan-glow-rim-soft), transparent), transparent);
-  -webkit-mask: var(--mask-fill) content-box, var(--mask-fill);
-  -webkit-mask-composite: xor;
-  mask: var(--mask-fill) content-box exclude, var(--mask-fill);
+  background: radial-gradient(var(--summary-glow-shape), color-mix(in srgb, var(--summary-tone) var(--plan-glow-strong), transparent), transparent);
   pointer-events: none;
 }
 
@@ -102,6 +88,7 @@
 .summary-source {
   color: var(--color-text-tertiary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
   white-space: nowrap;
 }
 

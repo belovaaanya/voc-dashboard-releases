@@ -18,6 +18,7 @@
   background: none;
   color: var(--color-text-secondary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
   cursor: pointer;
 }
 

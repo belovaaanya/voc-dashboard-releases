@@ -102,6 +102,7 @@
   gap: var(--space-1);
   color: var(--tone-ink, var(--tone));
   font: var(--type-caption-strong);
+  letter-spacing: var(--tracking-caption-strong);
   white-space: nowrap;
 }
 
@@ -115,6 +116,7 @@
   color: var(--color-text-strong);
   /* Число — величина, а не изменение: обычного веса, как соседние числа строки (аудит 13.11) */
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 .delta--plain .delta__arrow {
@@ -153,14 +155,15 @@
 }
 
 /*
-  Иконка типа события календаря (неделя 16–22.11, референс дизайнера): скруглённый квадрат со светящимся градиентом —
+  Иконка типа события календаря (неделя 16–22.11, референс дизайнера): круг со светящимся градиентом —
   тёмная сердцевина сверху и яркий край тона снизу. Сердцевина — поверхность темы, поэтому в светлой теме она светлая:
-  градиент «наоборот», тон по-прежнему виден краем и свечением. Только CSS, без картинок
+  градиент «наоборот», тон по-прежнему виден краем и свечением. Только CSS, без картинок. Круг меньше иконки
+  интерфейса (14 и 10 px): квадрат с ярким краем спорил с текстом строки
 */
 .status-dot--event {
-  width: var(--icon-size);
-  height: var(--icon-size);
-  border-radius: var(--radius-tag);
+  width: calc(var(--icon-size) - var(--space-1) / 2);
+  height: calc(var(--icon-size) - var(--space-1) / 2);
+  border-radius: var(--radius-pill);
   background:
     radial-gradient(ellipse 75% 60% at 50% 28%, var(--color-surface-sunken) 0%, transparent 72%),
     radial-gradient(circle at 50% 110%, color-mix(in oklab, var(--tone), var(--color-text-strong) 18%) 0%, var(--tone) 55%, color-mix(in oklab, var(--tone) 70%, var(--color-surface-sunken)) 100%);
@@ -170,9 +173,9 @@
 }
 
 .status-dot--event-sm {
-  width: var(--icon-size-sm);
-  height: var(--icon-size-sm);
-  border-radius: var(--radius-tag);
+  width: calc(var(--icon-size-sm) - var(--space-1) / 2);
+  height: calc(var(--icon-size-sm) - var(--space-1) / 2);
+  border-radius: var(--radius-pill);
   background:
     radial-gradient(ellipse 75% 60% at 50% 28%, var(--color-surface-sunken) 0%, transparent 72%),
     radial-gradient(circle at 50% 110%, var(--tone) 0%, var(--tone) 55%, color-mix(in oklab, var(--tone) 70%, var(--color-surface-sunken)) 100%);
@@ -188,6 +191,7 @@
   background: color-mix(in srgb, var(--tone) var(--tone-tint), transparent);
   color: var(--tone-ink, var(--tone));
   font: var(--type-caption-strong);
+  letter-spacing: var(--tracking-caption-strong);
   overflow-wrap: anywhere;
 }
 
@@ -218,6 +222,7 @@
   color: var(--tone-ink, var(--tone));
   height: var(--space-6);
   font: var(--type-caption-strong);
+  letter-spacing: var(--tracking-caption-strong);
   white-space: nowrap;
 }
 

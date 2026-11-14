@@ -1,7 +1,7 @@
 /* Шкала периода chartTimeline: полоса истории, окно выбора и ручки */
 .chart-timeline { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
 .chart-timeline__toolbar { display: flex; align-items: center; gap: var(--space-2); justify-content: space-between; }
-.chart-timeline__caption { color: var(--color-text-tertiary); font: var(--type-caption); }
+.chart-timeline__caption { color: var(--color-text-tertiary); font: var(--type-caption); letter-spacing: var(--tracking-caption); }
 /* Место под кнопку есть всегда: без своего окна она невидима и недоступна, полоса не прыгает */
 .chart-timeline__reset[data-idle] { visibility: hidden; }
 .chart-timeline__stage { position: relative; height: 64px; min-width: 0; }

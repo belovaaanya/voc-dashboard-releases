@@ -111,6 +111,7 @@
   margin: 0;
   color: var(--color-text-tertiary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 /*
@@ -171,6 +172,7 @@
   margin: 0;
   color: var(--color-text-strong);
   font: var(--type-caption-strong);
+  letter-spacing: var(--tracking-caption-strong);
   text-wrap: pretty;
 }
 
@@ -275,6 +277,7 @@
   padding: var(--space-1) 0;
   color: var(--color-text-tertiary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
   text-align: end;
 }
 
@@ -306,6 +309,7 @@
   text-align: start;
   color: var(--color-text-strong);
   font: var(--type-caption-strong);
+  letter-spacing: var(--tracking-caption-strong);
 }
 
 .digest-table tbody .digest-table__group:first-child th {
@@ -392,12 +396,14 @@
 .digest-bars__value {
   color: var(--color-text-secondary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
   white-space: nowrap;
 }
 
 .digest-bars__month {
   color: var(--color-text-tertiary);
   font: var(--type-axis);
+  letter-spacing: var(--tracking-axis);
 }
 
 /*
@@ -438,7 +444,7 @@
 
 .digest-hbars__row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(var(--space-10), 0.5fr) var(--space-10) calc(var(--space-10) * 1.25);
+  grid-template-columns: minmax(0, 1fr) minmax(var(--space-10), 0.4fr) var(--space-10) calc(var(--space-10) * 1.25);
   gap: var(--space-3);
   align-items: center;
   min-height: var(--space-6);
@@ -450,6 +456,7 @@
   overflow: hidden;
   color: var(--color-text-secondary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
@@ -490,6 +497,7 @@
 .digest-hbars__value {
   color: var(--color-text-secondary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
   text-align: end;
   white-space: nowrap;
 }
@@ -528,10 +536,27 @@
   display: contents;
 }
 
+/* Оценки ролей вне плиток — тихая подпись внизу страницы на всю ширину */
+.page-view[data-page='roles'] > .column > .card--roles-other {
+  grid-column: 1 / -1;
+}
+
+.card--roles-other[hidden] {
+  display: none;
+}
+
+.roles-others {
+  margin: 0;
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
+}
+
 /* Подзаголовок страницы — подпись, а не подпись оси: --type-caption (аудит 13.11) */
 .roles-caption {
   margin: 0;
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 /* Левая колонка: портрет сверху, VOC с оценками — у низа плитки; между ними — растущий зазор */
@@ -624,6 +649,7 @@
   padding-block-end: var(--space-2);
   color: var(--color-text-tertiary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
   text-align: start;
 }
 

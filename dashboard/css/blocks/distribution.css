@@ -24,6 +24,7 @@
 
 .distribution-row__mark {
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
   white-space: nowrap;
 }
 
@@ -31,6 +32,7 @@
 .distribution-row__share {
   color: var(--color-text-strong);
   font: var(--type-caption-strong);
+  letter-spacing: var(--tracking-caption-strong);
   text-align: end;
   white-space: nowrap;
 }
@@ -75,6 +77,7 @@
 .distribution-row__percent {
   color: var(--color-text-tertiary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
   text-align: end;
   white-space: nowrap;
 }

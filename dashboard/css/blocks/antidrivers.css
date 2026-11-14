@@ -75,6 +75,7 @@
   background: linear-gradient(to right, var(--heatmap-sticky-fill) calc(100% - var(--heatmap-fade)), transparent);
   color: var(--color-text-secondary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
   text-align: start;
 }
 
@@ -128,6 +129,7 @@
   min-width: var(--heatmap-cell-width);
   color: var(--color-text-tertiary);
   font: var(--type-axis);
+  letter-spacing: var(--tracking-axis);
   text-align: center;
 }
 
@@ -155,6 +157,7 @@
   overflow: hidden;
   color: var(--color-text-tertiary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -190,6 +193,7 @@
   margin: 0;
   color: var(--color-text-tertiary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 .heatmap-pagination__actions { display: flex; gap: var(--space-2); }
@@ -230,6 +234,7 @@
   background: var(--row-selected);
   color: var(--color-text-strong);
   font: var(--type-caption-strong);
+  letter-spacing: var(--tracking-caption-strong);
 }
 
 .heatmap tr.is-picked th.heatmap__row-title {
@@ -245,4 +250,5 @@
   border-radius: var(--radius-tag);
   color: var(--color-text-tertiary);
   font: var(--type-axis);
+  letter-spacing: var(--tracking-axis);
 }

@@ -168,6 +168,8 @@
   --type-title: 300 14px/1.4 var(--font-headings);
   /* J-168: заголовок страницы в карточке-шапке (VOC ролей) — крупнее заголовка блока */
   --type-page-title: 400 24px/1.3 var(--font-headings);
+  /* Причина главного вывода: обычная причина («Отправка рублевого платежа юридическому лицу») — в две строки на 1440 (≈235 px текста; в 18 px — три строки, в 24 px — четыре) */
+  --type-cause: 400 16px/1.3 var(--font-headings);
   --type-text: 400 14px/1.4 var(--font-sans);
   --type-text-strong: 500 14px/1.4 var(--font-sans);
   --type-caption: 400 12px/1.4 var(--font-sans);
@@ -182,21 +184,40 @@
   /* Значения «Конверсии опроса» — тонкие, как в стратегии VoC: луч несёт форму, числа не спорят с ним */
   --type-funnel-value: 200 18px/1 var(--font-sans);
 
-  --tracking-display: -8px;
-  /* Подписи ступеней капсом — разрядка, иначе капс слипается */
-  --tracking-caps: 0.06em;
-  /* Трекинг --type-display-fit — в em (−8 px при 96), число ужимается целиком */
+  /*
+    Трекинг — у каждой роли свой, в em, по кеглю (docs/visual-style.md, «Трекинг»): чем крупнее, тем плотнее,
+    мелкое — свободнее. Шкала монотонна: 96 → 11 px — от −0,083em до +0,03em. Крупные числа Styrene Light
+    калиброваны по макету (−8 px при 96 — это −0,083em); заголовки Styrene на 14 px — 0, чуть плотнее Manrope.
+    Правило рядом с ролью: `font: var(--type-x)` + `letter-spacing: var(--tracking-x)` (test/tracking.test.js)
+  */
+  --tracking-display: -0.083em;
+  /* --type-display-fit: число ужимается целиком, при 56–96 px — та же доля кегля */
   --tracking-display-fit: -0.083em;
-  --tracking-value: -2px;
-  --tracking-value-lg: -4px;
-  /* J-59: заголовки блоков плотнее — разрядка +0,02em читалась как широкий набор */
-  --tracking-title: -0.01em;
-  /* Подпись 12 px в строках таблиц — чуть свободнее: мелкий кегль без разрядки читается сжатым (12 px — +1 %) */
-  --tracking-caption: 0.01em;
-  /* Названия проблематик в таблице — свободнее подписи: +1 % на 12 px почти не заметен, слова слипались */
-  --tracking-table: 0.025em;
-  /* «Главный вывод»: подпись и причина свободнее — плотный набор читался слипшимся (просьба пользователя) */
-  --tracking-airy: 0.03em;
+  --tracking-value-lg: -0.056em;
+  --tracking-value: -0.042em;
+  --tracking-value-sm: -0.02em;
+  --tracking-page-title: -0.01em;
+  --tracking-funnel-value: 0em;
+  --tracking-cause: 0em;
+  /* J-59: заголовки блоков без разрядки — +0,02em читалась как широкий набор */
+  --tracking-title: 0em;
+  --tracking-text: 0.005em;
+  --tracking-text-strong: 0.005em;
+  /* 12 px без разрядки читается сжатым */
+  --tracking-caption: 0.02em;
+  --tracking-caption-strong: 0.02em;
+  --tracking-caption-bold: 0.02em;
+  --tracking-quote: 0.02em;
+  /* Названия в «Топ проблем» — Light 300: тонкому начертанию нужно чуть больше воздуха, чем подписи */
+  --tracking-table-name: 0.025em;
+  --tracking-axis: 0.03em;
+  /* Подпись только из цифр и дат в тесном месте (концы линии сегмента) — без разрядки: у цифр свой шаг */
+  --tracking-numeric: 0em;
+  /* Подписи капсом — не роль по кеглю: капс слипается, разрядка больше любой строчной */
+  --tracking-caps: 0.06em;
+  /* Прежние имена — псевдонимы ролей, пока их читают блоки */
+  --tracking-table: var(--tracking-table-name);
+  --tracking-airy: var(--tracking-caption);
 
   /* Поверхность карточки и её шапки — wireframe (V-32, Figma 3204:2724, 3204:2866) */
   --color-card-border: rgba(61, 63, 67, 0.5);
@@ -225,10 +246,12 @@
 
   /*
     Жидкое стекло всплывающих окон (R-50): тёмная заливка, умеренное размытие и насыщение фона,
-    светлая кромка, блик сверху и тень уровня 2. J-14: прозрачная заливка 62%; brightness в .glass сохраняет контраст над светлым фоном
+    светлая кромка, блик сверху и тень уровня 2. J-14: прозрачная заливка 62%; brightness в .glass сохраняет контраст над светлым фоном.
+    Неделя 16–22.11: заливка плотная (92%) — окно и подсказка не просвечивают цветом карточек под ними: с J-290 свечение
+    статусных карточек ярче, и при 62% под окном проступали пятна и градиент. Размытие и кромка остались
   */
   --glass-tint: #15171C;
-  --glass-opacity: 62%;
+  --glass-opacity: 92%;
   --glass-fill: color-mix(in srgb, var(--glass-tint) var(--glass-opacity), transparent);
   /* Без backdrop-filter и при prefers-reduced-transparency — тот же тон, каким стекло выглядит над карточкой */
   --glass-fill-solid: color-mix(in srgb, var(--glass-tint) var(--glass-opacity), var(--color-surface));
@@ -336,25 +359,23 @@
   --tone-ring-end: 8%;
   --tone-glow: 40%;
   /*
-    Стеклянная карточка по статусу плана (образец Nulox): свечение тона поднимается снизу, рамка тона ярче внизу и гаснет
-    к верху. Доли тона, а не новые цвета; сильное отклонение плотнее. До этого — свечение правого верхнего угла (J-89)
+    J-89: угол карточки сегмента у кольца светится тоном плана — доли тона, а не новые цвета; сильное отклонение плотнее.
+    Плотность выше прежних 22/40 %: статус читается с первого взгляда, текст на свечении читается
   */
-  --plan-glow-shape: ellipse 150% 120% at 50% 100%;
-  --plan-glow-rim-shape: ellipse 130% 110% at 50% 110%;
-  --plan-glow-soft: 40%;
-  --plan-glow-strong: 58%;
+  --plan-glow-shape: ellipse 60% 70% at 100% 0;
+  /* «Главный вывод» — свечение куполом от нижней кромки: центр внизу посередине, ширина — вся карточка, высота ≈ 3/4 */
+  --summary-glow-shape: ellipse 100% 80% at 50% 100%;
+  --plan-glow-rim-shape: ellipse 60% 80% at 100% 0;
+  --plan-glow-soft: 34%;
+  --plan-glow-strong: 52%;
   --plan-glow-rim-soft: 60%;
   --plan-glow-rim-strong: 90%;
   /* J-101: наведённая цветная карточка — тот же тон плотнее и шире, а не белая рамка */
   --plan-glow-hover: 56%;
   --plan-glow-rim-hover: 100%;
-  --plan-glow-shape-hover: ellipse 170% 140% at 50% 100%;
-  /* В плане — нейтральное «молочное» стекло: светлая дымка снизу поверх поверхности, без цвета тона */
-  --plan-wash-neutral: linear-gradient(to top, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.015) 70%);
-  /* Непрозрачная заливка маски — задаёт форму (кольцо рамки), а не цвет */
-  --mask-fill: linear-gradient(#000 0 0);
-  /* Блик стекла по верхней кромке рамки: светлая полоса гаснет к середине карточки */
-  --glass-sheen: linear-gradient(to bottom, rgba(255, 255, 255, 0.22), transparent 45%);
+  --plan-glow-shape-hover: ellipse 90% 110% at 100% 0;
+  /* В плане — нейтральная стеклянная текстура: мягкий светлый градиент поверх поверхности (белый 5 %, не цвет тона) */
+  --plan-wash-neutral: linear-gradient(160deg, rgba(255, 255, 255, 0.05), transparent 55%);
   /* Pill тона (J-15, Figma 3204:2734): прозрачный центр, тон к краю; радиусы — доли ширины и высоты, градиент — в indicators.css */
   --tone-pill-rx: 87%;
   --tone-pill-ry: 181%;
@@ -526,8 +547,10 @@
   --color-yellow: #8A6500;
   --color-purple: #6F45D6;
   --funnel-stream: #9E9BF2;
-  --funnel-core: #FFFFFF;
-  --funnel-beam: #FFFFFF;
+  /* Светлая тема: белый хвост на светлой карточке пропадал после «1–3» — ядро и луч лавандовые, луч темнее,
+     с мягким ореолом потока; чёрного нет */
+  --funnel-core: #8A85EC;
+  --funnel-beam: #5F59D6;
   /* J-69, J-71: в светлой теме мятный и жёлтый плотнее, текст мятного и оранжевого — темнее; аварию сдвигает к янтарному */
   --calendar-mint: #2FBF71;
   --calendar-mint-ink: #00704B;
@@ -565,7 +588,8 @@
 
   /* Стекло — светлое: фон под окном светлеет, а не темнеет */
   --glass-tint: #FFFFFF;
-  --glass-opacity: 78%;
+  /* Плотная, как в тёмной: розовое и зелёное свечение карточек под окном не проступает */
+  --glass-opacity: 94%;
   --glass-backdrop-brightness: 104%;
   --glass-edge: rgba(22, 23, 26, 0.1);
   --glass-control: rgba(22, 23, 26, 0.04);
@@ -580,12 +604,7 @@
   --shadow-inset: inset 0 1px 2px rgba(17, 24, 39, 0.08);
   --control-surface: linear-gradient(178deg, rgba(236, 238, 241, 0.9) 37%, rgba(229, 231, 235, 0.9) 80%);
 
-  --plan-wash-neutral: linear-gradient(to top, rgba(22, 23, 26, 0.035), transparent 70%);
-  /* Светлая тема отложена (переделывается): тон — прежней плотности, на светлой карточке стекло тёмной темы
-     заливало бы её розовым и зелёным; блик — едва заметной тёмной кромкой */
-  --plan-glow-soft: 22%;
-  --plan-glow-strong: 40%;
-  --glass-sheen: linear-gradient(to bottom, rgba(22, 23, 26, 0.06), transparent 45%);
+  --plan-wash-neutral: linear-gradient(160deg, rgba(22, 23, 26, 0.03), transparent 55%);
   /* J-71: нейтральные и пустые плитки — почти белые: серая заливка на белой карточке грязнит */
   --heat-cell-rim: rgba(22, 23, 26, 0.1);
   --heat-cell-surface: linear-gradient(251deg, #FFFFFF 58%, #F8F9FA);

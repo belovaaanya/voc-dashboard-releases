@@ -28,6 +28,7 @@
   background: transparent;
   color: var(--color-text-secondary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
   white-space: nowrap;
   cursor: pointer;
   transition: color var(--motion-fast) var(--ease-standard), background-color var(--motion-fast) var(--ease-standard);
@@ -40,6 +41,7 @@
   overflow: hidden;
   visibility: hidden;
   font: var(--type-caption-strong);
+  letter-spacing: var(--tracking-caption-strong);
 }
 
 /* J-135: подпись и значки смысла в одну строку; ширина под жирное — у подписи (::after), значки добавляются к ней */
@@ -101,6 +103,7 @@
   border-radius: var(--radius-pill);
   color: var(--color-text-secondary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 .segmented__tab:hover,
@@ -116,6 +119,7 @@
 .segmented__tab[aria-selected='true'] {
   color: var(--color-text-strong);
   font: var(--type-caption-strong);
+  letter-spacing: var(--tracking-caption-strong);
 }
 
 .segmented__tab[aria-selected='true']::before {
@@ -132,6 +136,7 @@
 .segmented--lg .segmented__tab::after,
 .segmented--lg .segmented__tab[aria-selected='true'] {
   font: var(--type-caption-bold);
+  letter-spacing: var(--tracking-caption-bold);
 }
 
 /* Дорожка канала и в плотном варианте (R-50) */
@@ -163,6 +168,7 @@
 .segmented-field__caption {
   color: var(--color-text-tertiary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
   white-space: nowrap;
 }
 

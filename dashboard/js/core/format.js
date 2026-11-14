@@ -48,6 +48,12 @@ export function formatDeltaCount(value) {
   return (value > 0 ? '+' : '') + formatNumber(value, 0);
 }
 
+/** Изменение в процентах к прошлому значению: «−76 %», «+4 %»; целые проценты. */
+export function formatDeltaPercent(value) {
+  if (!Number.isFinite(value)) return '—';
+  return `${value > 0 ? '+' : ''}${formatNumber(value, 0)}${NBSP}%`;
+}
+
 export function formatDeltaShare(value) {
   if (!Number.isFinite(value)) return '—';
   return `${value > 0 ? '+' : ''}${formatNumber(value, 1)}${NBSP}п.${NBSP}п.`;

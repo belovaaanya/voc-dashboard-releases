@@ -16,8 +16,8 @@ import { appendAll, element } from '../ui/dom.js';
 import { formatVoc } from '../core/format.js';
 import { voc, vocDelta } from '../core/metrics.js';
 import { withFilter } from '../state/url-state.js';
-import { planFor, planGlow } from '../core/plan.js';
-import { badgeNode, countGroupNode, setPlanGlow, forecastNode, leadNode, metaRowNode, pairNode, sufficiencyNode, trendNode, valueRowNode } from './metric-card.js';
+import { planFor } from '../core/plan.js';
+import { badgeNode, countGroupNode, setPlanGlow, statusGlow, trendTone, forecastNode, leadNode, metaRowNode, pairNode, sufficiencyNode, trendNode } from './metric-card.js';
 import { trendDirection, trendStep, trendSteps, trendValues } from '../core/segment-trend.js';
 
 const SEGMENT = 'segment';
@@ -54,7 +54,7 @@ function render(block, context, index) {
   const plan = planFor(context.reference?.plan, { channel: state.channel, from: context.period?.from, to: context.period?.to });
   /* Статус плана — бейджем словами справа в шапке, как у карточки канала (было — точка) */
   block.setHead({ note: badgeNode(voc(rows), plan) });
-  setPlanGlow(block, planGlow(voc(rows), plan));
+  setPlanGlow(block, statusGlow(voc(rows), plan, rows));
 
   /* Выбрана — когда фильтр равен ровно этому сегменту: при двух выбранных ни одна карточка не «нажата» */
   const chosen = state.filters?.[SEGMENT] ?? [];
@@ -86,8 +86,12 @@ function render(block, context, index) {
   const history = steps.length ? select({ filters: withFilter(state.filters, SEGMENT, [code]), from: steps[0].from, to: steps.at(-1).to }).rows : [];
   const values = steps.length ? trendValues(history, steps) : [];
   /* Пунктир уровня — нижняя граница плана: под ней сегмент «Ниже плана»; вне шкалы ряда не рисуется */
-  const trend = steps.length ? trendNode(values, steps, trendStep(context.period), { direction: trendDirection(values), level: plan?.min ?? null }) : null;
-  appendAll(toggle, valueRowNode(pairNode(formatVoc(voc(rows)), leadNode(delta)), trend), metaRowNode(countGroupNode(rows.length, previous?.length, context.period), forecast, warning));
+  /* Цвет тренда — направление динамики, мало оценок — серый (`trendTone`): план показывают бейдж и свечение */
+  const tone = trendTone(rows, trendDirection(values));
+  const trend = steps.length ? trendNode(values, steps, trendStep(context.period), { tone, level: plan?.min ?? null }) : null;
+  /* Тренд — своей зоной справа под бейджем, число и объём — слева у нижнего края (metrics.css, `.metric--with-trend`) */
+  if (trend) toggle.classList.add('metric--with-trend');
+  appendAll(toggle, pairNode(formatVoc(voc(rows)), leadNode(delta)), metaRowNode(countGroupNode(rows.length, previous?.length, context.period), forecast, warning), trend);
   /* aria-label кнопки заменяет её текст: прогноз и пометку выборки screen reader иначе не услышит */
   if (forecast) toggle.setAttribute('aria-label', `${toggle.getAttribute('aria-label')}. Период не закончен: ${forecast.dataset.forecast.toLowerCase()}`);
   if (warning) toggle.setAttribute('aria-label', `${toggle.getAttribute('aria-label')}. Мало оценок: ${warning.dataset.threshold.toLowerCase()}`);

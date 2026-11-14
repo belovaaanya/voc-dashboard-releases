@@ -25,6 +25,7 @@ body {
   padding: var(--space-10) var(--page-gutter);
   color: var(--color-text-secondary);
   font: var(--type-text);
+  letter-spacing: var(--tracking-text);
 }
 
 /*
@@ -129,12 +130,14 @@ body::before {
 .side-nav__logo {
   color: var(--color-text-strong);
   font: var(--type-caption-strong);
+  letter-spacing: var(--tracking-caption-strong);
   white-space: nowrap;
 }
 
 .side-nav__logo .side-nav__label {
   color: var(--color-text-secondary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 .side-nav__link {
@@ -146,6 +149,7 @@ body::before {
   background: none;
   color: var(--color-text-secondary);
   font: var(--type-text);
+  letter-spacing: var(--tracking-text);
   text-align: start;
   text-decoration: none;
   cursor: pointer;
@@ -196,16 +200,6 @@ body::before {
   display: none;
 }
 
-/* J-151: значок главной — текст «1.0» в квадрате иконки, тем же цветом, что иконки пунктов */
-.side-nav__version {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: auto;
-  min-width: var(--icon-size-nav);
-  font: var(--type-caption-strong);
-}
-
 .side-nav__list {
   display: flex;
   flex-direction: column;
@@ -237,6 +231,7 @@ body::before {
   background: var(--color-surface-sunken);
   color: var(--color-text-tertiary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 .side-nav__data-icon {
@@ -467,6 +462,7 @@ body::before {
 .card--page-head .card__title {
   color: var(--color-text-strong);
   font: var(--type-page-title);
+  letter-spacing: var(--tracking-page-title);
 }
 
 .card__tools {
@@ -482,6 +478,7 @@ body::before {
 .card__note {
   color: var(--color-text-tertiary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
   white-space: nowrap;
 }
 
@@ -497,6 +494,7 @@ body::before {
   gap: var(--space-1);
   color: var(--color-text-strong);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
   white-space: nowrap;
 }
 
@@ -545,6 +543,7 @@ body::before {
   border: var(--hairline) solid var(--color-control-border);
   border-radius: var(--radius-pill);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
   background: var(--control-raised);
   box-shadow: var(--control-raised-edge);
   color: var(--color-text-secondary);
@@ -565,6 +564,7 @@ body::before {
   gap: var(--space-1);
   color: var(--color-text-tertiary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
   white-space: nowrap;
 }
 
@@ -676,12 +676,14 @@ body::before {
 .state__title {
   color: var(--color-text-secondary);
   font: var(--type-text-strong);
+  letter-spacing: var(--tracking-text-strong);
   text-wrap: balance;
 }
 
 .state__detail {
   color: var(--color-text-tertiary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 /* Состояние ошибки несёт текст и знак, а не только цвет (D-26) */
@@ -703,6 +705,7 @@ body::before {
 .state--quiet .state__title {
   color: var(--color-text-tertiary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 .state--quiet .state__title,
@@ -713,6 +716,7 @@ body::before {
 .state--text .state__title {
   color: var(--color-text-secondary);
   font: var(--type-text);
+  letter-spacing: var(--tracking-text);
   text-wrap: wrap;
 }
 
@@ -731,6 +735,7 @@ body::before {
   padding: var(--space-4) 0;
   color: var(--color-text-tertiary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 /* ── Шапка ─────────────────────────────────────────────────────────── */
@@ -810,6 +815,7 @@ body::before {
   display: inline-grid;
   /* Кнопки шапки — роль подписи, а не 13,33 px браузера */
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
   place-items: center;
   width: calc(var(--control-height-lg) - var(--space-2));
   padding: 0;
@@ -839,10 +845,24 @@ body::before {
 .shell-head__meta {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: baseline;
   gap: var(--space-2) var(--space-4);
   color: var(--color-text-tertiary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
+}
+
+/* Строка только со скрытым h1 места не занимает */
+.shell-head__meta--hidden {
+  display: contents;
+}
+
+/* Заголовок страницы — короткий, ролью заголовка блока и основным цветом: читается раньше служебной строки рядом */
+.shell-head__title {
+  margin: 0;
+  color: var(--color-text-strong);
+  font: var(--type-title);
+  letter-spacing: var(--tracking-title);
 }
 
 /* J-115: «С кэшбеком» — переключатель в строке фильтров; состояние — положением ручки и подписью, не только цветом (D-26) */
@@ -854,6 +874,7 @@ body::before {
   padding-inline: var(--space-2);
   color: var(--color-text-secondary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
   white-space: nowrap;
   cursor: pointer;
 }
@@ -952,6 +973,7 @@ body::before {
   box-shadow: var(--control-raised-edge);
   color: var(--color-text-secondary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
   white-space: nowrap;
   cursor: pointer;
 }
@@ -997,6 +1019,7 @@ body::before {
   padding: var(--space-4);
   border-radius: var(--radius-popover);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 .feedback[hidden] {
@@ -1012,6 +1035,7 @@ body::before {
   background: var(--glass-control);
   color: var(--color-text-strong);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 .feedback__comment {
@@ -1173,6 +1197,7 @@ body::before {
 .method-popover__term {
   color: var(--color-text-strong);
   font: var(--type-caption-strong);
+  letter-spacing: var(--tracking-caption-strong);
 }
 
 .method-popover__text {
@@ -1230,6 +1255,7 @@ body::before {
   background: none;
   color: var(--color-text-secondary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
   cursor: pointer;
   transition: color var(--motion-fast) var(--ease-standard), background-color var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard);
 }
@@ -1314,7 +1340,7 @@ body::before {
   display: none;
 }
 
-/* «Ещё фильтры» — контрол строки фильтров; шеврон показывает, раскрыт ли список */
+/* «Ещё фильтры» — контрол строки фильтров; шеврон вправо — фильтры раскрываются в строке справа, раскрытый — влево */
 .filters__more {
   flex: none;
   max-width: none;
@@ -1346,6 +1372,7 @@ body::before {
   background: none;
   color: var(--color-text-secondary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
   white-space: nowrap;
   cursor: pointer;
 }
@@ -1393,6 +1420,7 @@ body::before {
   padding: var(--space-4);
   border-radius: var(--radius-popover);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 /* Popover проявляется у своего контрола: показ из display: none перезапускает анимацию (D-56) */
@@ -1429,6 +1457,7 @@ body::before {
 .control-popover__title,
 .control-popover__subtitle {
   font: var(--type-caption-strong);
+  letter-spacing: var(--tracking-caption-strong);
 }
 
 .control-popover__presets {
@@ -1449,6 +1478,7 @@ body::before {
 .control-popover__preset-label {
   color: var(--color-text-tertiary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 .control-popover__preset-list {
@@ -1475,6 +1505,7 @@ body::before {
   background: var(--color-text-strong);
   color: var(--color-on-accent);
   font: var(--type-caption-strong);
+  letter-spacing: var(--tracking-caption-strong);
 }
 
 .control-popover__preset:hover,
@@ -1490,6 +1521,7 @@ body::before {
   box-shadow: 0 1px 3px var(--channel-selected-shadow);
   color: var(--channel-selected-text);
   font: var(--type-caption-strong);
+  letter-spacing: var(--tracking-caption-strong);
 }
 
 .control-popover__preset {
@@ -1522,6 +1554,7 @@ body::before {
 .control-popover__field-label {
   color: var(--color-text-secondary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 .control-popover__date {
@@ -1601,6 +1634,7 @@ body::before {
   margin: 0;
   color: var(--color-negative-ink);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 /* ── Жидкое стекло (R-50) ───────────────────────────────────────────── */
@@ -1664,6 +1698,7 @@ body::before {
   align-items: center;
   gap: var(--space-2);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 .source-note--demo {
@@ -1672,6 +1707,7 @@ body::before {
 
 .source-note__mark {
   font: var(--type-caption-strong);
+  letter-spacing: var(--tracking-caption-strong);
 }
 
 /* Иконка внутри строки текста — размером со строку */

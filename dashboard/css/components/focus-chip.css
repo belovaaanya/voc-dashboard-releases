@@ -12,6 +12,7 @@
   box-shadow: var(--control-raised-edge);
   color: var(--color-text-secondary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
   white-space: nowrap;
   cursor: pointer;
 }
@@ -19,6 +20,7 @@
 .focus-chip__value {
   color: var(--color-text-strong);
   font: var(--type-text-strong);
+  letter-spacing: var(--tracking-text-strong);
 }
 
 .focus-chip__icon {

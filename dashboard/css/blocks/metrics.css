@@ -26,6 +26,7 @@
 .metric__meta {
   color: var(--color-text-tertiary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 /* Пара число + дельта карточек шапки (`valueDelta`): дельта по верху поля числа, а не по базовой линии */
@@ -34,31 +35,48 @@
   min-width: 0;
 }
 
-/* Строка значения сегмента: число с дельтой слева, мини-тренд справа на всё оставшееся место */
-.metric__value-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-width: 0;
+/*
+  Сегмент с мини-трендом (рисунок пользователя): тренд — своей зоной справа, от бейджа в шапке вниз, по правому краю
+  бейджа. Ширину зоне даёт левая колонка по ширине числа: дельта — под числом, «N оценок» — строкой во всю ширину
+  карточки у нижнего края (она шире числа и иначе ограничивала бы зону). Карточка прежней высоты (176 px)
+*/
+.metric--with-trend {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  grid-template-rows: 1fr auto auto;
+  align-items: end;
+  column-gap: var(--space-3);
+  row-gap: var(--space-1);
 }
 
-/*
-  Тренд — остаток строки значения на её высоту (высота числа): строка и карточка (176 px) не растут. Подписи крайних точек —
-  над линией и под ней; ширина тренда — контейнер для правила узкой карточки ниже
-*/
-.metric__trend {
+/* Число и под ним дельта: дельта справа от числа отнимала у тренда ≈60 px */
+.metric--with-trend > .metric__pair {
+  grid-column: 1;
+  grid-row: 2;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+
+.metric--with-trend > .metric__caption {
+  grid-column: 1 / -1;
+  grid-row: 3;
+}
+
+/* Ширина тренда — контейнер для правил узкой карточки ниже */
+.metric--with-trend > .metric__trend {
   display: flex;
-  flex: 1 1 0;
-  min-width: 0;
-  max-width: calc(var(--space-10) * 3);
+  grid-column: 2;
+  grid-row: 1 / 3;
   align-self: stretch;
+  min-width: 0;
   container-type: inline-size;
 }
 
 .metric__trend > .sparkline-labels {
   flex: 1 1 auto;
   width: 100%;
-  /* В высоте числа (48 px) — подпись значения, линия ≈20 px и шаги: подпись ближе к точке, шаги вплотную к линии */
+  /* Сверху — место под подпись значения самой высокой точки */
   padding-block-start: var(--space-3);
 }
 
@@ -85,9 +103,9 @@
 }
 
 /*
-  Ширина тренда — остаток строки за числом и дельтой (docs/blocks-metrics.md — замеры по ширинам). Подписи обеих
-  крайних точек (2 × ≈23 px и зазор) помещаются от 56 px; уже — линия и последнее значение; совсем узко — тренда нет:
-  строка и карточка не растут, ничего не вылезает
+  Ширина тренда — остаток карточки за числом и дельтой (docs/blocks-metrics.md — замеры по ширинам). Подписи обеих
+  крайних точек (2 × ≈23 px и зазор) помещаются от 56 px; уже — линия и последнее значение; уже 28 px — тренда нет:
+  тонкий высокий столбик не читается линией. Карточка не растёт, ничего не вылезает
 */
 @container (width < 56px) {
   .metric__trend .sparkline-labels__axis,
@@ -96,7 +114,7 @@
   }
 }
 
-@container (width < 24px) {
+@container (width < 28px) {
   .metric__trend > .sparkline-labels {
     visibility: hidden;
   }
@@ -116,6 +134,7 @@
   min-width: 0;
   color: var(--color-text-tertiary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 /* Части подписи не рвутся по словам («6 240 / оценок», B-09) */
@@ -146,6 +165,7 @@
   border-radius: var(--radius-pill);
   color: var(--color-text-tertiary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
   cursor: help;
 }
 
@@ -290,12 +310,14 @@
   justify-self: end;
   color: var(--color-text-strong);
   font: var(--type-caption-strong);
+  letter-spacing: var(--tracking-caption-strong);
   text-align: end;
 }
 
 .plan-days__caption {
   color: var(--color-text-secondary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
   white-space: nowrap;
 }
 
@@ -303,6 +325,7 @@
 .card--metric-plan-days .state--compact .state__title {
   color: var(--color-text-secondary);
   font: var(--type-text-strong);
+  letter-spacing: var(--tracking-text-strong);
 }
 
 .metric--tally {
@@ -312,6 +335,7 @@
 
 .metric--tally .metric__value {
   font: var(--type-value-sm);
+  letter-spacing: var(--tracking-value-sm);
 }
 
 /* J-96: дельта у правого края плитки; не поместившись, уходит под число */
@@ -330,25 +354,28 @@
   margin-block-end: var(--space-2);
   color: var(--color-text-tertiary);
   font: var(--type-value);
+  letter-spacing: var(--tracking-value);
 }
 
 .card--metric-big .state--empty.state--compact::before {
   font: var(--type-display);
+  letter-spacing: var(--tracking-display);
 }
 
 .card--metric-tally .state--empty.state--compact::before {
   font: var(--type-value-sm);
+  letter-spacing: var(--tracking-value-sm);
 }
 
 /*
   ── Свечение сегмента по плану (J-67, J-89) ──────────────────────────
-  Стекло по статусу плана — сегменты и большая карточка канала: свечение тона поднимается снизу, рамка тона ярче
-  внизу, по верхней кромке — блик. Ниже плана красным, выше зелёным; сильное отклонение плотнее. В плане цвета
-  нет — молочное стекло с бликом. Статус и его силу называет бейдж (подсказка и доступное имя). Пока в карточке служебное состояние — загрузка, пусто,
+  Правый верхний угол — там, где кольцо статуса, — светится: ниже плана красным, выше
+  зелёным; сильное отклонение плотнее. В плане цвета нет — нейтральная текстура. Статус и
+  его силу называет кольцо (подсказка и доступное имя). Пока в карточке служебное состояние — загрузка, пусто,
   ошибка, — свечения нет: оно описывает число, а не его отсутствие. Свечение — слои под
   содержимым, а не фон карточки: наведение и выбор меняют фон и рамку, статус остаётся виден
 */
-.card--metric[data-plan-glow]:not(:has(.state)) {
+.card--metric-segment[data-plan-glow]:not(:has(.state)) {
   --plan-tone: var(--color-positive);
   --plan-glow: var(--plan-glow-soft);
   --plan-glow-rim: var(--plan-glow-rim-soft);
@@ -358,19 +385,19 @@
   isolation: isolate;
 }
 
-.card--metric[data-plan-glow='below']:not(:has(.state)),
-.card--metric[data-plan-glow='below-strong']:not(:has(.state)) {
+.card--metric-segment[data-plan-glow='below']:not(:has(.state)),
+.card--metric-segment[data-plan-glow='below-strong']:not(:has(.state)) {
   --plan-tone: var(--color-negative);
 }
 
-.card--metric[data-plan-glow='below-strong']:not(:has(.state)),
-.card--metric[data-plan-glow='above-strong']:not(:has(.state)) {
+.card--metric-segment[data-plan-glow='below-strong']:not(:has(.state)),
+.card--metric-segment[data-plan-glow='above-strong']:not(:has(.state)) {
   --plan-glow: var(--plan-glow-strong);
   --plan-glow-rim: var(--plan-glow-rim-strong);
 }
 
-.card--metric[data-plan-glow]:not(:has(.state))::before,
-.card--metric[data-plan-glow]:not(:has(.state))::after {
+.card--metric-segment[data-plan-glow]:not(:has(.state))::before,
+.card--metric-segment[data-plan-glow]:not(:has(.state))::after {
   content: '';
   position: absolute;
   z-index: -1;
@@ -378,16 +405,16 @@
   pointer-events: none;
 }
 
-.card--metric[data-plan-glow]:not(:has(.state))::before {
+.card--metric-segment[data-plan-glow]:not(:has(.state))::before {
   inset: 0;
   background: radial-gradient(var(--plan-shape), color-mix(in srgb, var(--plan-tone) var(--plan-glow), transparent), transparent);
 }
 
-/* Рамка тона ярче внизу и гаснет к верху, по верхней кромке — блик стекла: кольцо-маска поверх обычной рамки */
-.card--metric[data-plan-glow]:not(:has(.state))::after {
+/* Рамка тона гаснет от угла: кольцо-маска поверх обычной рамки карточки */
+.card--metric-segment[data-plan-glow]:not(:has(.state))::after {
   inset: calc(-1 * var(--hairline));
   padding: var(--hairline);
-  background: var(--glass-sheen), radial-gradient(var(--plan-rim-shape), color-mix(in srgb, var(--plan-tone) var(--plan-glow-rim), transparent), transparent);
+  background: radial-gradient(var(--plan-rim-shape), color-mix(in srgb, var(--plan-tone) var(--plan-glow-rim), transparent), transparent);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
@@ -397,7 +424,7 @@
   J-101: наведение и фокус на цветной карточке — в её тоне: свечение плотнее и шире, рамка тона;
   серый подсвет наведения остаётся фоном карточки. В плане цвета нет — наведение обычное, белое
 */
-.card--metric[data-plan-glow]:not([data-plan-glow='in']):not(:has(.state)):has(.metric__toggle:hover, .metric__toggle:focus-visible) {
+.card--metric-segment[data-plan-glow]:not([data-plan-glow='in']):not(:has(.state)):has(.metric__toggle:hover, .metric__toggle:focus-visible) {
   --plan-glow: var(--plan-glow-hover);
   --plan-glow-rim: var(--plan-glow-rim-hover);
   --plan-shape: var(--plan-glow-shape-hover);
@@ -405,13 +432,13 @@
   border-color: color-mix(in srgb, var(--plan-tone) var(--plan-glow-rim-soft), transparent);
 }
 
-/* В плане — без цвета: молочное стекло вместо свечения, у рамки только блик */
-.card--metric[data-plan-glow='in']:not(:has(.state))::before {
+/* В плане — без цвета: текстура вместо свечения, рамка карточки обычная */
+.card--metric-segment[data-plan-glow='in']:not(:has(.state))::before {
   background: var(--plan-wash-neutral);
 }
 
-.card--metric[data-plan-glow='in']:not(:has(.state))::after {
-  background: var(--glass-sheen);
+.card--metric-segment[data-plan-glow='in']:not(:has(.state))::after {
+  content: none;
 }
 
 /* ── Кликабельная карточка (P0 №7, D-31, V-26) ─────────────────────── */
@@ -490,11 +517,16 @@
   flex: 1 1 auto;
   grid-template-rows: auto minmax(var(--space-8), 1fr) auto auto;
   /* Доли колонок — те же, что COLUMNS в blocks/conversion.js: по ним стоят центры полосы */
-  grid-template-columns: 0.7fr 0.9fr 1.4fr 1fr 1fr;
+  grid-template-columns: 0.45fr 0.5fr 1.2fr 1.2fr 1.2fr;
   align-self: stretch;
   min-width: 0;
   position: relative;
   isolation: isolate;
+}
+
+/* Узкая карточка («Для аналитика»): без ступеней «—» — три колонки, те же доли, что COMPACT_COLUMNS в conversion.js */
+.conversion--compact {
+  grid-template-columns: 1.2fr 1fr 1fr;
 }
 
 /* Рамка луча — строка полосы и запас `--beam-headroom` (доля строки, из blocks/conversion.js) сверху и снизу.
@@ -542,6 +574,8 @@
   grid-template-rows: subgrid;
   justify-items: center;
   min-width: 0;
+  /* Поле у разделителя: значение с изменением не подходит к соседней ступени ближе 8 px, а уходит строкой ниже */
+  padding-inline: var(--space-1);
   text-align: center;
 }
 
@@ -558,30 +592,34 @@
   grid-row: 1;
 }
 
-.conversion__value,
-.conversion__step > .value-empty {
+.conversion__line {
   grid-row: 3;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0 var(--space-1);
+  min-width: 0;
+}
+
+.conversion__value,
+.conversion__line > .value-empty {
   color: var(--color-text-strong);
   font: var(--type-funnel-value);
+  letter-spacing: var(--tracking-funnel-value);
   white-space: nowrap;
 }
 
-.conversion__step > .value-empty {
+.conversion__line > .value-empty {
   color: var(--color-text-tertiary);
-}
-
-.conversion__share-row {
-  grid-row: 4;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-height: 1lh;
-  white-space: nowrap;
 }
 
 .conversion__share {
+  grid-row: 4;
+  min-height: 1lh;
   color: var(--color-text-tertiary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
   white-space: nowrap;
 }
 
@@ -600,7 +638,7 @@
   stroke-linecap: round;
 }
 
-/* Луч хвоста — светлый, с мягким ореолом потока; в светлой теме тоже светлый, без тёмной линии */
+/* Луч хвоста с мягким ореолом потока: в тёмной теме светлый, в светлой — лавандовый темнее потока, без чёрного */
 .conversion__thread {
   stroke: var(--funnel-beam);
   stroke-width: 1.5;
@@ -616,5 +654,9 @@
 }
 
 .conversion__change {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }

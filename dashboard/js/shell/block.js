@@ -46,15 +46,18 @@ function renderState(state, detail, compact = false) {
     return wrap;
   }
 
-  const texts = TEXTS[state];
-  const detailText = detail || texts.detail;
+  /* Свой текст пустого блока целиком — `{ title, detail }`: у дайджеста нет фильтров, совет «снимите фильтры» ему не подходит */
+  const own = typeof detail?.title === 'string' ? detail : null;
+  const texts = own ? { ...TEXTS[state], ...own, compactTitle: own.title } : TEXTS[state];
+  if (own) detail = own.detail ?? '';
+  const detailText = own ? detail : detail || texts.detail;
   /* J-39: компактное состояние — одна строка; пояснение мышью в подсказке, screen reader — скрытым текстом */
   /*
     Своя причина пустого блока («Сегмента нет в выгрузке») — сама строка: общий текст «нет данных за период»
     её бы исказил. Ошибка оставляет свой заголовок, а техническую причину уносит в подсказку
   */
   if (compact) {
-    const ownLine = state === EMPTY && detail;
+    const ownLine = !own && state === EMPTY && detail;
     const hint = ownLine ? '' : detailText;
     wrap.classList.add('state--compact');
     wrap.append(stateText('title', ownLine || texts.compactTitle || texts.title));

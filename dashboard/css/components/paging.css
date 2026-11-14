@@ -10,6 +10,7 @@
   box-shadow: var(--control-raised-edge);
   color: var(--color-text-secondary);
   font: var(--type-caption-strong);
+  letter-spacing: var(--tracking-caption-strong);
   cursor: pointer;
 }
 

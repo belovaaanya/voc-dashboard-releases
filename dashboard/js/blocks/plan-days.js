@@ -63,7 +63,8 @@ export function renderPlanDays(block, context) {
   const conversion = !context.analyst || isWholeMonth(context.period, context.rows);
   block.element?.classList.toggle('card--conversion', conversion);
   if (conversion) {
-    renderConversion(block, context);
+    /* «Для аналитика» карточка узкая (≈280 px): компактная конверсия без ступеней «—» */
+    renderConversion(block, { ...context, compact: Boolean(context.analyst) });
     return;
   }
   block.setTitle?.(PLAN_DAYS_TITLE);

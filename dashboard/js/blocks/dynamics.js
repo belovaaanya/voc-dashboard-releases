@@ -7,6 +7,10 @@ import { legendItem, legendList } from '../components/legend.js';
 import { segmented } from '../components/segmented.js';
 import { periodScaleMemory, scaleTabs } from '../components/scale-tabs.js';
 import { stateText } from '../components/status-panel.js';
+import { statusDot } from '../components/status-dot.js';
+import { tag } from '../components/tag.js';
+import { eventText } from './insights.js';
+import { accidentColor } from '../core/incident-events.js';
 import { element, svgNode } from '../ui/dom.js';
 import { formatCount, formatDate, formatDateRange, formatDayRange, formatDelta, formatInterval, formatNumber, formatRatings, formatVoc } from '../core/format.js';
 import { comparedPeriod } from '../core/period.js';
@@ -15,7 +19,7 @@ import { downloadAction } from '../ui/download.js';
 import { planFor } from '../core/plan.js';
 import { roundDelta, roundVoc } from '../core/round.js';
 import { SCALE_OPTIONS, buildTimeSeries, recommendedScale, withDamage } from '../core/timeseries.js';
-import { ANOMALY_EVENT, INCIDENT_EVENT, ROLLOUT_EVENT, SUSTAINED_EVENT, eventLanes, majorEvents } from '../core/calendar.js';
+import { ANOMALY_EVENT, EVENT_LANES, INCIDENT_EVENT, ROLLOUT_EVENT, SUSTAINED_EVENT, eventLanes, majorEvents } from '../core/calendar.js';
 import { calendarEventsOf, calendarReady } from '../state/event-analysis.js';
 
 /* График рисуется в пикселях сцены, а не в растянутом viewBox: иначе на узкой странице текст мельче роли (B-17) */
@@ -188,11 +192,12 @@ function appendXAxis(svg, series, points, frame, indices) {
   этого интервала. Мишень — столбец интервала во всю высоту строки
 */
 /*
-  Карточки крупных событий (неделя 16–22.11, «Для аналитика»): стеклянная карточка цвета типа на тонкой ножке к своей
-  дате на оси. Внутри — тип, дата и одно число: доля затронутых у аварии, падение VOC у снижения, отрыв от плана у
-  инцидента. Размер — как у `.chart-card` в стилях: раскладка (`placeCards`) должна знать его заранее
+  Карточки крупных событий (неделя 16–22.11, «Для аналитика»): плашка подсказки графика на тонкой пунктирной ножке
+  к своей дате на оси. Внутри одной строкой — строка ленты «Календаря событий» в сжатом виде: иконка типа, дата,
+  тег типа и VOC справа — те же тексты (`eventText`) и тот же тег. Высота — как у `.chart-card` в стилях; ширина — по
+  тексту, её меряет отрисовка до раскладки (`placeCards`), `CARD.width` — запас, если померить нельзя
 */
-const CARD = { width: 112, height: 40 };
+const CARD = { width: 240, height: 24 };
 /*
   Карточки — в своей полосе над областью графика (над подписями точек): при ежедневном масштабе линия VOC проходит
   почти по всей высоте, и внутри области карточка неизбежно легла бы на линию. Ножки идут вниз к дате на оси
@@ -200,8 +205,11 @@ const CARD = { width: 112, height: 40 };
 const CARD_GAP = 4;
 const CARD_ZONE = CARD.height + CARD_GAP * 2;
 const CARD_LIMIT = 5;
+/* Кандидатов меряется с запасом: крупная карточка может не встать, и место займёт следующая */
+const CARD_MEASURED = CARD_LIMIT * 3;
 const CARD_LABELS = { [INCIDENT_EVENT]: 'Авария', [ANOMALY_EVENT]: 'Крит. снижение', [SUSTAINED_EVENT]: 'Инцидент' };
-const CARD_TONES = { [INCIDENT_EVENT]: 'orange', [ANOMALY_EVENT]: 'negative', [SUSTAINED_EVENT]: 'incident' };
+/* Иконка — та же, что у типа в календаре событий и в полосе (J-269) */
+const CARD_TONES = Object.fromEntries(EVENT_LANES.map(({ kind, tone }) => [kind, tone]));
 
 function cardNumber(event) {
   if (event.kind === INCIDENT_EVENT) return `${formatNumber((event.effect ?? 0) * 100, 0)}\u00a0%`;
@@ -211,33 +219,45 @@ function cardNumber(event) {
 
 const CARD_NUMBER_HINT = { [INCIDENT_EVENT]: 'затронуто', [ANOMALY_EVENT]: 'VOC к средней окна', [SUSTAINED_EVENT]: 'к нижней границе плана' };
 
+/* Строка ленты календаря в одну строку: иконка, дата, тег типа, VOC — те же части, что у `insight-row` */
+function eventCard(event, tone, text, label, number, date) {
+  const card = element('button', 'chart-card glass');
+  card.type = 'button';
+  if (event.kind === INCIDENT_EVENT) card.style.setProperty('--accident-tone', accidentColor(event.effect, event.duration_seconds));
+  card.setAttribute('aria-label', `${date}. ${label}: ${number} ${CARD_NUMBER_HINT[event.kind]}. ${POINT_HINT}`);
+  /* Дата — день события на оси (ДД.ММ), а не диапазон серии ленты: длительность серии уже в теге («Инцидент 6 дн»),
+     а узкая карточка оставляет место соседним */
+  card.append(statusDot(tone, 'event'), element('span', 'chart-card__date', date.slice(0, 5)), tag(text.title, text.color));
+  if (text.value !== null && text.value !== 'VOC —') card.append(element('span', 'chart-card__value', text.value));
+  return card;
+}
+
 function appendEventCards(stage, svg, candidates, series, points, plot, tooltip, interaction, context) {
   for (const old of stage.querySelectorAll('.chart-card')) old.remove();
   if (!candidates.length) return;
+  /* Карточки ставятся в сцену невидимыми и меряются: ширина зависит от типа, числа и шрифта */
+  const drafts = candidates.slice(0, CARD_MEASURED).map((candidate) => {
+    const { event } = candidate;
+    const text = { tone: CARD_TONES[event.kind], label: CARD_LABELS[event.kind], number: cardNumber(event), date: formatDate(event.date) };
+    const card = eventCard(event, text.tone, eventText(event, context), text.label, text.number, text.date);
+    card.style.visibility = 'hidden';
+    stage.append(card);
+    return { ...candidate, ...text, card, width: Math.ceil(card.offsetWidth || CARD.width) };
+  });
   /* Один ряд над подписями точек: в координатах области — выше её верха на поле подписей и саму полосу */
-  const placed = placeCards(candidates, {
+  const placed = placeCards(drafts, {
     xs: points.map(({ x }) => x), line: [], width: plot.width, card: CARD, gap: CARD_GAP, limit: CARD_LIMIT,
     rows: [-(MARGIN.top + CARD_ZONE) + CARD_GAP],
   });
+  const kept = new Set(placed.map(({ card }) => card));
+  for (const { card } of drafts) if (!kept.has(card)) card.remove();
   const stems = svgNode('g', 'chart-cards', { 'aria-hidden': 'true', transform: `translate(${plot.x} ${plot.y})` });
-  for (const { event, index, center, rect } of placed) {
-    const tone = CARD_TONES[event.kind];
-    const label = CARD_LABELS[event.kind];
-    const number = cardNumber(event);
-    const date = formatDate(event.date);
-    /* Ножка — от края карточки к оси дат под областью графика */
-    stems.append(svgNode('line', `chart-cards__stem tone--${tone}`, {
-      x1: center, y1: rect.y + rect.height, x2: center, y2: plot.height,
-    }));
-    stems.append(svgNode('circle', `chart-cards__foot tone--${tone}`, { cx: center, cy: plot.height, r: 2 }));
-    const card = element('button', `chart-card glass tone--${tone}`);
-    card.type = 'button';
+  for (const { event, index, center, rect, label, number, date, card } of placed) {
+    /* Ножка — нейтральный пунктир, как направляющие сетки: от края карточки к оси дат под областью графика */
+    stems.append(svgNode('line', 'chart-cards__stem', { x1: center, y1: rect.y + rect.height, x2: center, y2: plot.height }));
     card.style.left = `${plot.x + rect.x}px`;
     card.style.top = `${plot.y + rect.y}px`;
-    card.setAttribute('aria-label', `${date}. ${label}: ${number} ${CARD_NUMBER_HINT[event.kind]}. ${POINT_HINT}`);
-    const value = element('span', 'chart-card__value', number);
-    value.append(element('span', 'chart-card__date', date.slice(0, 5)));
-    card.append(element('span', 'chart-card__head', label), value);
+    card.style.visibility = '';
     const bucket = series[index];
     /* Подсказка — у оси дат, как у точки графика: над карточкой ей не хватит места в сцене, и она закрыла бы карточку */
     const reveal = () => showChartTooltip(tooltip, {
@@ -259,7 +279,6 @@ function appendEventCards(stage, svg, candidates, series, points, plot, tooltip,
       /* Клик перерисовывает график: фокус возвращается на ту же карточку новой отрисовки */
       stage.closest('.card')?.querySelector(`[data-focus-card="${id}"]`)?.focus({ preventScroll: true });
     });
-    stage.append(card);
   }
   svg.append(stems);
 }

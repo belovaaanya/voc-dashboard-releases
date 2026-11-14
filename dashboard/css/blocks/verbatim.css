@@ -117,11 +117,13 @@
   margin: 0;
   color: var(--color-text-strong);
   font: var(--type-caption-strong);
+  letter-spacing: var(--tracking-caption-strong);
 }
 
 .verbatim-feed__title small {
   color: var(--color-text-tertiary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 .verbatim-feed__list {
@@ -147,6 +149,7 @@
   margin: 0;
   color: var(--color-text-strong);
   font: var(--type-quote);
+  letter-spacing: var(--tracking-quote);
 }
 
 /* «Фрагмент экспертизы» — тихая пометка источника цитаты */
@@ -154,12 +157,14 @@
   margin: 0;
   color: var(--color-text-tertiary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 .verbatim-feed__source {
   margin: 0;
   color: var(--color-text-tertiary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 .verbatim-feed--skeleton {
@@ -186,11 +191,13 @@
   color: var(--color-text-strong);
   /* Аудит 13.11: числа строки — одного веса: жалобы и доля не жирнее урона, сегментов и шагов */
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 .problem-table__was {
   color: var(--color-text-tertiary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 /* Скелет — те же строки со скрытым содержимым: высота совпадает с загруженной по построению */
@@ -224,11 +231,12 @@
   margin: 0;
   color: var(--color-text-tertiary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 .verbatim-table {
   width: 100%;
-  min-width: 2604px;
+  min-width: 2724px;
   border-collapse: collapse;
   table-layout: fixed;
 }
@@ -239,6 +247,7 @@
   border-bottom: var(--divider-width) solid var(--color-border);
   color: var(--color-text-secondary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
   text-align: start;
   vertical-align: top;
 }
@@ -259,7 +268,8 @@
 .verbatim-table__col--os { width: 84px; }
 .verbatim-table__col--appVersion { width: 168px; }
 .verbatim-table__col--rating { width: 96px; }
-.verbatim-table__col--comment { width: 300px; }
+/* Комментарий — главная колонка: шире остальных, стоит третьей, сразу за датой и оценкой */
+.verbatim-table__col--comment { width: 420px; }
 .verbatim-table__col--expertise { width: 280px; }
 .verbatim-table__col--problemType { width: 180px; }
 .verbatim-table__col--problem { width: 220px; }
@@ -308,6 +318,7 @@
 .verbatim-head__count {
   color: var(--color-text-strong);
   font: var(--type-caption-strong);
+  letter-spacing: var(--tracking-caption-strong);
 }
 
 .verbatim-head__count,
@@ -353,6 +364,7 @@
   background: none;
   color: var(--color-text-secondary);
   font: var(--type-caption-strong);
+  letter-spacing: var(--tracking-caption-strong);
   text-decoration: underline;
   cursor: pointer;
 }
@@ -399,6 +411,7 @@
   border-spacing: 0;
   color: var(--color-text-secondary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 .problem-table th,
@@ -416,6 +429,7 @@
   color: var(--color-text-tertiary);
   /* Аудит 13.11: шапка таблицы — подпись, а не ось графика: роль --type-caption, как у остальных таблиц */
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 /* Первая колонка — подпись проблемы: прилипает при прокрутке, текст переносится по словам */
@@ -441,6 +455,7 @@
   background: none;
   color: var(--color-text-strong);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
   text-align: start;
   cursor: pointer;
 }
@@ -457,6 +472,7 @@
 /* Выбранная проблема — жирнее и подложкой строки, а не только цветом (D-26) */
 .problem-table__name[aria-pressed='true'] {
   font: var(--type-caption-strong);
+  letter-spacing: var(--tracking-caption-strong);
 }
 
 .problem-table__row {
@@ -543,6 +559,7 @@
 .problem-table__name:not([aria-pressed='true']) .problem-table__name-text,
 .problem-table__group-name span {
   font: var(--type-table-name);
+  letter-spacing: var(--tracking-table-name);
 }
 
 .problem-table__name-text,
@@ -592,6 +609,7 @@
   margin: 0;
   color: var(--color-text-tertiary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 /* J-136: поиск, разрез, числа, шаг и кнопка ленты — одной строкой над таблицей; кнопка ленты — справа */
@@ -629,6 +647,7 @@
   border-block-end: 0;
   color: var(--color-text-secondary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
   text-align: start;
 }
 
@@ -690,4 +709,5 @@
 .problem-table__step-sub {
   color: var(--color-text-tertiary);
   font: var(--type-axis);
+  letter-spacing: var(--tracking-axis);
 }

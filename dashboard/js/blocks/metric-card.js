@@ -22,6 +22,7 @@ import {
   formatCount,
   formatDelta,
   formatDeltaCount,
+  formatDeltaPercent,
   formatDeltaShare,
   formatPeriodDative,
   formatVoc,
@@ -41,6 +42,8 @@ export const DELTA_SHAPES = {
   voc: { round: roundDelta, format: formatDelta },
   count: { round: roundCount, format: formatDeltaCount },
   share: { round: roundShare, format: formatDeltaShare },
+  /* Изменение в процентах к прошлому — целые проценты: «−76 %» */
+  percent: { round: roundCount, format: formatDeltaPercent },
 };
 
 /* Тон дельты — по смыслу роста: рост низких оценок плох, спад числа оценок плох, а его рост ни хорош, ни плох (D-49) */
@@ -48,12 +51,14 @@ export const GROWTH = {
   good: { up: 'positive', down: 'negative', flat: 'neutral' },
   bad: { up: 'negative', down: 'positive', flat: 'neutral' },
   volume: { up: 'neutral', down: 'negative', flat: 'neutral' },
+  /* Незаконченный период против целого прошлого: изменение без смысла, третьим серым */
+  unfinished: { up: 'faint', down: 'faint', flat: 'faint' },
 };
 
 /* Объём оценок в шапке: рост — вторым серым текста, а не --color-neutral (четвёртый серый карточки) */
 const HEADER_VOLUME = { up: 'quiet', down: 'negative', flat: 'quiet' };
 /* Незаконченный период: часть месяца против целого прошлого — дельта не хороша и не плоха, третьим серым */
-const UNFINISHED_VOLUME = { up: 'faint', down: 'faint', flat: 'faint' };
+const UNFINISHED_VOLUME = GROWTH.unfinished;
 const FORECAST_END = { month: 'к концу месяца', quarter: 'к концу квартала' };
 
 const TREND_CAPTION = {
@@ -78,11 +83,11 @@ export function valueNode(text, modifier) {
 }
 
 /** Направление берётся из знака дельты, а не задаётся отдельно (V-15). */
-export function deltaNode(value, { shape = DELTA_SHAPES.voc, growth = GROWTH.good, className, large } = {}) {
+export function deltaNode(value, { shape = DELTA_SHAPES.voc, growth = GROWTH.good, className, large, arrow = true } = {}) {
   const shown = shape.round(value);
   const direction = trendOf(shown);
   if (!direction) return null;
-  return delta({ text: shape.format(shown), direction, tone: growth[direction], caption: TREND_CAPTION[direction], className, large });
+  return delta({ text: shape.format(shown), direction, tone: growth[direction], caption: TREND_CAPTION[direction], className, large, arrow });
 }
 
 /** Дельта стоит рядом с числом; без сравнения слот пуст и скрыт — карточка не меняет высоту (B-07). */
@@ -108,7 +113,7 @@ const TREND_STEP = { month: 'по месяцам', quarter: 'по квартал
  * три подписи в остаток строки не помещаются. В узкой карточке подписи гаснут (metrics.css). Все шаги и значения —
  * в подсказке и доступном имени. Шаг без оценок — разрыв; меньше двух точек с оценками — тренда нет.
  */
-export function trendNode(values, steps, step, { direction = null, level = null } = {}) {
+export function trendNode(values, steps, step, { direction = null, tone = null, level = null } = {}) {
   if (values.filter((value) => value !== null).length < 2) return null;
   const trend = element('span', 'metric__trend');
   const caption = `VOC ${TREND_STEP[step] ?? ''}: ${steps.map(({ label }, index) => `${label} ${values[index] === null ? 'нет оценок' : formatVoc(values[index])}`).join(', ')}`;
@@ -116,21 +121,13 @@ export function trendNode(values, steps, step, { direction = null, level = null 
   trend.setAttribute('role', 'img');
   trend.setAttribute('aria-label', caption);
   const end = (index) => index === 0 || index === steps.length - 1;
-  /* Цвет — направление динамики, а не статус плана: бейдж и тренд могут расходиться (ниже плана, но растёт — зелёный) */
+  /* Цвет — `trendTone`: направление, мало оценок — серый; без `tone` — направление */
   trend.append(sparkline(values, {
-    tone: GROWTH.good[direction] ?? 'neutral', wide: true, fill: true, halo: true, endRule: true, level,
+    tone: tone ?? GROWTH.good[direction] ?? 'neutral', wide: true, fill: true, halo: true, endRule: true, level,
     label: (value, index) => (end(index) ? formatVoc(value) : null),
     axis: steps.map(({ label }, index) => (end(index) ? label : '')),
   }));
   return trend;
-}
-
-/** Число с дельтой и мини-тренд справа — одна строка значения карточки сегмента. */
-export function valueRowNode(pair, trend) {
-  if (!trend) return pair;
-  const row = element('div', 'metric__value-row');
-  row.append(pair, trend);
-  return row;
 }
 
 /** J-65: одна строка подписи под числом — объём, коридор, пометка выборки; пустые части пропускаются. */
@@ -159,6 +156,24 @@ export function badgeNode(value, plan) {
     node.setAttribute('aria-label', strong);
   }
   return node;
+}
+
+/**
+ * Цвет мини-тренда сегмента (решение пользователя): только направление динамики — вверх зелёный, вниз красный,
+ * меньше 0,01 — серый; план показывают бейдж и свечение. Мало оценок — серый, как и карточка без свечения.
+ * Линия, заливка и вертикаль последней точки — одного тона.
+ */
+export function trendTone(ratings, direction) {
+  if (!sampleSufficiency(ratings).sufficient) return 'neutral';
+  return GROWTH.good[direction] ?? 'neutral';
+}
+
+/**
+ * Уровень свечения по плану (`plan.planGlow`) — только при достаточной выборке (D-25): 12 оценок КИБ не светятся так же,
+ * как 4 207 СБ. Бейдж плана и пометка «Мало оценок» остаются; карточка — нейтральная, без статуса.
+ */
+export function statusGlow(value, plan, ratings) {
+  return sampleSufficiency(ratings).sufficient ? planGlow(value, plan) : null;
 }
 
 /** Стекло по статусу плана (J-67) — атрибут карточки, стили в metrics.css; без плана или данных атрибута нет (D-04). */
@@ -203,9 +218,9 @@ export function countNode(count) {
  * Дельта числа оценок — сразу после «N оценок»; без предыдущего периода её нет. Рост объёма нейтрален, спад — тревога (D-49).
  * Незаконченный месяц или квартал (`forecast`) сравнивается с прошлым целиком (J-85): дельта третьим серым, без смысла роста.
  */
-export function countDeltaNode(count, previousCount, forecast = null) {
+export function countDeltaNode(count, previousCount, forecast = null, { arrow = true } = {}) {
   if (!previousCount) return null;
-  return deltaNode(count - previousCount, { shape: DELTA_SHAPES.count, growth: forecast ? UNFINISHED_VOLUME : HEADER_VOLUME, className: 'metric__count-delta' });
+  return deltaNode(count - previousCount, { shape: DELTA_SHAPES.count, growth: forecast ? UNFINISHED_VOLUME : HEADER_VOLUME, className: 'metric__count-delta', arrow });
 }
 
 /** «N оценок» с дельтой — пара общего `valueDelta`: у карточки канала и сегментов одна анатомия, «+557» не уходит на строку ниже. */

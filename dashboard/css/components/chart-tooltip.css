@@ -10,6 +10,7 @@
   border-radius: var(--radius-tooltip);
   color: var(--color-text-secondary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
   width: max-content;
   pointer-events: none;
 }
@@ -32,6 +33,7 @@
   margin-block-end: var(--space-1);
   color: var(--color-text-strong);
   font: var(--type-caption-strong);
+  letter-spacing: var(--tracking-caption-strong);
 }
 
 .chart-tooltip--left {

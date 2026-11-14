@@ -12,6 +12,7 @@ import { CHANNEL_DIMENSION } from '../core/dimensions.js';
 import { element, withFullLabel, withOverflowTitle } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { periodPicker } from '../components/period-picker.js';
+import { monthPicker } from '../components/month-picker.js';
 import { dataImportControl, dataNoticeControl } from './data-import.js';
 import { appUpdateControl } from './app-update.js';
 import { segmented } from '../components/segmented.js';
@@ -125,6 +126,18 @@ function filterControl(dimension, state, label, onChange, reference) {
   return item;
 }
 
+/* Дайджест считается за календарный месяц: на его странице вместо периода — «Месяц» (неделя 16–22.11) */
+function renderMonth({ value, months, onChange }) {
+  const group = element('div', 'filters filters--period');
+  group.setAttribute('role', 'group');
+  group.setAttribute('aria-label', 'Месяц');
+  group.append(monthPicker({
+    id: 'month-popover', month: value, months, onChange,
+    itemClass: 'filters__item', triggerClass: 'filters__control filters__control--period', iconClass: 'filters__calendar-icon',
+  }));
+  return group;
+}
+
 /* J-61: период — своя группа шапки, отдельно от фильтров разрезов: он задаёт время, а не срез */
 function renderPeriod(period, manifestPeriod, onPeriodChange) {
   const group = element('div', 'filters filters--period');
@@ -166,7 +179,8 @@ function moreFiltersButton(hidden) {
   const button = element('button', 'filters__control filters__more');
   button.type = 'button';
   button.dataset.action = 'more-filters';
-  /* Раскрытый список — только стрелка вверх: открытые фильтры сами показывают раскрытие, а подпись
+  /* Шеврон горизонтальный: «›» — фильтры раскроются вправо, в раскрытом поворот на 180° — «‹», свернуть влево.
+     Раскрытый список — только стрелка: открытые фильтры сами показывают раскрытие, а подпись
      «Меньше фильтров» вместе с «С кэшбеком» не помещалась в строку на 1280 */
   const sync = () => {
     button.setAttribute('aria-expanded', String(moreOpen));
@@ -174,11 +188,11 @@ function moreFiltersButton(hidden) {
     if (moreOpen) {
       button.setAttribute('aria-label', 'Свернуть фильтры');
       button.title = 'Свернуть фильтры';
-      button.replaceChildren(icon('chevron-down', 'filters__more-icon'));
+      button.replaceChildren(icon('chevron-right', 'filters__more-icon'));
     } else {
       button.removeAttribute('aria-label');
       button.removeAttribute('title');
-      button.replaceChildren(element('span', 'filters__control-label', 'Ещё фильтры'), icon('chevron-down', 'filters__more-icon'));
+      button.replaceChildren(element('span', 'filters__control-label', 'Ещё фильтры'), icon('chevron-right', 'filters__more-icon'));
     }
     for (const node of hidden) node.hidden = !moreOpen;
   };
@@ -259,6 +273,8 @@ export function renderHeader(host, context) {
     onCashbackChange,
     onFiltersReset,
     slim = false,
+    month = null,
+    pageTitle = null,
   } = context;
 
   let shell = shells.get(host);
@@ -277,8 +293,11 @@ export function renderHeader(host, context) {
 
   const barBefore = [renderChannels(channels, state, label, onChannelChange)];
   /* Период — тот же разрешённый период, по которому считают карточки: иначе шапка и цифры расходятся */
-  barBefore.push(renderPeriod(period, manifest.period, onPeriodChange));
-  if (!slim) {
+  /* `month` — страница дайджеста: месяц вместо периода, фильтров среза и кэшбека нет — дайджест считается по всему каналу */
+  barBefore.push(month ? renderMonth(month) : renderPeriod(period, manifest.period, onPeriodChange));
+  if (month) {
+    /* срез дайджест не сужает — фильтров нет */
+  } else if (!slim) {
     const filters = renderFilters(dimensions, state, label, onFilterChange, reference, onFiltersReset, { onCashbackChange });
     if (filters) barBefore.push(filters);
   } else {
@@ -295,10 +314,22 @@ export function renderHeader(host, context) {
   barAfter.push(themeToggle());
 
   const headAfter = [];
+  /*
+    Заголовок страницы (неделя 16–22.11) — h1 в начале строки под фильтрами: «Главная» и «Для аналитика» выглядят
+    одинаково, без него не видно, где ты. `visible: false` — страница, чья первая карточка уже называет её (дайджест,
+    роли, «Обратная связь»): h1 только для screen reader, без повтора на экране
+  */
+  const meta = element('div', 'shell-head__meta');
+  if (pageTitle) {
+    const title = element('h1', pageTitle.visible ? 'shell-head__title' : 'visually-hidden', pageTitle.text);
+    meta.append(title);
+  }
   /* J-65: база дельт всех карточек метрик — одной строкой под фильтрами, а не под каждой дельтой (было J-37) */
-  if (comparedTo && !slim) {
-    const meta = element('div', 'shell-head__meta');
+  if (comparedTo && !slim && !month) {
     meta.append(element('span', 'shell-head__compared', bindShortWords(`Изменения в карточках метрик — к ${formatDayRange(comparedTo.from, comparedTo.to)}`)));
+  }
+  if (meta.childNodes.length) {
+    if (!meta.querySelector('.shell-head__title, .shell-head__compared')) meta.classList.add('shell-head__meta--hidden');
     headAfter.push(meta);
   }
 

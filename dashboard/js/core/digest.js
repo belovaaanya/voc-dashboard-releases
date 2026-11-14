@@ -277,6 +277,19 @@ export const ROLE_ORDER = ['Предприниматель', 'Альфа-Бос�
 export const ROLE_SLOTS = ROLE_ORDER.length;
 const ROLE_PROBLEMS = 3;
 
+/*
+  Оценки месяца у ролей вне четырёх плиток (J-197 их не показывает): всего и первые OTHER_ROLES_SHOWN по числу оценок —
+  тихой строкой внизу страницы, чтобы эти оценки не пропадали из виду. Оценки без роли сюда не входят
+*/
+const OTHER_ROLES_SHOWN = 3;
+function otherRoles(rows) {
+  const counts = new Map();
+  for (const { role } of rows) if (role && !ROLE_ORDER.includes(role)) counts.set(role, (counts.get(role) ?? 0) + 1);
+  const top = [...counts].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0], 'ru'))
+    .map(([role, count]) => ({ role, count }));
+  return { total: top.reduce((sum, { count }) => sum + count, 0), roles: top.length, top: top.slice(0, OTHER_ROLES_SHOWN) };
+}
+
 export function buildRoles({ rows, month, reference, channel }) {
   const previousMonth = shiftMonth(month, -1);
   const current = inMonth(rows, month);
@@ -294,6 +307,7 @@ export function buildRoles({ rows, month, reference, channel }) {
     month,
     weeks,
     months: trendMonths,
+    others: otherRoles(current),
     plan: planFor(reference?.plan, { channel, from, to }) ?? null,
     roles: roles.map((role) => {
       const pick = (list) => list.filter((row) => row.role === role);

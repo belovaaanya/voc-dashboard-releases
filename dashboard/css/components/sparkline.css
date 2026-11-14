@@ -88,6 +88,7 @@
 /* Значения VOC над точками линий дайджеста — кеглем текста, а не оси: их читают, а не сверяют */
 .sparkline-labels--glow .sparkline-labels__value {
   font: var(--type-text);
+  letter-spacing: var(--tracking-text);
 }
 
 .sparkline-labels--glow .sparkline__marker {
@@ -153,6 +154,7 @@
   transform: translate(-50%, var(--label-shift));
   color: var(--color-text-secondary);
   font: var(--type-axis);
+  letter-spacing: var(--tracking-axis);
   white-space: nowrap;
   pointer-events: none;
 }
@@ -204,6 +206,8 @@
   transform: translateX(-50%);
   color: var(--color-text-tertiary);
   font: var(--type-axis);
+  /* Только даты на узкой линии сегмента: разрядка оси сводила «26.10» и «09.11» вплотную */
+  letter-spacing: var(--tracking-numeric);
   white-space: nowrap;
 }
 

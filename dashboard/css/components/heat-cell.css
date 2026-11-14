@@ -11,6 +11,7 @@
   background: var(--heat-cell-surface);
   color: var(--color-text-strong);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
   transition: border-color var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard);
 }
 
@@ -80,4 +81,5 @@ button.heatmap-cell {
   border-color: var(--cell-ring);
   box-shadow: 0 0 0 var(--focus-ring) var(--cell-ring);
   font: var(--type-caption-strong);
+  letter-spacing: var(--tracking-caption-strong);
 }

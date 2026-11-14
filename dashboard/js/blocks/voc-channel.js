@@ -19,12 +19,13 @@ import { CHANNEL_DIMENSION } from '../core/dimensions.js';
 import { appendAll, element } from '../ui/dom.js';
 import { formatVoc } from '../core/format.js';
 import { voc, vocDelta } from '../core/metrics.js';
-import { planFor, planGlow } from '../core/plan.js';
+import { planFor } from '../core/plan.js';
 import { withFilter } from '../state/url-state.js';
 import {
   badgeNode,
   countGroupNode,
   setPlanGlow,
+  statusGlow,
   forecastNode,
   leadNode,
   metaRowNode,
@@ -84,7 +85,7 @@ export function renderVocChannel(block, context) {
   });
 
   block.setHead({ note: badgeNode(value, plan) });
-  setPlanGlow(block, planGlow(value, plan));
+  setPlanGlow(block, statusGlow(value, plan, slice));
 
   /*
     Анатомия сегментов: дельта VOC справа сверху от числа; без сравнения слот пуст и держит место (B-07).

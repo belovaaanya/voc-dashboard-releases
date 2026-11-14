@@ -33,12 +33,14 @@
   margin-inline-end: var(--space-1);
   color: var(--color-text-tertiary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 .insight-help__group {
   margin: var(--space-3) 0 var(--space-2);
   color: var(--color-text-tertiary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 .insight-kind {
@@ -54,6 +56,7 @@
   box-shadow: var(--control-raised-edge);
   color: var(--color-text-secondary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
   white-space: nowrap;
   cursor: pointer;
 }
@@ -81,6 +84,7 @@
   color: var(--color-text-tertiary);
   /* Шрифт кнопки — роль подписи, а не 13,33 px браузера */
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
   cursor: pointer;
 }
 
@@ -103,6 +107,7 @@
   overflow: hidden auto;
   overscroll-behavior: contain;
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
   text-align: start;
 }
 
@@ -130,6 +135,7 @@
   gap: var(--space-1) var(--space-3);
   margin: 0;
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 .insight-help__key {
@@ -139,6 +145,11 @@
 .insight-help__value {
   color: var(--color-text-secondary);
   text-wrap: pretty;
+}
+
+/* Иконка не липнет к подписи: от неё 8, как в строке ленты; между подписью и числом — прежние 4 */
+.insight-kind__label {
+  margin-inline-start: var(--space-1);
 }
 
 .insight-kind:hover,
@@ -157,11 +168,13 @@
   box-shadow: 0 1px 3px var(--channel-selected-shadow);
   color: var(--channel-selected-text);
   font: var(--type-caption-strong);
+  letter-spacing: var(--tracking-caption-strong);
 }
 
 .insight-kind[aria-pressed='true'] .insight-kind__count {
   color: var(--channel-selected-text);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 /* Высоту строки задаёт левая колонка (D-55): список, не влезающий в неё, прокручивается сам */
@@ -231,6 +244,7 @@
   align-items: center;
   height: 1lh;
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 .insight-row__headline,
@@ -257,11 +271,13 @@
   overflow-wrap: anywhere;
   color: var(--color-text-secondary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 .insight-row__value {
   flex: 0 0 auto;
   font: var(--type-caption-strong);
+  letter-spacing: var(--tracking-caption-strong);
 }
 
 /* Ревью 13.11: одна структура у всех строк — текст слева переносится внутри своей колонки, VOC всегда справа */
@@ -270,6 +286,7 @@
   align-items: start;
   color: var(--color-text-tertiary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 .insight-row__slice {
@@ -326,6 +343,7 @@
   box-shadow: var(--control-raised-edge);
   color: var(--color-text-secondary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
   cursor: pointer;
 }
 

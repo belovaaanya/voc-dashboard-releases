@@ -15,17 +15,17 @@ import { colourScale } from '../core/antidrivers.js';
 import { STABILITY_PLAN, buildDigest, filledFrom, buildPlatforms, buildRoles, buildTriggers, defaultMonth, monthsOf } from '../core/digest.js';
 import { element } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
-import { MONTHS, formatBucket, monthName, formatCount, formatImpact, formatRatings, formatShare, formatVoc, plural } from '../core/format.js';
+import { MONTHS, formatBucket, formatCount, formatImpact, formatRatings, formatShare, formatVoc, plural } from '../core/format.js';
 import { roundDelta, roundImpact, roundVoc } from '../core/round.js';
 import { MOBILE_CHANNEL } from '../core/dimensions.js';
 import { MINIMUM_RATINGS } from '../core/sufficiency.js';
 import { DELTA_SHAPES, GROWTH, countGroupNode, countNode, leadNode, metaRowNode, planCaptionNode, pairNode, planDotNode, valueNode } from './metric-card.js';
 import { valueDelta } from '../components/value-delta.js';
+import { monthTitle } from '../components/month-picker.js';
 
 const monthIndex = (month) => Number(month.slice(5, 7)) - 1;
 const MONTHS_PREPOSITIONAL = ['январе', 'феврале', 'марте', 'апреле', 'мае', 'июне', 'июле', 'августе', 'сентябре', 'октябре', 'ноябре', 'декабре'];
-export const monthTitle = (month) => `${capitalized(monthName(month))} ${month.slice(0, 4)}`;
-const capitalized = (text) => text.charAt(0).toUpperCase() + text.slice(1);
+export { monthTitle };
 const monthShort = (month) => formatBucket(`${month}-01`, 'month');
 const percent = (share) => (share === null || share === undefined ? '—' : formatShare(share * 100));
 const vocText = (value) => (value === null ? '—' : formatVoc(roundVoc(value)));
@@ -43,12 +43,26 @@ function digestOf(context) {
   return digest;
 }
 
-/* J-176: месяц дайджеста — месяц конца периода шапки; своего выбора месяца у карточки нет */
+/*
+  Месяц дайджеста — явный выбор «Месяц» в шапке страницы (`month` в URL, неделя 16–22.11; пересматривает J-176, где
+  месяц брался из конца периода шапки и 01.04–30.06 молча давал «Май»). Старая ссылка без `month` — как раньше: месяц
+  конца периода, если в нём есть оценки, иначе последний полный месяц
+*/
 export function selectedMonth(context) {
   const months = monthsOf(context.channelRows);
+  return months.includes(context.state.month) ? context.state.month : periodMonth(context);
+}
+
+/* J-176: месяц конца периода шапки, если в нём есть оценки, иначе последний полный. Страница ролей живёт по
+   периоду шапки — месяц, выбранный в дайджесте, на неё не переходит */
+function periodMonth(context) {
   const fromPeriod = context.period?.to?.slice(0, 7);
-  if (months.includes(fromPeriod)) return fromPeriod;
-  return months.includes(context.state.month) ? context.state.month : defaultMonth(context.channelRows);
+  return monthsOf(context.channelRows).includes(fromPeriod) ? fromPeriod : defaultMonth(context.channelRows);
+}
+
+/** Выбор месяца для шапки страницы дайджеста: месяцы с оценками канала и выбранный. */
+export function digestMonthControl(context, onChange) {
+  return { value: selectedMonth(context), months: monthsOf(context.channelRows), onChange };
 }
 
 /* Линия полугода — sparkline карточек: VOC с поправкой с первого месяца с оценками; подпись — первый и последний месяц */
@@ -111,16 +125,19 @@ function monthTable(months, rows) {
   return table;
 }
 
-function unavailable(block) {
+/* Дайджест не сужается фильтрами — пустой блок советует другой месяц, а не «снимите фильтры» (неделя 16–22.11) */
+const DIGEST_EMPTY = { title: 'Нет данных за этот месяц', detail: 'Выберите другой месяц в шапке.' };
+
+function unavailable(block, texts) {
   block.setHead();
-  block.setState(EMPTY);
+  block.setState(EMPTY, texts);
 }
 
 export function renderDigestSummary(block, context) {
   const digest = digestOf(context);
   /* Заголовок страницы — «VOC-дайджест · Месяц ГГГГ» ролью --type-page-title (card--page-head); канал виден в шапке дашборда */
   block.setTitle(digest ? `VOC-дайджест · ${monthTitle(digest.month)}` : 'VOC-дайджест');
-  if (!digest) return unavailable(block);
+  if (!digest) return unavailable(block, DIGEST_EMPTY);
   block.setHead({ marker: planDotNode(digest.voc.voc, digest.voc.plan) });
   const content = element('div', 'digest-summary');
 
@@ -150,7 +167,7 @@ export const digestSegment = (index) => (block, context) => {
   const digest = digestOf(context);
   const segment = digest?.segments[index];
   block.setTitle(segment ? `VOC ${segment.code}` : 'Сегмент');
-  if (!segment || !segment.count) return unavailable(block);
+  if (!segment || !segment.count) return unavailable(block, DIGEST_EMPTY);
   block.setHead();
   const content = element('div', 'digest-segment');
   const numbers = element('div', 'metric digest-segment__numbers');
@@ -225,7 +242,7 @@ function hbarsHead() {
 export function renderDigestDko(block, context) {
   const digest = digestOf(context);
   block.setTitle('ДКО: антидрайверы');
-  if (!digest?.groups.length) return unavailable(block);
+  if (!digest?.groups.length) return unavailable(block, DIGEST_EMPTY);
   const damage = dkoMetric === 'damage';
   block.setHead({ controls: [segmented({
     label: 'Числа антидрайверов дайджеста',
@@ -275,7 +292,7 @@ export function renderDigestStability(block, context) {
   block.setTitle('ДКО: стабильность');
   const points = digest?.stability ?? [];
   /* Нет урона ни в одном месяце (данных нет или все нули) — пустое состояние карточки, а не ряд пустых столбиков */
-  if (!points.some(({ damage }) => damage !== null && roundImpact(damage) !== 0)) return unavailable(block);
+  if (!points.some(({ damage }) => damage !== null && roundImpact(damage) !== 0)) return unavailable(block, DIGEST_EMPTY);
   const [previous, current] = points.slice(-2).map(({ damage }) => (damage === null ? null : roundImpact(damage)));
   const shift = current === null || previous === null ? null : current - previous;
   block.setHead({ note: shift === null ? null : leadNode(shift, { shape: { round: roundImpact, format: formatImpact } }) });
@@ -319,9 +336,9 @@ export function renderDigestStability(block, context) {
 export function renderDigestTriggers(block, context) {
   const digest = digestOf(context);
   block.setTitle('Триггеры: драйверы и антидрайверы');
-  if (!digest) return unavailable(block);
+  if (!digest) return unavailable(block, DIGEST_EMPTY);
   const triggers = buildTriggers({ rows: context.channelRows, month: digest.month, reference: context.reference, label: context.label });
-  if (!triggers.drivers.length && !triggers.antidrivers.length) return unavailable(block);
+  if (!triggers.drivers.length && !triggers.antidrivers.length) return unavailable(block, DIGEST_EMPTY);
   block.setHead();
   const peak = Math.max(0.0001, ...[...triggers.drivers, ...triggers.antidrivers].map(({ impact }) => Math.abs(impact)));
   const content = element('div', 'digest-triggers');
@@ -357,10 +374,10 @@ export function renderDigestPlatforms(block, context) {
   block.setTitle('iOS / Android');
   /* Карточка есть только у мобильного канала: у других каналов ОС в выгрузке нет, пустая карточка не нужна */
   block.element.hidden = context.state.channel !== MOBILE_CHANNEL;
-  if (!digest || block.element.hidden) return unavailable(block);
+  if (!digest || block.element.hidden) return unavailable(block, DIGEST_EMPTY);
   const detail = buildPlatforms({ rows: context.channelRows, month: digest.month, reference: context.reference });
   const points = detail.platforms.flatMap(({ months }) => months);
-  if (!points.some(({ voc: value }) => value !== null)) return unavailable(block);
+  if (!points.some(({ voc: value }) => value !== null)) return unavailable(block, DIGEST_EMPTY);
   block.setHead();
   const plan = digest.voc.plan;
   const band = plan ? { min: plan.min, max: plan.max } : null;
@@ -437,7 +454,7 @@ function roleRows(context) {
 
 function rolesOf(context) {
   const rows = roleRows(context);
-  const month = selectedMonth(context);
+  const month = periodMonth(context);
   if (!month) return null;
   const key = JSON.stringify([context.state.channel, month]);
   const saved = rolesCache.get(rows);
@@ -460,6 +477,21 @@ const roleTiles = new Map();
 
 function planText(plan) {
   return plan ? ` · план ${formatVoc(plan.min)}–${formatVoc(plan.max)}` : '';
+}
+
+/*
+  Оценки ролей вне четырёх плиток (J-197 их не показывает) — тихой строкой внизу страницы: сколько их всего и у каких ролей
+  больше всего, только числа. Все оценки месяца у четырёх ролей — карточки нет
+*/
+export function renderOtherRoles(block, context) {
+  const others = rolesOf(context)?.others;
+  block.element.hidden = !others?.total;
+  if (!others?.total) return;
+  block.setTitle('Другие роли');
+  block.setHead();
+  const list = others.top.map(({ role, count }) => `${role} — ${formatCount(count)}`).join(', ');
+  const rest = others.roles > others.top.length ? ` и ещё ${others.roles - others.top.length}` : '';
+  block.setContent(element('p', 'roles-others', `Ещё ${formatRatings(others.total)} у других ролей: ${list}${rest}`));
 }
 
 export function renderRoles(block, context) {

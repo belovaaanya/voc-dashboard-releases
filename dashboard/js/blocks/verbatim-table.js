@@ -30,8 +30,14 @@ let tableFilters = {};
 const joined = (values = []) => values.length ? values.join(' · ') : NONE;
 
 /* Порядок и состав — J-21; `filter` — ключ фильтра по значению из verbatim.js. */
+/*
+  Порядок колонок: дата, оценка и комментарий — первыми, чтобы главное было видно без прокрутки при 1440; разрезы —
+  за ними; разметка (ФО, тип проблемы, проблема) и экспертиза УИУКО — в конце
+*/
 const COLUMNS = [
   { key: 'date', label: 'Дата', text: (row) => formatDate(row.date) },
+  { key: 'rating', label: 'Оценка', filter: 'rating', text: (row) => String(row.rating) },
+  { key: 'comment', label: 'Комментарий', text: (row) => row.comment ?? NONE },
   { key: 'segment', label: 'Сегмент', filter: 'segment', text: (row) => row.segment ?? NONE },
   { key: 'role', label: 'Роль', filter: 'role', text: (row) => row.role ?? NONE },
   { key: 'cps', label: 'Дирекция', filter: 'cps', text: (row) => joined(row.cps) },
@@ -41,12 +47,10 @@ const COLUMNS = [
   { key: 'category', label: 'ДКО: категория негатива', full: 'Категория основного негатива', filter: 'category', text: (row) => row.category ?? NONE },
   { key: 'os', label: 'ОС', full: 'Операционная система', filter: 'os', text: (row) => row.os ?? NONE },
   { key: 'appVersion', label: 'Версия приложения', filter: 'appVersion', text: (row) => row.appVersion ?? NONE },
-  { key: 'rating', label: 'Оценка', filter: 'rating', text: (row) => String(row.rating) },
-  { key: 'comment', label: 'Комментарий', text: (row) => row.comment ?? NONE },
-  { key: 'expertise', label: 'Экспертиза УИУКО', full: 'Разбор обращения сотрудником банка, не слова клиента', text: (row) => row.expertise ?? NONE },
   { key: 'domain', label: 'ФО', full: 'Функциональная область', filter: 'domain', text: (row) => row.domain ?? NONE },
   { key: 'problemType', label: 'Тип проблемы', filter: 'problemType', text: (row) => row.problemType ?? NONE },
   { key: 'problem', label: 'Проблема', filter: 'problem', text: (row) => row.problem ?? NONE },
+  { key: 'expertise', label: 'Экспертиза УИУКО', full: 'Разбор обращения сотрудником банка, не слова клиента', text: (row) => row.expertise ?? NONE },
 ];
 
 export const COLUMN_LABELS = COLUMNS.map(({ label }) => label);

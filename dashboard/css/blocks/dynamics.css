@@ -20,6 +20,7 @@
   min-height: var(--space-5);
   color: var(--color-text-tertiary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 .chart-stage {
@@ -50,6 +51,7 @@
 .chart-axis-label {
   fill: var(--color-text-tertiary);
   font: var(--type-axis);
+  letter-spacing: var(--tracking-axis);
 }
 
 .chart-axis-label--y {
@@ -97,6 +99,7 @@
 .chart-legend__count {
   color: var(--color-text-secondary);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 .chart-area {
@@ -202,6 +205,7 @@
 /* Ореол цвета фона: подпись экстремума, которой пришлось лечь на линию, читается поверх неё */
 .chart-point-label {
   font: var(--type-axis);
+  letter-spacing: var(--tracking-axis);
   paint-order: stroke;
   stroke: var(--label-halo-color);
   stroke-width: var(--label-halo);
@@ -282,50 +286,35 @@
 }
 
 /*
-  Карточки крупных событий на графике (неделя 16–22.11, «Для аналитика»): стекло с краем и свечением цвета типа,
-  тонкая ножка того же цвета к дате на оси. Размер — как `CARD` в dynamics.js: раскладка знает его заранее
+  Карточки крупных событий на графике (неделя 16–22.11, «Для аналитика»): плашка подсказки графика (стекло, радиус
+  подсказки), внутри одной строкой — строка ленты календаря: иконка, дата ролью даты ленты, тег типа, VOC сильнее.
+  Высота — как `CARD.height` в dynamics.js: раскладка знает её заранее, ширину меряет по тексту
 */
 .chart-card {
   position: absolute;
   z-index: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: var(--space-1);
-  width: calc(var(--space-10) * 2.8);
-  height: var(--space-10);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--space-6);
   padding: 0 var(--space-2);
-  border-color: color-mix(in srgb, var(--tone) var(--tone-rim), transparent);
-  border-radius: var(--radius-control);
-  box-shadow: var(--glass-shadow), 0 0 var(--space-3) color-mix(in srgb, var(--tone) var(--tone-glow), transparent);
-  color: var(--color-text-strong);
-  text-align: start;
+  border-radius: var(--radius-tooltip);
+  color: var(--color-text-secondary);
+  font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
+  white-space: nowrap;
   cursor: pointer;
 }
 
-.chart-card:hover {
-  border-color: var(--tone);
-}
-
-.chart-card__head {
-  overflow: hidden;
-  color: var(--tone-ink, var(--tone));
-  font: var(--type-caption);
-  white-space: nowrap;
-  text-overflow: ellipsis;
+.chart-card:hover,
+.chart-card:focus-visible {
+  border-color: var(--color-border-strong);
 }
 
 .chart-card__value {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-1);
+  color: var(--color-text-strong);
   font: var(--type-caption-strong);
-}
-
-.chart-card__date {
-  color: var(--color-text-tertiary);
-  font: var(--type-caption);
+  letter-spacing: var(--tracking-caption-strong);
 }
 
 .chart-cards {
@@ -333,11 +322,9 @@
   pointer-events: none;
 }
 
+/* Ножка — нейтральный пунктир, как направляющие сетки графика; цвет края, а не сетки: сетка на ножке теряется */
 .chart-cards__stem {
-  stroke: color-mix(in srgb, var(--tone) var(--tone-rim), transparent);
+  stroke: var(--color-border-strong);
+  stroke-dasharray: 2 4;
   stroke-width: var(--divider-width);
-}
-
-.chart-cards__foot {
-  fill: var(--tone);
 }

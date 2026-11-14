@@ -20,12 +20,12 @@ import { renderDistribution } from './blocks/distribution.js';
 import { conclusionPlaceholder, detachConclusion, renderConclusion } from './blocks/conclusion.js';
 import { renderVerbatimCards } from './blocks/verbatim-cards.js';
 import { renderVerbatimTable } from './blocks/verbatim-table.js';
-import { digestSegment, renderDigestDko, renderDigestPlatforms, renderDigestStability, renderDigestSummary, renderDigestTriggers, renderRoles, digestRole } from './blocks/digest.js';
+import { digestMonthControl, digestSegment, renderDigestDko, renderDigestPlatforms, renderDigestStability, renderDigestSummary, renderDigestTriggers, renderOtherRoles, renderRoles, digestRole } from './blocks/digest.js';
 import { vocSegment } from './blocks/voc-segment.js';
 import { renderPlanDays } from './blocks/plan-days.js';
 import { channelsOf, metricSegments } from './core/dimensions.js';
 import { renderEmptyHeader, renderHeader } from './shell/header.js';
-import { renderSideNav } from './shell/side-nav.js';
+import { SECTIONS, renderSideNav } from './shell/side-nav.js';
 import { alignHeaderAmbient } from './shell/header-ambient.js';
 import { sideToggle } from './components/side-toggle.js';
 import { statusPanel } from './components/status-panel.js';
@@ -56,7 +56,7 @@ const BLOCKS = [
   { id: 'verbatim-cards', title: 'Топ проблем', host: 'problems', modifier: 'card--verbatim', heavy: true, render: renderVerbatimCards, verbatim: true },
   { id: 'insights', title: 'Календарь событий', host: 'rail-main', modifier: 'card--insights card--fill', render: renderInsights, ready: calendarReady },
   /* J-151: таблица прямой речи — на странице «Обратная связь» */
-  { id: 'verbatim-table', title: 'Прямая речь: детализация', host: 'full', modifier: 'card--verbatim-table', page: 'feedback', render: renderVerbatimTable, verbatim: true },
+  { id: 'verbatim-table', title: 'Обратная связь', host: 'full', modifier: 'card--verbatim-table', page: 'feedback', render: renderVerbatimTable, verbatim: true },
   /* J-151: VOC-дайджест — месяц канала по макету */
   { id: 'digest-summary', title: 'VOC-дайджест', host: 'digest-top', modifier: 'card--digest-summary card--page-head card--bare', render: renderDigestSummary, page: 'digest' },
   { id: 'digest-segment-1', title: 'Сегмент', host: 'digest-segments', modifier: 'card--digest-segment', render: digestSegment(0), page: 'digest' },
@@ -69,8 +69,10 @@ const BLOCKS = [
   { id: 'roles', title: 'VOC ролей', host: 'roles', modifier: 'card--roles card--page-head card--bare', render: renderRoles, page: 'roles' },
   /* J-197: плитка на роль, сетка 2×2 — по слоту на каждую из ROLE_SLOTS ролей */
   ...Array.from({ length: ROLE_SLOTS }, (_, index) => ({ id: `role-${index + 1}`, title: 'Роль', host: 'roles', modifier: 'card--role card--avatar-head', render: digestRole(index), page: 'roles' })),
+  /* Оценки ролей вне четырёх плиток — тихой строкой внизу страницы ролей */
+  { id: 'roles-other', title: 'Другие роли', host: 'roles', modifier: 'card--roles-other card--bare', render: renderOtherRoles, page: 'roles' },
 ];
-/* J-151: страница блока; без поля — главная «VOC ЦК» */
+/* J-151: страница блока; без поля — «Главная» */
 const pageOf = (spec) => spec.page ?? DEFAULT_PAGE;
 /* `heavy`: расчёт дольше кадра — на кадрах жеста таймлайна стоит прежнее содержимое, блок обновляется по отпусканию (docs/ui-shell.md#скорость) */
 const waitsForGesture = (spec, live) => live && spec.heavy;
@@ -90,9 +92,8 @@ function channelRowsOf(rows, channel) {
 */
 const ANALYSIS_TITLE = 'Динамика, события и антидрайверы';
 const ANALYSIS_BLOCKS = ['dynamics', 'insights', 'antidrivers', 'verbatim-cards'];
-const VERBATIM_TITLE = 'Прямая речь';
-const VERBATIM_BLOCKS = ['verbatim-table'];
-const VERBATIM_PERIOD = 'verbatim';
+/* Страница «Обратная связь»: одно имя в меню, карточке и таблице; период — один, в шапке дашборда (неделя 16–22.11) */
+const VERBATIM_TITLE = 'Обратная связь';
 /* Колонки внутри карточек-групп: заголовок блока там — h3 под заголовком группы */
 const GROUPED_HOSTS = ['main', 'rail-main', 'drivers', 'problems', 'full'];
 
@@ -163,7 +164,7 @@ function pageHosts() {
 function mountCards(hosts) {
   /* J-40: график, календарь и антидрайверы — одна карточка; её шапка несёт общий период трёх блоков */
   const analysis = groupFromSlot({ id: 'analysis', title: ANALYSIS_TITLE, modifier: 'card--group card--analysis' });
-  /* J-105: у прямой речи свой период в шапке группы; выбор дня на графике её не сужает (J-49) */
+  /* Карточка «Обратная связь» — заголовок без своего периода: таблица живёт по периоду шапки; день графика её не сужает (J-49) */
   const verbatimGroup = groupFromSlot({ id: 'verbatim', title: VERBATIM_TITLE, modifier: 'card--group card--verbatim-group' });
 
   const blocks = new Map();
@@ -172,6 +173,8 @@ function mountCards(hosts) {
     blocks.set(spec.id, block);
     hosts[spec.host].append(block.element);
   }
+  /* Таблицу уже назвал заголовок карточки «Обратная связь» над ней: свой заголовок — только для screen reader */
+  blocks.get('verbatim-table').setTitle('Обратная связь', null, { hidden: true });
 
   const setAll = (state, detail) => {
     analysis.setHead();
@@ -245,7 +248,7 @@ function renderNav(env, context) {
     onNavigate: (page) => {
       const sameView = viewOf(page) === viewOf(state.page);
       setState({ ...state, page });
-      /* Новая страница читается с начала; «VOC ЦК» ↔ «Для аналитика» — та же страница, прокрутка остаётся */
+      /* Новая страница читается с начала; «Главная» ↔ «Для аналитика» — та же страница, прокрутка остаётся */
       if (!sameView) globalThis.scrollTo?.({ top: 0 });
     } });
 }
@@ -256,6 +259,10 @@ function renderPageHeader(env, context) {
   renderHeader(hosts.header, {
     /* J-168: на странице ролей фильтры, кэшбек и база дельт не действуют — в шапке только канал и период */
     slim: state.page === 'roles',
+    /* Заголовок страницы — имя пункта меню; на экране — у вида главной, у остальных его называет первая карточка */
+    pageTitle: { text: SECTIONS.find(({ id }) => id === state.page)?.label ?? SECTIONS[0].label, visible: viewOf(state.page) === DEFAULT_PAGE },
+    /* Дайджест считается по всему каналу за календарный месяц: в шапке канал и «Месяц», без фильтров и периода */
+    month: state.page === 'digest' ? digestMonthControl(context, (month) => setState({ ...state, month })) : null,
     channels,
     dimensions,
     state,
@@ -267,7 +274,7 @@ function renderPageHeader(env, context) {
     dataError: source.dataError,
     rowsInSlice: context.slice.length,
     /* J-65: база дельт карточек метрик — одна строка шапки вместо подписи в каждой карточке */
-    comparedTo: metricsBase(context.previousPeriod, context.rows),
+    comparedTo: viewOf(state.page) === DEFAULT_PAGE ? metricsBase(context.previousPeriod, context.rows) : null,
     onChannelChange: (channel) => setState({ ...state, channel, days: [], detailEvent: null, driver: null }),
     /* Новый общий период снимает local period блоков: иначе блок молча остаётся на старом */
     onPeriodChange: (nextPeriod) =>
@@ -311,28 +318,25 @@ function localContext(env, { localPeriods, eligible, dimensions }, context, id) 
   }, id);
 }
 
-/* J-40: у трёх блоков аналитики один период — `dynamics`, его выбор в шапке группы; у прямой речи — свой */
+/* J-40: у трёх блоков аналитики один период — `dynamics`, его выбор в шапке группы; таблица «Обратная связь» — по шапке */
 function groupContexts(env, resolved, context) {
   const analysisContext = periodOf({
     ...localContext(env, resolved, context, SHARED_PERIOD),
     previewPeriod: (range) => env.cards.analysis.previewPeriod(range),
   }, SHARED_PERIOD);
   analysisContext.periodControl = { ...analysisContext.periodControl, shared: true };
-  const verbatimContext = localContext(env, resolved, context, VERBATIM_PERIOD);
-  verbatimContext.periodControl = { ...verbatimContext.periodControl, shared: true };
   const contextFor = (id) => {
     if (ANALYSIS_BLOCKS.includes(id)) return analysisContext;
-    if (VERBATIM_BLOCKS.includes(id)) return verbatimContext;
     return LOCAL_PERIOD_BLOCKS.includes(id) ? localContext(env, resolved, context, id) : context;
   };
-  return { analysisContext, verbatimContext, contextFor };
+  return { analysisContext, contextFor };
 }
 
 /*
   Догрузка блоков шапки групп не меняет: перерисовка закрыла бы открытый выбор периода. На кадрах жеста шапку,
   уже нарисованную в этом жесте, держит preview таймлайна; отпускание рисует её заново (`expireLive`)
 */
-function paintGroupHeads({ analysis, verbatimGroup }, { analysisContext, verbatimContext }, basePaint, live) {
+function paintGroupHeads({ analysis }, { analysisContext }, basePaint, live) {
   const paint = live ? (id, ...rest) => {
     if (basePaint.isLive(id)) return;
     basePaint(id, ...rest);
@@ -342,7 +346,6 @@ function paintGroupHeads({ analysis, verbatimGroup }, { analysisContext, verbati
   paint('#analysis', analysisContext, (watched) => analysis.setHead({ period: { ...watched.period, picker: watched.periodControl } }), { local: periodIds.get(analysisContext) });
   /* Кнопка календаря — в строке группы, одна на строку */
   if (analysisRow?.querySelector('#rail-main') && !analysisRow.querySelector(':scope > .side-toggle')) analysisRow.append(eventsToggle(analysisRow));
-  paint('#verbatim', verbatimContext, (watched) => verbatimGroup.setHead({ period: { ...watched.period, picker: watched.periodControl } }), { local: periodIds.get(verbatimContext) });
 }
 
 /* Блок с теми же входами стоит; блок с `ready` не из кэша рисуется следующим кадром, скелет — только у первой отрисовки */

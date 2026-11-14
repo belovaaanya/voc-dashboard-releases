@@ -276,6 +276,7 @@ function lineCrosses(rect, line, gap) {
  * рядов `rows` (верх карточки в координатах области); с `height` ряды берутся по всей высоте области. Ряды — сначала
  * подальше от линии VOC в этой дате. Карточка не ложится на другую карточку и на линию; не нашлось места — карточки
  * нет (событие остаётся точкой полосы). Ставится не больше `limit` карточек в порядке `candidates` (от крупного).
+ * Ширина — `candidate.width` (карточка по своему тексту), без неё — `card.width`.
  */
 export function placeCards(candidates, { xs, line = [], width, height = 0, rows: given, card, gap = 4, limit = 5 }) {
   const rows = given ?? [];
@@ -285,13 +286,14 @@ export function placeCards(candidates, { xs, line = [], width, height = 0, rows:
     if (placed.length >= limit) break;
     const center = xs[candidate.index];
     if (center === undefined || center === null) continue;
-    const x = Math.min(Math.max(0, center - card.width / 2), Math.max(0, width - card.width));
-    const near = line.filter((point) => point && point.y !== null && Math.abs(point.x - center) <= card.width / 2);
+    const size = candidate.width ?? card.width;
+    const x = Math.min(Math.max(0, center - size / 2), Math.max(0, width - size));
+    const near = line.filter((point) => point && point.y !== null && Math.abs(point.x - center) <= size / 2);
     const lineY = near.length ? near.reduce((sum, { y }) => sum + y, 0) / near.length : null;
     const ordered = lineY === null ? rows
       : [...rows].sort((left, right) => Math.abs(right + card.height / 2 - lineY) - Math.abs(left + card.height / 2 - lineY));
     for (const y of ordered) {
-      const rect = { x, y, width: card.width, height: card.height };
+      const rect = { x, y, width: size, height: card.height };
       if (placed.some((other) => cardsOverlap(rect, other.rect, gap)) || lineCrosses(rect, line, gap)) continue;
       placed.push({ ...candidate, center, rect });
       break;

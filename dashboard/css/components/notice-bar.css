@@ -10,6 +10,7 @@
   background: var(--control-raised);
   color: var(--color-text-strong);
   font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 .notice-bar[hidden] {
@@ -29,5 +30,6 @@
   background: var(--color-text-strong);
   color: var(--color-on-accent);
   font: var(--type-caption-strong);
+  letter-spacing: var(--tracking-caption-strong);
   cursor: pointer;
 }
