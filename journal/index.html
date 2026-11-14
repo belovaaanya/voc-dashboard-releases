@@ -55,6 +55,7 @@ p{margin:0}
 .dot{width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}
 .t-calc{color:var(--blue)} .t-ui{color:var(--orange)} .t-req{color:var(--purple)} .t-qa{color:var(--yellow)} .t-ship{color:var(--pos)}
 .bg-calc{background:var(--blue-soft)} .bg-ui{background:var(--orange-soft)} .bg-req{background:var(--purple-soft)} .bg-ship{background:var(--pos-soft)} .bg-qa{background:var(--yellow-soft)}
+.t-bug{color:var(--neg)} .bg-bug{background:var(--neg-soft)}
 .num{font-variant-numeric:tabular-nums}
 a{color:inherit}
 
@@ -299,6 +300,7 @@ footer{font-size:12px;color:var(--text-3);padding-top:8px}
       <span class="chip"><span class="dot t-req"></span>Требования</span>
       <span class="chip"><span class="dot t-calc"></span>Аналитика</span>
       <span class="chip"><span class="dot t-ui"></span>Дизайн и удобство</span>
+      <span class="chip"><span class="dot t-bug"></span>Исправлено</span>
       <span class="chip"><span class="dot t-qa"></span>Качество</span>
       <span class="chip"><span class="dot t-ship"></span>Доставка</span>
     </div>
@@ -765,8 +767,8 @@ footer{font-size:12px;color:var(--text-3);padding-top:8px}
 
 <script>
 (function(){
-  var AREA = {req:["Требования","t-req bg-req","t-req"], calc:["Аналитика","t-calc bg-calc","t-calc"], ui:["Дизайн","t-ui bg-ui","t-ui"], qa:["Качество","t-qa bg-qa","t-qa"], ship:["Доставка","t-ship bg-ship","t-ship"]};
-  var ORDER = ["req","calc","ui","qa","ship"];
+  var AREA = {req:["Требования","t-req bg-req","t-req"], calc:["Аналитика","t-calc bg-calc","t-calc"], ui:["Дизайн","t-ui bg-ui","t-ui"], qa:["Качество","t-qa bg-qa","t-qa"], ship:["Доставка","t-ship bg-ship","t-ship"], bug:["Исправлено","t-bug bg-bug","t-bug"]};
+  var ORDER = ["req","calc","ui","bug","qa","ship"];
   function plural(n, one, few, many){var m10=n%10, m100=n%100; return (m10===1&&m100!==11)?one:(m10>=2&&m10<=4&&(m100<12||m100>14))?few:many;}
   function groupItems(items){
     var g = {}; (items||[]).forEach(function(it){var k = AREA[it.area]?it.area:"other"; (g[k]=g[k]||[]).push(it.text);});
