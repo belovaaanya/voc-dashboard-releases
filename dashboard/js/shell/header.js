@@ -17,10 +17,10 @@ import { appUpdateControl } from './app-update.js';
 import { segmented } from '../components/segmented.js';
 import { triggerChoices } from '../components/trigger-choices.js';
 import { filterPopover } from '../components/filter-popover.js';
-import { bindPopover, popoverPanel } from '../ui/popover.js';
 
 /* J-26: дирекции скрыты в шапке; полный набор измерений расчётов сохраняется. */
-const HEADER_DIMENSIONS = ['segment', 'role', 'product', 'trigger', 'os'];
+/* Продукт убран (решение пользователя 14.11): он дублирует триггеры — триггер и так сгруппирован по продуктам в своём списке */
+const HEADER_DIMENSIONS = ['segment', 'role', 'trigger', 'os'];
 /* Редкие фильтры — за кнопкой «Ещё фильтры»: на виду канал, период, сегмент, продукт и триггер. Выбранный редкий фильтр
    виден всегда — чипом, как остальные: активный срез не прячется */
 const MORE_DIMENSIONS = ['role', 'os'];
@@ -52,7 +52,11 @@ function renderDivider() {
 export function filterCaption(dimension, state, label) {
   const selected = state.filters?.[dimension.key] ?? [];
   const caption = element('span', 'filters__control-label');
-  if (!selected.length) caption.textContent = dimension.allCaption;
+  /* «Все …» тоже сжимается многоточием, когда строке не хватает места (раскрыты «Ещё фильтры») — полный текст в подсказке */
+  if (!selected.length) {
+    caption.textContent = dimension.allCaption;
+    withOverflowTitle(caption);
+  }
   else if (selected.length === 1) {
     const [value] = selected;
     caption.textContent = value;
@@ -130,18 +134,22 @@ function renderPeriod(period, manifestPeriod, onPeriodChange) {
   return group;
 }
 
-/* J-115: «С кэшбеком» сужает все расчёты, как фильтр (J-21, J-103); переключатель — в настройках шапки, не в строке фильтров */
-function cashbackSwitch(onChange) {
+/*
+  J-115: «С кэшбеком» сужает все расчёты, как фильтр (J-21, J-103) — переключатель в конце строки фильтров. В кнопке
+  настроек (J-230) его не находили: вернулся в строку, на виду
+*/
+function cashbackSwitch(state, onChange) {
   const item = element('label', 'filters__item filters__switch');
   const input = element('input', 'filters__switch-input');
   input.type = 'checkbox';
   input.setAttribute('role', 'switch');
   input.dataset.action = 'cashback';
-  input.addEventListener('change', () => onChange(input.checked));
+  input.checked = state.includeCashback !== false;
+  input.addEventListener('change', () => onChange?.(input.checked));
   const track = element('span', 'filters__switch-track');
   track.setAttribute('aria-hidden', 'true');
   item.append(input, track, element('span', 'filters__switch-label', 'С кэшбеком'));
-  return { item, input };
+  return item;
 }
 
 /* J-128: «Сбросить фильтры» — только когда выбран хотя бы один фильтр среза; канал, период, кэшбек и выбор в блоках не трогает */
@@ -158,10 +166,20 @@ function moreFiltersButton(hidden) {
   const button = element('button', 'filters__control filters__more');
   button.type = 'button';
   button.dataset.action = 'more-filters';
+  /* Раскрытый список — только стрелка вверх: открытые фильтры сами показывают раскрытие, а подпись
+     «Меньше фильтров» вместе с «С кэшбеком» не помещалась в строку на 1280 */
   const sync = () => {
     button.setAttribute('aria-expanded', String(moreOpen));
-    button.replaceChildren(element('span', 'filters__control-label', moreOpen ? 'Меньше фильтров' : 'Ещё фильтры'),
-      icon('chevron-down', 'filters__more-icon'));
+    button.classList.toggle('filters__more--open', moreOpen);
+    if (moreOpen) {
+      button.setAttribute('aria-label', 'Свернуть фильтры');
+      button.title = 'Свернуть фильтры';
+      button.replaceChildren(icon('chevron-down', 'filters__more-icon'));
+    } else {
+      button.removeAttribute('aria-label');
+      button.removeAttribute('title');
+      button.replaceChildren(element('span', 'filters__control-label', 'Ещё фильтры'), icon('chevron-down', 'filters__more-icon'));
+    }
     for (const node of hidden) node.hidden = !moreOpen;
   };
   button.addEventListener('click', () => {
@@ -172,13 +190,14 @@ function moreFiltersButton(hidden) {
   return button;
 }
 
-/* J-174: `keys` — какие фильтры показать; страница ролей показывает только ОС (у АБМ). `more` — редкие фильтры за кнопкой */
-function renderFilters(dimensions, state, label, onFilterChange, reference, onFiltersReset, { keys = HEADER_DIMENSIONS, more = MORE_DIMENSIONS } = {}) {
+/* J-174: `keys` — какие фильтры показать; страница ролей показывает только ОС (у АБМ) и без кэшбека (J-168).
+   `more` — редкие фильтры за кнопкой; `onCashbackChange` — переключатель «С кэшбеком» в конце строки */
+function renderFilters(dimensions, state, label, onFilterChange, reference, onFiltersReset, { keys = HEADER_DIMENSIONS, more = MORE_DIMENSIONS, cashback = true, onCashbackChange } = {}) {
   const bar = element('div', 'filters');
   bar.setAttribute('role', 'group');
   bar.setAttribute('aria-label', 'Фильтры среза');
   const controls = keys.map((key) => dimensions.find((candidate) => candidate.key === key)).filter(Boolean);
-  if (!controls.length) return null;
+  if (!controls.length && !cashback) return null;
   const folded = [];
   controls.forEach((dimension, index) => {
     const nodes = [...(index ? [renderDivider()] : []), filterControl(dimension, state, label, onFilterChange, reference)];
@@ -187,33 +206,10 @@ function renderFilters(dimensions, state, label, onFilterChange, reference, onFi
     bar.append(...nodes);
   });
   if (folded.length) bar.append(renderDivider(), moreFiltersButton(folded));
+  if (cashback) bar.append(...(controls.length ? [renderDivider()] : []), cashbackSwitch(state, onCashbackChange));
   const shown = keys.filter((key) => dimensions.some((candidate) => candidate.key === key));
   if (shown.some((key) => state.filters?.[key]?.length)) bar.append(resetFilters(onFiltersReset));
   return bar;
-}
-
-/* Настройки шапки — иконка-шестерёнка с popover: «С кэшбеком» по умолчанию включён, как раньше в строке фильтров.
-   Узел создаётся один раз на шапку: пересозданный popover на переключении проявлялся бы заново */
-function settingsControl(shell, state, onCashbackChange) {
-  if (!shell.settings) {
-    const item = element('div', 'shell-head__action shell-head__settings');
-    const trigger = element('button', 'shell-head__button shell-head__button--icon');
-    trigger.type = 'button';
-    trigger.dataset.action = 'settings';
-    trigger.setAttribute('aria-label', 'Настройки расчёта');
-    trigger.title = 'Настройки расчёта';
-    trigger.append(icon('settings', 'shell-head__icon'));
-    const panel = popoverPanel({ id: 'settings-popover', title: 'Настройки расчёта', className: 'shell-head__settings-popover', align: 'end' });
-    const cashback = cashbackSwitch((checked) => shell.settings.onCashbackChange?.(checked));
-    panel.append(cashback.item,
-      element('p', 'shell-head__settings-note', 'Выключите, чтобы считать VOC без оценок по операциям с кэшбеком.'));
-    item.append(trigger, panel);
-    bindPopover(item, trigger, panel);
-    shell.settings = { item, input: cashback.input };
-  }
-  shell.settings.onCashbackChange = onCashbackChange;
-  shell.settings.input.checked = state.includeCashback !== false;
-  return shell.settings.item;
 }
 
 /* Меняет соседей `kept`, не вынимая его: вынутый и вставленный узел теряет фокус и перезапускает CSS-анимацию */
@@ -267,7 +263,7 @@ export function renderHeader(host, context) {
 
   let shell = shells.get(host);
   if (!shell) {
-    shell = { head: element('header', 'shell-head'), bar: element('div', 'shell-head__bar'), settings: null };
+    shell = { head: element('header', 'shell-head'), bar: element('div', 'shell-head__bar') };
     shells.set(host, shell);
   }
   const { head, bar } = shell;
@@ -283,11 +279,11 @@ export function renderHeader(host, context) {
   /* Период — тот же разрешённый период, по которому считают карточки: иначе шапка и цифры расходятся */
   barBefore.push(renderPeriod(period, manifest.period, onPeriodChange));
   if (!slim) {
-    const filters = renderFilters(dimensions, state, label, onFilterChange, reference, onFiltersReset);
+    const filters = renderFilters(dimensions, state, label, onFilterChange, reference, onFiltersReset, { onCashbackChange });
     if (filters) barBefore.push(filters);
   } else {
     /* J-174: на странице ролей из фильтров — только ОС, она есть лишь у АБМ; за кнопку её не прячем */
-    const osFilter = renderFilters(dimensions, state, label, onFilterChange, reference, onFiltersReset, { keys: ['os'], more: [] });
+    const osFilter = renderFilters(dimensions, state, label, onFilterChange, reference, onFiltersReset, { keys: ['os'], more: [], cashback: false });
     if (osFilter) barBefore.push(osFilter);
   }
   const barAfter = [];
@@ -310,13 +306,13 @@ export function renderHeader(host, context) {
   const focused = host.contains(document.activeElement) ? document.activeElement : null;
   const focusedDimension = focused?.dataset.dimension ?? focused?.dataset.clears;
   const focusedReset = focused?.dataset.action === 'filters-reset';
-  /* Настройки расчёта: «С кэшбеком» — не фильтр среза, а правило подсчёта; на странице ролей не действует (J-168) */
-  if (slim) bar.replaceChildren(...barBefore, ...barAfter);
-  else replaceAround(bar, settingsControl(shell, state, onCashbackChange), barBefore, barAfter);
+  const focusedCashback = focused?.dataset.action === 'cashback';
+  bar.replaceChildren(...barBefore, ...barAfter);
   replaceAround(head, bar, headBefore, headAfter);
   if (head.parentElement !== host) host.replaceChildren(head);
   /* После сброса кнопки нет: фокус — на первый фильтр, а не в начало страницы */
   if (focusedReset) head.querySelector('.filters:not(.filters--period) .filters__control')?.focus();
+  else if (focusedCashback) head.querySelector('[data-action="cashback"]')?.focus();
   else if (focusedDimension) {
     [...head.querySelectorAll('.filters__control')].find((control) => control.dataset.dimension === focusedDimension)?.focus();
   }

@@ -394,8 +394,8 @@
 /* ── J-114: таблица проблем — строка на проблему, колонки разрезов и шагов периода ── */
 
 .problem-table {
+  /* Ширина — по колонкам: свободное место не растягивает шаги динамики, остаётся справа пустым */
   width: max-content;
-  min-width: 100%;
   border-spacing: 0;
   color: var(--color-text-secondary);
   font: var(--type-caption);
@@ -536,9 +536,18 @@
 }
 
 /* Текст строк — с тем же межбуквенным, что у таблиц «Ролей» и дайджеста (--tracking-caption) */
+/*
+  Названия и группы — роль --type-table-name (в тёмной теме тоньше, текст не тяжелеет) и разрядка --tracking-table;
+  группа — той же роли и тише цветом, не сильнее названия. Выбранное название — по-прежнему жирнее (D-26)
+*/
+.problem-table__name:not([aria-pressed='true']) .problem-table__name-text,
+.problem-table__group-name span {
+  font: var(--type-table-name);
+}
+
 .problem-table__name-text,
 .problem-table__group-name span {
-  letter-spacing: var(--tracking-caption);
+  letter-spacing: var(--tracking-table);
 }
 
 /* Ручка ширины колонки названий — у правого края шапки, как у тепловой карты (J-68): видна при наведении и фокусе */
@@ -649,9 +658,12 @@
 }
 
 .problem-step-pill.heatmap-cell {
-  width: 100%;
-  min-width: var(--space-10);
-  padding: var(--space-1) var(--space-2);
+  /*
+    Пилюля одной ширины во всех шагах и периодах — как ячейка тепловой карты, а не во всю колонку. 64, а не 80 карты:
+    месяц по неделям (5 шагов) помещается на главной при 1440 без прокрутки; «−0,024» и «157 жалоб» входят
+  */
+  width: calc(var(--space-8) * 2);
+  padding: var(--space-1);
   white-space: nowrap;
 }
 

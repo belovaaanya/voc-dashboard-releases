@@ -16,9 +16,16 @@ export const PRESETS = [
   'calendar-year',
   'days-365',
   'years-5',
+  /* Выбор периода шапки (14.11): быстрые окна, прошлая неделя, третий месяц и квартал назад */
+  'days-7',
+  'days-30',
+  'previous-week',
+  'previous-month-2',
+  'previous-quarter-2',
 ];
 
-const ROLLING_DAYS = { 'days-365': 365 };
+/* Окно последних N дней — до последней даты выгрузки включительно */
+const ROLLING_DAYS = { 'days-7': 7, 'days-30': 30, 'days-365': 365 };
 
 /** Границы календарного периода preset'а, внутрь которого попадает `date`. */
 const CALENDAR_BOUNDS = {
@@ -27,6 +34,8 @@ const CALENDAR_BOUNDS = {
   'previous-month': (year, month) => [[year, month - 1, 1], [year, month, 0]],
   quarter: (year, month) => [[year, month - (month % 3), 1], [year, month - (month % 3) + 3, 0]],
   'previous-quarter': (year, month) => [[year, month - (month % 3) - 3, 1], [year, month - (month % 3), 0]],
+  'previous-month-2': (year, month) => [[year, month - 2, 1], [year, month - 1, 0]],
+  'previous-quarter-2': (year, month) => [[year, month - (month % 3) - 6, 1], [year, month - (month % 3) - 3, 0]],
   'half-year': (year, month) =>
     month < 6 ? [[year, 0, 1], [year, 6, 0]] : [[year, 6, 1], [year, 12, 0]],
   'calendar-year': (year) => [[year, 0, 1], [year, 12, 0]],
@@ -42,6 +51,8 @@ const CALENDAR_STEP = {
   'previous-month': { months: 1 },
   quarter: { months: 3 },
   'previous-quarter': { months: 3 },
+  'previous-month-2': { months: 1 },
+  'previous-quarter-2': { months: 3 },
   'half-year': { months: 6 },
   'calendar-year': { months: 12 },
   'years-5': { months: 12 },
@@ -56,7 +67,15 @@ export function calendarRange(preset, date) {
   return { from: isoDate(start), to: isoDate(end) };
 }
 
+/* Прошлая неделя — последняя полная неделя пн–вс до даты выгрузки: если выгрузка кончается воскресеньем, это её неделя */
+function previousWeek(today) {
+  const day = parseIso(today);
+  const sunday = addDays(day, -(day.getUTCDay() % 7));
+  return { from: isoDate(addDays(sunday, -6)), to: isoDate(sunday) };
+}
+
 export function resolvePreset(preset, today) {
+  if (preset === 'previous-week') return { preset, ...previousWeek(today), complete: true };
   const rollingDays = ROLLING_DAYS[preset];
   if (rollingDays) {
     return {
@@ -104,7 +123,7 @@ function precedingRange(period) {
   };
 }
 
-const BLOCK_OF = { 'previous-month': 'month', 'previous-quarter': 'quarter' };
+const BLOCK_OF = { 'previous-month': 'month', 'previous-quarter': 'quarter', 'previous-month-2': 'month', 'previous-quarter-2': 'quarter' };
 
 function shiftCalendarBlock(preset, from, months) {
   const start = parseIso(from);

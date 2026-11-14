@@ -147,6 +147,33 @@
   box-shadow: 0 0 var(--space-1) var(--tone);
 }
 
+/*
+  Иконка типа события календаря (неделя 16–22.11, референс дизайнера): скруглённый квадрат со светящимся градиентом —
+  тёмная сердцевина сверху и яркий край тона снизу. Сердцевина — поверхность темы, поэтому в светлой теме она светлая:
+  градиент «наоборот», тон по-прежнему виден краем и свечением. Только CSS, без картинок
+*/
+.status-dot--event {
+  width: var(--icon-size);
+  height: var(--icon-size);
+  border-radius: var(--radius-tag);
+  background:
+    radial-gradient(ellipse 75% 60% at 50% 28%, var(--color-surface-sunken) 0%, transparent 72%),
+    radial-gradient(circle at 50% 110%, color-mix(in oklab, var(--tone), var(--color-text-strong) 18%) 0%, var(--tone) 55%, color-mix(in oklab, var(--tone) 70%, var(--color-surface-sunken)) 100%);
+  box-shadow:
+    0 0 var(--space-2) color-mix(in srgb, var(--tone) 45%, transparent),
+    inset 0 0 0 var(--hairline) color-mix(in srgb, var(--tone) 60%, transparent);
+}
+
+.status-dot--event-sm {
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
+  border-radius: var(--radius-tag);
+  background:
+    radial-gradient(ellipse 75% 60% at 50% 28%, var(--color-surface-sunken) 0%, transparent 72%),
+    radial-gradient(circle at 50% 110%, var(--tone) 0%, var(--tone) 55%, color-mix(in oklab, var(--tone) 70%, var(--color-surface-sunken)) 100%);
+  box-shadow: 0 0 var(--space-1) color-mix(in srgb, var(--tone) 40%, transparent);
+}
+
 /* Длинный тег переносится, а не режется многоточием */
 .tag {
   display: inline-block;
@@ -194,9 +221,16 @@
   светлым концом шкалы аварий (J-25), поэтому тон — холодный бирюзовый между фиолетовым «Нового среза» и зелёным:
   в тёплой шкале аварий и снижений VOC такого нет
 */
-.insights .tone--data-loss { --tone: color-mix(in oklab, var(--color-purple), var(--color-positive)); }
+.tone--data-loss { --tone: color-mix(in oklab, var(--color-purple), var(--color-positive)); }
+/* Инцидент — свой цвет иконки между красным снижения и фиолетовым нового среза: тип читается и без подписи */
+.tone--incident { --tone: color-mix(in oklab, var(--color-negative), var(--color-purple)); }
 /* В светлой теме бирюзовый текстом на белом тусклее 4,5:1 — текст тега тёмный, тон несёт заливка и точка (D-28) */
-:root[data-theme='light'] .insights .tone--data-loss { --tone-ink: var(--color-text-strong); }
+:root[data-theme='light'] .tone--data-loss { --tone-ink: var(--color-text-strong); }
+/*
+  Выбранная строка календаря — плашка канала: текст тега её цветом, заливка тона остаётся. Правило сильнее светлых
+  переопределений тонов выше (`:root` в селекторе и место после них), иначе на тёмной плашке тег был бы тёмным
+*/
+:root .insights .insight-row[aria-pressed='true'] .tag { --tone-ink: var(--channel-selected-text); }
 
 /* Значение и дельта — неразрывная пара: дельта справа в строке числа, не переносится под него (value-delta.js) */
 .value-delta {

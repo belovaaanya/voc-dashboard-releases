@@ -85,6 +85,10 @@
   --color-orange: #FF8A3D;
   --color-yellow: #F2C94C;
   --color-purple: #B18CFF;
+  /* «Конверсия опроса»: поток — одним холодным оттенком, не красным и не зелёным (заняты смыслом); ядро и луч — светлые */
+  --funnel-stream: #8C9BC8;
+  --funnel-core: #F4F6FB;
+  --funnel-beam: #FFFFFF;
   /* Палитра календаря J-20: мятный, жёлтый и оранжевый тегов и точек ленты */
   --calendar-mint: #85E294;
   --calendar-yellow: #DBED99;
@@ -172,6 +176,9 @@
   --type-caption-bold: 600 12px/1.4 var(--font-sans);
   --type-quote: italic 500 12px/1.4 var(--font-sans);
   --type-axis: 400 11px/1.2 var(--font-sans);
+  /* Названия в строке таблицы «Топ проблем»: в тёмной теме светлый текст на тёмном читается жирнее — начертание 300;
+     в светлой — как --type-caption */
+  --type-table-name: 300 12px/1.4 var(--font-sans);
   /* Значения «Конверсии опроса» — тонкие, как в стратегии VoC: луч несёт форму, числа не спорят с ним */
   --type-funnel-value: 200 18px/1 var(--font-sans);
 
@@ -186,6 +193,8 @@
   --tracking-title: -0.01em;
   /* Подпись 12 px в строках таблиц — чуть свободнее: мелкий кегль без разрядки читается сжатым (12 px — +1 %) */
   --tracking-caption: 0.01em;
+  /* Названия проблематик в таблице — свободнее подписи: +1 % на 12 px почти не заметен, слова слипались */
+  --tracking-table: 0.025em;
 
   /* Поверхность карточки и её шапки — wireframe (V-32, Figma 3204:2724, 3204:2866) */
   --color-card-border: rgba(61, 63, 67, 0.5);
@@ -462,6 +471,8 @@
   от 4,5 на любой из них; проверяет test/theme.test.js
 */
 :root[data-theme='light'] {
+  /* Тёмный текст на светлом не утолщается — названия таблицы обычного начертания */
+  --type-table-name: var(--type-caption);
   --color-scheme: light;
 
   --workspace-fill: rgba(245, 246, 249, 0.97);
@@ -505,6 +516,9 @@
   --color-orange: #A64808;
   --color-yellow: #8A6500;
   --color-purple: #6F45D6;
+  --funnel-stream: #9E9BF2;
+  --funnel-core: #FFFFFF;
+  --funnel-beam: #FFFFFF;
   /* J-69, J-71: в светлой теме мятный и жёлтый плотнее, текст мятного и оранжевого — темнее; аварию сдвигает к янтарному */
   --calendar-mint: #2FBF71;
   --calendar-mint-ink: #00704B;

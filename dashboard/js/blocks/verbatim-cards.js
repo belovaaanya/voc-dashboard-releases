@@ -284,18 +284,42 @@ const stepText = (value, metric) => {
 /* J-142: шаг подсвечен тоном негатива по силе: чем больше жалоб, доли или урона, тем краснее — как карта антидрайверов */
 /*
   Шаг — пилюля тепловой карты (heatCell, как в антидрайверах и дайджесте): ячейка таблицы
-  без заливки, сила значения — свечением пилюли, шкала — максимум списка. Похвала — зелёной пилюлей.
+  без заливки, сила значения — свечением и яркостью края пилюли по квантильной шкале списка (heatRank). Похвала —
+  зелёной пилюлей.
   Доля и урон — значение крупно, число жалоб шага под ним тише: частотность видна в любом режиме; в «Частотности»
   значение и есть число жалоб — второй строки нет. Пустой шаг — пилюля без тона с прочерком
 */
-function bucketCell(bucket, positive, gap, heatMax, metric) {
+/*
+  Шкала подсветки — квантили, а не доля от максимума: один выброс не гасит остальные. Ранг значения среди всех
+  ненулевых шагов списка от 0 (наименьшее) до 1 (наибольшее), равные значения — средним рангом
+*/
+export function heatRank(values) {
+  const sorted = values.filter((value) => value > 0).sort((left, right) => left - right);
+  const last = sorted.length - 1;
+  return (value) => {
+    if (!(value > 0) || last < 0) return null;
+    if (last === 0) return 1;
+    let low = sorted.findIndex((item) => item >= value);
+    if (low < 0) low = last;
+    let high = low;
+    while (high < last && sorted[high + 1] === value) high += 1;
+    return Math.min(1, Math.max(0, (low + high) / 2 / last));
+  };
+}
+/* Диапазон яркости: наименьшее — едва тронутый край, наибольшее — во всю силу */
+const HEAT_FLOOR = 0.1;
+const EDGE_FLOOR = 0.25;
+
+function bucketCell(bucket, positive, gap, heatRankOf, metric) {
   const value = stepValue(bucket, positive, gap, metric);
   const main = stepText(value, metric);
   /* В «Доле» и «Уроне» вторая строка у каждого шага, и у пустого («нет жалоб»): пилюли строки одной высоты */
   const withCount = metric !== 'count';
   const cell = element('td', `problem-table__count problem-table__step${withCount ? ' problem-table__step--with-count' : ''}${main === null ? ' problem-table__none' : ''}`);
-  const strength = value !== null && heatMax > 0 ? Math.min(1, value / heatMax) : 0;
-  const pill = heatCell({ tone: strength > 0 ? (positive ? 'good' : 'bad') : null, strength: strength > 0 ? strength : null, className: 'problem-step-pill' });
+  const rank = value === null ? null : heatRankOf(value);
+  const strength = rank === null ? null : HEAT_FLOOR + (1 - HEAT_FLOOR) * rank;
+  const pill = heatCell({ tone: rank === null ? null : (positive ? 'good' : 'bad'), strength, className: 'problem-step-pill' });
+  if (rank !== null) pill.style.setProperty('--pill-edge', `${Math.round((EDGE_FLOOR + (1 - EDGE_FLOOR) * rank) * 100)}%`);
   const shown = element('span', 'problem-table__step-main');
   if (main === null) shown.append(emptyValue());
   else shown.append(main);
@@ -425,7 +449,7 @@ function problemRow(item, { columns, selected, onSelect, base }) {
   if (columns.analyst) row.append(peak);
   /* J-142: динамика — после итога за период, правой частью таблицы */
   item.buckets.forEach((bucket, index) => {
-    const cell = bucketCell(bucket, item.positive, columns.bucketGaps[index], columns.heatMax, columns.metric);
+    const cell = bucketCell(bucket, item.positive, columns.bucketGaps[index], columns.heatRank, columns.metric);
     if (index === 0) cell.classList.add('problem-table__step--first');
     row.append(cell);
   });
@@ -741,7 +765,7 @@ function problemColumns(context, { cards, complaintCards, buckets, previous, com
     bucketGaps: buckets.map((_, index) => cards.negative?.buckets?.[index]?.gap ?? 0),
   };
   /* Шкала подсветки шагов — по всем жалобам списка, а не по показанным: «Показать ещё» цвета не меняет */
-  columns.heatMax = Math.max(0, ...complaintCards.flatMap((item) => item.buckets
+  columns.heatRank = heatRank(complaintCards.flatMap((item) => item.buckets
     .map((bucket, index) => stepValue(bucket, false, columns.bucketGaps[index], columns.metric) ?? 0)));
   return columns;
 }

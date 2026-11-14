@@ -97,7 +97,11 @@
 
 /* Календарь — правая колонка: окно шире, правым краем к значку (`align: 'end'`), чтобы не уйти за край страницы */
 .control-popover.insight-help__panel {
-  width: calc(var(--space-10) * 9);
+  /* Неделя 16–22.11: формулы — шире, чтобы строки меньше переносились; окно не выше экрана, внутри своя прокрутка */
+  width: calc(var(--space-10) * 12);
+  max-height: 70dvh;
+  overflow: hidden auto;
+  overscroll-behavior: contain;
   font: var(--type-caption);
   text-align: start;
 }
@@ -119,8 +123,20 @@
   margin-block-start: 0;
 }
 
-.insight-help__text {
+/* Неделя 16–22.11: формула типа — «ключ — значение» в две колонки: ключ тише значения (цифры одной ширины — у всей страницы) */
+.insight-help__rules {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-1) var(--space-3);
   margin: 0;
+  font: var(--type-caption);
+}
+
+.insight-help__key {
+  color: var(--color-text-tertiary);
+}
+
+.insight-help__value {
   color: var(--color-text-secondary);
   text-wrap: pretty;
 }
@@ -131,18 +147,20 @@
   color: var(--color-text-strong);
 }
 
-/* J-98: выбранный чип — как выбранный таб: подложка, рамка и акцентный текст, без белой заливки (была J-58) */
+/* Выбранный чип — плашка выбранного канала шапки (J-243, неделя 16–22.11); до этого J-98 — как выбранный таб */
 .insight-kind[aria-pressed='true'],
 .insight-kind[aria-pressed='true']:hover,
 .insight-kind[aria-pressed='true']:focus-visible {
-  border-color: var(--color-border-strong);
-  background: var(--tab-active-surface);
-  color: var(--color-text-strong);
+  /* Неделя 16–22.11: выбранный тип — плашка выбранного канала шапки (J-243): белая в тёмной теме, тёмная в светлой */
+  border-color: var(--channel-selected-edge);
+  background: var(--channel-selected);
+  box-shadow: 0 1px 3px var(--channel-selected-shadow);
+  color: var(--channel-selected-text);
   font: var(--type-caption-strong);
 }
 
 .insight-kind[aria-pressed='true'] .insight-kind__count {
-  color: var(--color-text-secondary);
+  color: var(--channel-selected-text);
   font: var(--type-caption);
 }
 
@@ -181,10 +199,30 @@
 }
 
 /* J-60: выбранным остаётся только событие, переданное в детализацию; дни выбранной даты не обводятся, строку подсвечивает наведение */
-.insight-row[aria-pressed='true'] {
-  border-color: var(--color-text-tertiary);
-  background: var(--row-selected);
+.insight-row[aria-pressed='true'],
+.insight-row[aria-pressed='true']:hover,
+.insight-row[aria-pressed='true']:focus-visible {
+  /* Неделя 16–22.11: выбранное событие — плашка выбранного канала шапки (J-243), а не едва заметная подложка */
+  border-color: var(--channel-selected-edge);
+  background: var(--channel-selected);
+  box-shadow: 0 1px 3px var(--channel-selected-shadow);
 }
+
+/* На плашке весь текст строки — её тёмным (в светлой теме — светлым) цветом; тег сохраняет заливку тона */
+.insight-row[aria-pressed='true'] .insight-row__date,
+.insight-row[aria-pressed='true'] .insight-row__detail,
+.insight-row[aria-pressed='true'] .insight-row__value,
+.insight-row[aria-pressed='true'] .value-empty {
+  color: var(--channel-selected-text);
+}
+
+/* Фокус с клавиатуры на выбранной строке виден: кольцо цветом текста темы вокруг плашки (общий hover-row его снимает) */
+.insight-row[aria-pressed='true']:focus-visible {
+  box-shadow:
+    0 0 0 var(--focus-ring) var(--color-surface),
+    0 0 0 calc(2 * var(--focus-ring)) var(--color-text-strong);
+}
+
 
 /* Точка — по центру первой строки, даже когда тег ушёл под дату */
 .insight-row__marker {

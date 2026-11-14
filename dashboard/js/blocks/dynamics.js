@@ -15,18 +15,21 @@ import { downloadAction } from '../ui/download.js';
 import { planFor } from '../core/plan.js';
 import { roundVoc } from '../core/round.js';
 import { SCALE_OPTIONS, buildTimeSeries, recommendedScale, withDamage } from '../core/timeseries.js';
+import { ROLLOUT_EVENT, eventLanes } from '../core/calendar.js';
+import { calendarEventsOf, calendarReady } from '../state/event-analysis.js';
 
 /* График рисуется в пикселях сцены, а не в растянутом viewBox: иначе на узкой странице текст мельче роли (B-17) */
 /* Сверху — место под подпись значения у точки на верхней границе шкалы (B-03) */
 const MARGIN = { top: 26, right: 12, bottom: 28, left: 44 };
 /* Ревью 13.11: названия осей — над шкалами, слева и справа на одной линии, с теми же краями, что их цифры */
 const AXIS_TITLE_Y = 8;
-const POINT_RADIUS = 3;
-/* Запас клипа под маркер с обводкой и под обводку линии на границе шкалы; ряды по x обрезаны точно (B-02, V-05) */
-const PLOT_BLEED = POINT_RADIUS * 2;
+/* Неделя 16–22.11: точка мельче — линия не теряется среди точек; мишень мыши — столбец интервала, он прежний */
+const POINT_RADIUS = 2;
+/* Запас клипа под точку при наведении (3,5 + кольцо 3) и выбранную (5 + обводка); ряды по x обрезаны точно (B-02, V-05) */
+const PLOT_BLEED = 7;
 /* Переход тона линии — по центру границы коридора (J-15): точка у границы не стоит на сером участке */
 const ZONE_FADE = 16;
-const LABEL_OFFSET = POINT_RADIUS + 4;
+const LABEL_OFFSET = POINT_RADIUS + 5;
 const LABEL_GAP = 2;
 const LINE_SAMPLE = 3;
 /* Подпись даты `дд.мм.гг` ролью type-axis; с запасом, чтобы соседние не слипались */
@@ -107,12 +110,22 @@ const DAMAGE_BARS = { caption: DAMAGE_CAPTION, share: DAMAGE_SHARE, tone: 'damag
 
 const barsAxisWidth = (bars) => Math.max(bars.spec.caption.length, bars.spec.format(bars.axis.max).length) * COUNT_CHAR_WIDTH + COUNT_AXIS_GAP;
 
-function frameFor({ width, height }, bars) {
+/*
+  Полоса событий под осью дат (неделя 16–22.11, только «Для аналитика»): строка на тип, точка — в интервале графика
+  на той же оси X. Высота строки — 10, точка растёт с числом событий интервала
+*/
+const LANE_HEIGHT = 10;
+const LANE_GAP = 4;
+const laneRadius = (count) => (count >= 4 ? 4 : count >= 2 ? 3 : 2);
+const stripHeight = (lanes) => (lanes.length ? LANE_GAP + lanes.length * LANE_HEIGHT : 0);
+
+function frameFor({ width, height }, bars, strip = 0) {
   const right = bars ? barsAxisWidth(bars) : MARGIN.right;
   return {
     width,
     height,
-    plot: { x: MARGIN.left, y: MARGIN.top, width: width - MARGIN.left - right, height: height - MARGIN.top - MARGIN.bottom },
+    strip,
+    plot: { x: MARGIN.left, y: MARGIN.top, width: width - MARGIN.left - right, height: height - MARGIN.top - MARGIN.bottom - strip },
   };
 }
 
@@ -160,7 +173,7 @@ function appendXAxis(svg, series, points, frame, indices) {
   for (const index of indices) {
     labels.append(svgText('chart-axis-label', formatDate(series[index].from), {
       x: points[index].x,
-      y: frame.height - 4,
+      y: frame.plot.y + frame.plot.height + MARGIN.bottom - 4,
       'text-anchor': edgeAnchor(index, series.length),
     }));
   }
@@ -168,6 +181,52 @@ function appendXAxis(svg, series, points, frame, indices) {
 }
 
 /* Столбик объёма гаснет к оси (R-12): градиент в долях своего столбика, поэтому один на все */
+/*
+  Строка на тип в порядке `EVENT_LANES`; точка — в интервале, где есть события этого типа, крупнее при 2–3 и при
+  4+ событиях. Наведение — подсказка «дата · тип · число», клик — как клик по точке графика: события и антидрайверы
+  этого интервала. Мишень — столбец интервала во всю высоту строки
+*/
+function appendEventStrip(svg, lanes, series, points, frame, tooltip, interaction, context) {
+  const { plot } = frame;
+  const top = plot.y + plot.height + MARGIN.bottom + LANE_GAP;
+  const strip = svgNode('g', 'chart-events', { transform: `translate(${plot.x} ${top})`, 'aria-hidden': 'true' });
+  const columns = hitColumns(points, plot.width);
+  lanes.forEach((lane, row) => {
+    const y = row * LANE_HEIGHT + LANE_HEIGHT / 2;
+    /* Раскатка подписана каналом, как чип календаря («Раскатка НИБ») */
+    const label = lane.kind === ROLLOUT_EVENT && context.state.channel ? `${lane.label} ${context.state.channel}` : lane.label;
+    strip.append(svgNode('line', 'chart-events__rail', { x1: 0, y1: y, x2: plot.width, y2: y }));
+    for (const { index, count } of lane.cells) {
+      const bucket = series[index];
+      const x = points[index].x;
+      const dot = svgNode('circle', `chart-events__mark tone--${lane.tone}`, { cx: x, cy: y, r: laneRadius(count) });
+      const { left, right } = columns[index];
+      const hit = svgNode('rect', 'chart-events__hit', { x: left, y: row * LANE_HEIGHT, width: right - left, height: LANE_HEIGHT });
+      const when = bucket.from === bucket.to ? formatDate(bucket.from) : formatInterval(bucket);
+      hit.addEventListener('pointerenter', () => {
+        dot.classList.add('is-hovered');
+        showChartTooltip(tooltip, {
+          content: [element('span', 'chart-tooltip__value', `${when} · ${label} · ${formatCount(count)}`),
+            element('span', 'chart-tooltip__hint', POINT_HINT)],
+          x: plot.x + x,
+          y: top + y,
+        });
+      });
+      hit.addEventListener('pointerleave', () => {
+        dot.classList.remove('is-hovered');
+        tooltip.hidden = true;
+      });
+      /* Клик — как по точке графика; у интервала без оценок точки нет — тогда выбирается сам день */
+      hit.addEventListener('click', (event) => {
+        if (interaction.select && points[index].y !== null) interaction.select(index, event);
+        else context.setState({ ...context.state, focus: null, days: dateRange(bucket.from, bucket.to), detailEvent: null });
+      });
+      strip.append(dot, hit);
+    }
+  });
+  svg.append(strip);
+}
+
 function appendBarGradient(defs, id, tone) {
   const gradient = svgNode('linearGradient', `chart-gradient chart-gradient--${tone}`, { id, x1: 0, x2: 0, y1: 0, y2: 1 });
   gradient.append(svgNode('stop', 'chart-gradient__strong', { offset: 0 }), svgNode('stop', 'chart-gradient__clear', { offset: 1 }));
@@ -307,6 +366,18 @@ function labelBoxes(point, tone, anchor, size) {
 
 /* Размер сцены прошлой отрисовки блока: перерисовка на кадре жеста не мерит сцену заново */
 const stageSizes = new WeakMap();
+/* Последний контекст отрисовки блока: ожидание событий календаря перерисует график, только если он ещё актуален */
+const lastContexts = new WeakMap();
+/* Сколько кадров ждать событий календаря: он рисуется следующим кадром, после жеста — по отпусканию */
+const CALENDAR_WAIT_FRAMES = 120;
+
+function awaitCalendar(block, context, frames = CALENDAR_WAIT_FRAMES) {
+  requestAnimationFrame(() => {
+    if (lastContexts.get(block) !== context) return;
+    if (calendarReady(context)) renderDynamics(block, context);
+    else if (frames > 1) awaitCalendar(block, context, frames - 1);
+  });
+}
 
 /* Рамка подписи зависит только от класса и текста: на кадрах drag подписи те же, getBBox не перестраивает layout */
 const labelBoxCache = new Map();
@@ -547,9 +618,9 @@ function chartBars(current, damageMode) {
 
 function drawChart(block, context, stage, tooltip, model, size) {
   const damageMode = modeOf(context) === MODE_DAMAGE;
-  const { current, previous } = model;
+  const { current, previous, lanes } = model;
   const bars = chartBars(current, damageMode);
-  const frame = frameFor(size, bars);
+  const frame = frameFor(size, bars, stripHeight(lanes));
   const { plot } = frame;
   const plan = damageMode ? null : model.plan;
   const hasPrevious = !damageMode && model.hasPrevious;
@@ -564,7 +635,11 @@ function drawChart(block, context, stage, tooltip, model, size) {
     role: 'group',
     'aria-label': `Динамика VOC за ${formatDateRange(context.period.from, context.period.to)}`,
   });
-  svg.append(svgNode('title', null));
+  /*
+    Неделя 16–22.11: описание графика — `desc`, а не `title`: системная подсказка `title` всплывала поверх нашей
+    «Клик покажет события и антидрайверы этой точки». Screen reader читает `desc` так же
+  */
+  svg.append(svgNode('desc', null));
   svg.firstChild.textContent = 'Динамика VOC, план, предыдущий период и количество оценок';
   const dated = xLabelIndices(plot.width, current.length, DATE_LABEL_WIDTH);
   appendGrid(svg, domain, plot, dated.map((index) => currentPoints[index].x));
@@ -593,6 +668,7 @@ function drawChart(block, context, stage, tooltip, model, size) {
   plotGroup.append(selectedColumns(current, currentPoints, plot, context.state), series, marks);
   attachDayBrush(svg, plotGroup, context, current, currentPoints, plot, interaction);
   svg.append(defs, plotGroup);
+  if (lanes.length) appendEventStrip(svg, lanes, current, currentPoints, frame, tooltip, interaction, context);
 
   /* Перерисовка по размеру сцены не сбрасывает фокус с точки, а подсказка не остаётся у её старого места */
   const focused = stage.contains(document.activeElement) ? document.activeElement.getAttribute('data-focus-date') : null;
@@ -604,10 +680,21 @@ function drawChart(block, context, stage, tooltip, model, size) {
 }
 
 function renderChart(block, context, scale, plan) {
-  const model = chartModel(context, scale, plan);
+  /* Полоса событий — только в разделе «Для аналитика» (J-228): на главной график без неё */
+  const base = chartModel(context, scale, plan);
+  /*
+    События считает календарь — отложенно и не на кадрах жеста таймлайна (`ready: calendarReady`). Полоса берёт их
+    только готовыми из общего кэша, а пока их нет — график рисуется без неё и перерисовывается, когда календарь досчитал
+  */
+  const wanted = context.analyst && context.slice.length > 0;
+  const ready = wanted && calendarReady(context);
+  if (wanted && !ready) awaitCalendar(block, context);
+  const model = { ...base, lanes: ready ? eventLanes(calendarEventsOf(context), base.current) : [] };
   const chart = element('div', modeOf(context) === MODE_DAMAGE ? 'chart chart--damage' : 'chart');
   chart.append(chartLegend(context, model));
   const stage = element('div', 'chart-stage');
+  /* Сцена выше на полосу событий: область графика не сжимается */
+  if (model.lanes.length) stage.style.setProperty('--chart-events-height', `${stripHeight(model.lanes)}px`);
   /* Урон с пятёрками и подсказку клика знает только подсказка: диктор читает её, а не одно имя точки */
   const tooltip = chartTooltip({ spoken: true });
   stage.append(tooltip);
@@ -627,6 +714,7 @@ function renderChart(block, context, scale, plan) {
 }
 
 export function renderDynamics(block, context) {
+  lastContexts.set(block, context);
   /* Ревью 13.11: над графиком уже заголовок группы «Динамика, события и антидрайверы» — своё название видно только развёрнутым */
   block.setTitle('Динамика VOC', undefined, { hidden: !block.isExpanded() });
   /* J-40: общий период блока аналитики выбирается в шапке группы, а не графика */

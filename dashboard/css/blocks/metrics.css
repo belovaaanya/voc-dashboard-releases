@@ -430,22 +430,14 @@
   isolation: isolate;
 }
 
-/* Строку полосы задаёт пропорция луча: сам луч стоит вне потока */
-.conversion::before {
-  content: '';
-  grid-row: 2;
-  grid-column: 1 / -1;
-  aspect-ratio: var(--beam-ratio);
-}
-
 /* Рамка луча — строка полосы и запас `--beam-headroom` (доля строки, из blocks/conversion.js) сверху и снизу.
    Маска гасит свечение по ширине у краёв карточки, по высоте — за `--space-6` от строки: заголовок не задет */
 .conversion__beam {
   --beam-ink: var(--color-text-strong);
   --beam-row: calc(100% * var(--beam-headroom) / (1 + 2 * var(--beam-headroom)));
   --beam-fade-x: linear-gradient(90deg, transparent, var(--beam-ink) var(--space-6), var(--beam-ink) calc(100% - var(--space-6)), transparent);
-  --beam-fade-y: linear-gradient(180deg, transparent max(0%, calc(var(--beam-row) - var(--space-6))), var(--beam-ink) var(--beam-row),
-    var(--beam-ink) calc(100% - var(--beam-row)), transparent min(100%, calc(100% - var(--beam-row) + var(--space-6))));
+  /* По высоте поток гаснет в запасе рамки: подписи и числа стоят поверх его краёв, заголовок карточки не задет */
+  --beam-fade-y: linear-gradient(180deg, transparent 0%, var(--beam-ink) 30%, var(--beam-ink) 70%, transparent 100%);
   grid-row: 2 / 3;
   grid-column: 1 / -1;
   position: absolute;
@@ -511,9 +503,17 @@
   color: var(--color-text-tertiary);
 }
 
-.conversion__share {
+.conversion__share-row {
   grid-row: 4;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: var(--space-2);
   min-height: 1lh;
+  white-space: nowrap;
+}
+
+.conversion__share {
   color: var(--color-text-tertiary);
   font: var(--type-caption);
   white-space: nowrap;
@@ -524,12 +524,29 @@
   color: var(--color-text-secondary);
 }
 
-.conversion__stop--dim { stop-color: var(--color-text-tertiary); }
-.conversion__stop--core { stop-color: var(--color-text-strong); }
-.conversion__stop--mid { stop-color: var(--color-text-secondary); }
+/* Оттенок потока — токены темы: одна структура, в тёмной — приглушённый серо-синий, в светлой — лавандовый */
+.conversion__stop--stream { stop-color: var(--funnel-stream); }
+.conversion__stop--core { stop-color: var(--funnel-core); }
 
+.conversion__core {
+  stroke: var(--funnel-core);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+/* Луч хвоста — светлый, с мягким ореолом потока; в светлой теме тоже светлый, без тёмной линии */
 .conversion__thread {
-  stroke: var(--color-text-strong);
+  stroke: var(--funnel-beam);
   stroke-width: 1.5;
-  filter: drop-shadow(0 0 2px var(--color-text-strong)) drop-shadow(0 0 6px var(--color-text-secondary));
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 2px var(--funnel-beam)) drop-shadow(0 0 6px var(--funnel-stream)) drop-shadow(0 0 14px var(--funnel-stream));
+}
+
+/* Тонкие вертикальные разделители между ступенями — как в стратегии */
+.conversion__step + .conversion__step {
+  border-inline-start: var(--hairline) solid var(--color-border);
+}
+
+.conversion__change {
+  font: var(--type-caption);
 }

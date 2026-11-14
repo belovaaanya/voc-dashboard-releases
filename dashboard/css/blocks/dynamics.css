@@ -25,7 +25,7 @@
 .chart-stage {
   position: relative;
   flex: 1 1 auto;
-  min-height: var(--chart-plot-height);
+  min-height: calc(var(--chart-plot-height) + var(--chart-events-height, 0px));
   overflow: hidden;
 }
 
@@ -227,7 +227,15 @@
   fill: var(--color-neutral);
 }
 
-.chart-point.is-hovered,
+.chart-point.is-hovered:not(.is-selected) {
+  /* Неделя 16–22.11: кольцо наведения — цвета самой точки (красное, зелёное, серое), а не белое; точка чуть крупнее */
+  r: calc(var(--chart-point-selected-radius) * 0.7);
+  stroke: color-mix(in srgb, currentColor 50%, transparent);
+  stroke-width: calc(var(--divider-width) * 6);
+  paint-order: stroke;
+}
+
+/* Фокус с клавиатуры — отдельное сплошное кольцо цвета текста: полупрозрачное кольцо наведения у серой точки слишком тусклое */
 .chart-point:focus-visible {
   stroke: var(--color-text-strong);
   stroke-width: calc(var(--divider-width) * 2);
@@ -249,3 +257,26 @@
 
 .chart-svg { touch-action: none; user-select: none; }
 .chart-day-brush { fill: var(--row-selected); stroke: var(--color-border-strong); pointer-events: none; }
+
+/* Полоса событий под осью дат (неделя 16–22.11, «Для аналитика»): тонкая направляющая строки и точки цвета иконки типа */
+.chart-events__rail {
+  stroke: var(--chart-grid);
+  stroke-dasharray: 1 3;
+  stroke-width: var(--divider-width);
+}
+
+.chart-events__mark {
+  fill: var(--tone);
+  pointer-events: none;
+}
+
+.chart-events__mark.is-hovered {
+  stroke: color-mix(in srgb, var(--tone) var(--tone-rim), transparent);
+  stroke-width: calc(var(--divider-width) * 4);
+  paint-order: stroke;
+}
+
+.chart-events__hit {
+  fill: transparent;
+  cursor: pointer;
+}

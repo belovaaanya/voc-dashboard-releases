@@ -47,8 +47,9 @@ export function resolveState(requested, { rows, reference, channels, fallbackPer
   const channel = requested.channel && channels.includes(requested.channel) ? requested.channel : channels[0] ?? null;
   const eligible = dashboardRows(rows, requested, reference);
   const dimensions = channelDimensions(eligible, channel, reference);
-  /* J-21/J-26: ФО и дирекция скрыты в панели, прежние global filters снимаются */
-  const { domain: removedDomain, cp: removedDirection, ...requestedFilters } = requested.filters ?? {};
+  /* J-21/J-26: ФО и дирекция скрыты в панели, прежние global filters снимаются. Продукт убран из шапки (дублирует
+     триггеры): старая ссылка с `product` открывается без ошибки и не сужает срез молча — параметр снимается */
+  const { domain: removedDomain, cp: removedDirection, product: removedProduct, ...requestedFilters } = requested.filters ?? {};
   const state = {
     ...requested,
     filters: servableFilters(requestedFilters, dimensions),

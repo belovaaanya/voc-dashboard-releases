@@ -346,6 +346,57 @@ function releaseEvent({ releaseDate, first, ratings, sum, dataEnd, fromHistorySt
   };
 }
 
+/*
+  Порядок и цвет типов событий — один на ленту календаря и полосу событий под графиком (J-269, неделя 16–22.11):
+  сначала то, что считается из оценок, потом внешние события. Цвет — тон иконки типа
+*/
+export const EVENT_LANES = [
+  { kind: ANOMALY_EVENT, label: 'Крит. снижение VOC', tone: 'negative' },
+  { kind: DATA_LOSS_EVENT, label: 'Провал оценок', tone: 'data-loss' },
+  { kind: SUSTAINED_EVENT, label: 'Инцидент', tone: 'incident' },
+  { kind: NEW_SLICE_EVENT, label: 'Новый срез', tone: 'purple' },
+  { kind: INCIDENT_EVENT, label: 'Авария', tone: 'orange' },
+  { kind: RELEASE_EVENT, label: 'Релизы АБМ', tone: 'positive' },
+  { kind: ROLLOUT_EVENT, label: 'Раскатка', tone: 'neutral' },
+];
+
+/* Событие одного дня — релиз, раскатка, новый срез: точка в день события; у серий и аварий — каждый их день */
+const POINT_KINDS = new Set([RELEASE_EVENT, ROLLOUT_EVENT, NEW_SLICE_EVENT]);
+const laneDays = (event) => (POINT_KINDS.has(event.kind) ? [event.date] : event.days ?? [event.date]);
+
+/**
+ * Полоса событий под графиком: для каждого типа — интервалы графика (`buckets`: `{ from, to }` подряд) с числом
+ * событий, которые захватывают хотя бы один день интервала. Событие считается в интервале один раз, даже если
+ * занимает в нём несколько дней. Типы без событий в интервалах графика не попадают; порядок — `EVENT_LANES`.
+ */
+export function eventLanes(events, buckets) {
+  if (!buckets.length) return [];
+  const indexOf = (day) => {
+    let low = 0;
+    let high = buckets.length - 1;
+    while (low <= high) {
+      const middle = (low + high) >> 1;
+      if (day < buckets[middle].from) high = middle - 1;
+      else if (day > buckets[middle].to) low = middle + 1;
+      else return middle;
+    }
+    return -1;
+  };
+  return EVENT_LANES.flatMap((lane) => {
+    const cells = new Map();
+    for (const event of events) {
+      if (event.kind !== lane.kind) continue;
+      for (const index of new Set(laneDays(event).map(indexOf).filter((index) => index >= 0))) {
+        const cell = cells.get(index) ?? { index, count: 0, events: [] };
+        cell.count += 1;
+        cell.events.push(event);
+        cells.set(index, cell);
+      }
+    }
+    return cells.size ? [{ ...lane, cells: [...cells.values()].sort((left, right) => left.index - right.index) }] : [];
+  });
+}
+
 export function coversDay(event, focus) {
   return event.days.includes(focus);
 }

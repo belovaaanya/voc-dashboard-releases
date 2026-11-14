@@ -1,21 +1,28 @@
 import {
+  ANOMALY_MIN_WINDOW_VALUES,
+  ANOMALY_WINDOW_DAYS,
+  MIN_EVENT_RATINGS,
   VOC_METRIC,
   isWorkingDay,
 } from '../core/anomalies.js';
+import { DATA_LOSS_ALPHA, DATA_LOSS_MIN_ACTIVE_DAYS, DATA_LOSS_MIN_DAILY, DATA_LOSS_RATIO, DATA_LOSS_WINDOW } from '../core/data-loss.js';
+import { INCIDENT_MIN_DAYS, INCIDENT_PLAN_GAP, INCIDENT_TOP_TRIGGERS } from '../core/calendar-analysis.js';
 import { latestDate } from '../core/dates.js';
 import { selectionDays } from '../state/chart-selection.js';
 import { EMPTY } from '../shell/block.js';
 import { calendarAnomalies, hasEvaluatedSlice } from '../core/calendar-analysis.js';
-import { CRITICAL_DROP_MIN_WINDOW_RATINGS } from '../core/critical-drop.js';
+import { CRITICAL_DROP_ALPHA, CRITICAL_DROP_EXACT_RATINGS, CRITICAL_DROP_MIN, CRITICAL_DROP_MIN_WINDOW_RATINGS } from '../core/critical-drop.js';
 import { accidentColor } from '../core/incident-events.js';
 import { eventDetail, sameDetailEvent } from '../state/detail-event.js';
 import {
   ANOMALY_EVENT,
   DATA_LOSS_EVENT,
+  EVENT_LANES,
   INCIDENT_EVENT,
   NEW_SLICE_EVENT,
   NEW_SLICE_MIN_DAILY,
   RELEASE_EVENT,
+  RELEASE_BASELINE_RATINGS,
   RELEASE_LAG_DAYS,
   ROLLOUT_EVENT,
   SUSTAINED_EVENT,
@@ -84,27 +91,84 @@ export function kindsOf(context) {
   return context.analyst ? KINDS : KINDS.filter(({ value }) => MAIN_KINDS.has(value));
 }
 
+/*
+  Иконка типа (неделя 16–22.11): один цвет на тип — красный снижения VOC, бирюзовый провала оценок, малиновый
+  инцидента, фиолетовый нового среза, оранжевый аварии, зелёный релиза, серый раскатки. Цвет тега строки (план,
+  тяжесть аварии) остаётся своим: иконка говорит «что это», тег — «насколько»
+*/
+const KIND_ICON = Object.fromEntries(EVENT_LANES.map(({ kind, tone }) => [kind, tone]));
+
 /** Подпись типа: у раскатки — с каналом («Раскатка НИБ»), остальные — как в `KINDS`. */
 export function kindLabel({ label, channelLabel }, channel) {
   return channelLabel && channel ? `${label} ${channel}` : label;
 }
 
 export const KINDS = [
-  { value: ANOMALY_EVENT, group: 'ratings', label: 'Крит. снижение VOC', tags: [{ label: 'Снижение VOC ниже плана', color: 'negative' }, { label: 'Снижение VOC', color: 'orange' }],
-    hint: 'VOC разреза за день ниже средней за 10 прошлых рабочих дней на 0,1 и больше; выходной — против 10 прошлых календарных дней. Падение не случайно: вероятность меньше 1 %. Разрез — от 100 оценок за период' },
-  { value: DATA_LOSS_EVENT, group: 'ratings', label: 'Провал оценок', tags: [{ label: 'Провал оценок', color: 'data-loss' }],
-    hint: 'Оценок разреза за день нет или в 3 раза меньше обычного. Обычное — средняя за 10 прошлых дней того же типа: будни против будней, выходные и праздники против выходных; от 5 оценок в день. Падение не случайно: вероятность меньше 1 %' },
-  { value: SUSTAINED_EVENT, group: 'ratings', label: 'Инцидент', tags: [{ label: 'Инцидент 3\u00a0дн', color: 'negative' }],
-    hint: 'Триггер из топ-15 по оценкам за всю выгрузку канала: VOC за день ниже нижней границы плана больше чем на 0,05 три рабочих дня подряд и дольше' },
-  { value: NEW_SLICE_EVENT, group: 'ratings', label: 'Новый срез', tags: [{ label: 'Новый срез', color: 'purple' }],
-    hint: `Триггер, роль, сегмент или продукт, которых раньше не было, и по ним пошёл поток: за день от ${formatRatings(NEW_SLICE_MIN_DAILY)}. Дата — первый такой день. Единичные оценки и заглушки («Без сопоставления» и др.) не считаются` },
-  { value: INCIDENT_EVENT, group: 'external', label: 'Авария', tags: [{ label: 'Авария', color: 'negative' }],
-    hint: 'Сбой из листа аварий: начало, конец и доля затронутых пользователей. Ни с чем не сравнивается. Показываются аварии всех каналов: авария соседнего тоже может сдвинуть VOC' },
-  { value: RELEASE_EVENT, group: 'external', label: 'Релизы АБМ', tags: [{ label: 'Релиз АБМ', color: 'neutral' }, { label: 'Релиз без оценок', color: 'data-loss' }, { label: 'Релиз: оценки через 5\u00a0дн', color: 'data-loss' }],
-    hint: `Дата релиза версии из листа раскаток против дня первых оценок по ней. Сигнал — оценок нет через ${releaseLag()} или они пришли позже. Версия без строки в листе — релиз, только если она новее уже встречавшихся на своей ОС` },
-  { value: ROLLOUT_EVENT, group: 'external', label: 'Раскатка', channelLabel: true, tags: [{ label: 'Раскатка', color: 'neutral' }],
-    hint: 'Выпуск фичи из листа раскаток (строка без версии приложения): дата, название, число пинов. Ни с чем не сравнивается' },
+  { value: ANOMALY_EVENT, group: 'ratings', label: 'Крит. снижение VOC', tags: [{ label: 'Снижение VOC ниже плана', color: 'negative' }, { label: 'Снижение VOC', color: 'orange' }] },
+  { value: DATA_LOSS_EVENT, group: 'ratings', label: 'Провал оценок', tags: [{ label: 'Провал оценок', color: 'data-loss' }] },
+  { value: SUSTAINED_EVENT, group: 'ratings', label: 'Инцидент', tags: [{ label: 'Инцидент 3\u00a0дн', color: 'negative' }] },
+  { value: NEW_SLICE_EVENT, group: 'ratings', label: 'Новый срез', tags: [{ label: 'Новый срез', color: 'purple' }] },
+  { value: INCIDENT_EVENT, group: 'external', label: 'Авария', tags: [{ label: 'Авария', color: 'negative' }] },
+  { value: RELEASE_EVENT, group: 'external', label: 'Релизы АБМ', tags: [{ label: 'Релиз АБМ', color: 'neutral' }, { label: 'Релиз без оценок', color: 'data-loss' }, { label: 'Релиз: оценки через 5\u00a0дн', color: 'data-loss' }] },
+  { value: ROLLOUT_EVENT, group: 'external', label: 'Раскатка', channelLabel: true, tags: [{ label: 'Раскатка', color: 'neutral' }] },
 ];
+
+/*
+  Неделя 16–22.11: пояснение типа — формула, а не абзац: «что / с чем сравнивается / отсечка / объём» для расчётных
+  типов, «источник / что показываем / не сравнивается» для внешних. Числа — из констант расчёта, текст их не дублирует
+*/
+const percent = (share) => `${formatNumber(share * 100, 0)}\u00a0%`;
+const days = (count, forms) => `${formatCount(count)}\u00a0${plural(count, forms)}`;
+const WORKING = ['рабочий день', 'рабочих дня', 'рабочих дней'];
+const CALENDAR = ['календарный день', 'календарных дня', 'календарных дней'];
+const PAST = ['прошлый день', 'прошлых дня', 'прошлых дней'];
+const RATED = ['день с оценками', 'дня с оценками', 'дней с оценками'];
+const times = (count) => `${formatCount(count)}\u00a0${plural(count, ['раз', 'раза', 'раз'])}`;
+export const KIND_RULES = {
+  [ANOMALY_EVENT]: [
+    ['Что', 'VOC разреза за день: канал, сегмент, триггер, продукт, ОС'],
+    ['Сравнение', `средняя всех оценок за ${days(ANOMALY_WINDOW_DAYS, WORKING)} до дня (пн–пт, праздники не выделяются); выходной — за ${days(ANOMALY_WINDOW_DAYS, CALENDAR)}`],
+    ['Отсечка', `ниже на ≥\u00a0${formatNumber(CRITICAL_DROP_MIN, 1)} и p\u00a0<\u00a0${percent(CRITICAL_DROP_ALPHA)}; у дня до ${formatRatings(CRITICAL_DROP_EXACT_RATINGS)} — значимо и без его самой низкой оценки`],
+    ['Мин. объём', `в окне ≥\u00a0${formatRatings(CRITICAL_DROP_MIN_WINDOW_RATINGS)} и ≥\u00a0${days(ANOMALY_MIN_WINDOW_VALUES, RATED)}; разрез ≥\u00a0${formatRatings(MIN_EVENT_RATINGS)} за период`],
+    ['Цвет тега', 'красный — ниже плана, жёлтый — в плане, мятный — выше плана, оранжевый — плана нет'],
+  ],
+  [DATA_LOSS_EVENT]: [
+    ['Что', 'число оценок разреза за день: срез, ОС, сегмент, продукт, триггер, роль, версия'],
+    ['Сравнение', `средняя за ${days(DATA_LOSS_WINDOW, PAST)} того же типа: будни — с буднями, выходные и праздники — с выходными`],
+    ['Отсечка', `≤\u00a0${formatNumber(DATA_LOSS_RATIO * 100, 0)}\u00a0% средней (в ${times(Math.round(1 / DATA_LOSS_RATIO))} меньше) или 0 и p\u00a0<\u00a0${percent(DATA_LOSS_ALPHA)}`],
+    ['Не считается', 'копия пропажи всего среза или ОС в тот же день; переход оценок на новую версию'],
+    ['Мин. объём', `в среднем ≥\u00a0${formatCount(DATA_LOSS_MIN_DAILY)} в день, оценки в ≥\u00a0${formatCount(DATA_LOSS_MIN_ACTIVE_DAYS)} днях из ${formatCount(DATA_LOSS_WINDOW)}`],
+  ],
+  [SUSTAINED_EVENT]: [
+    ['Что', 'VOC триггера за рабочий день'],
+    ['Сравнение', 'нижняя граница плана канала этого дня (рабочие — пн–пт, праздники не выделяются)'],
+    ['Отсечка', `ниже на >\u00a0${formatNumber(INCIDENT_PLAN_GAP, 2)}, ${days(INCIDENT_MIN_DAYS, WORKING)} подряд и дольше`],
+    ['Мин. объём', `триггер из топ-${formatCount(INCIDENT_TOP_TRIGGERS)} по оценкам за всю выгрузку канала`],
+  ],
+  [NEW_SLICE_EVENT]: [
+    ['Что', 'триггер, роль, сегмент или продукт, которых раньше не было'],
+    ['Сравнение', 'вся история среза до дня'],
+    ['Отсечка', `первый день с ≥\u00a0${formatRatings(NEW_SLICE_MIN_DAILY)}; до него — меньше ${formatCount(NEW_SLICE_MIN_DAILY)} в сумме`],
+    ['Не считается', 'значение первого дня выгрузки, заглушки «Без сопоставления», «Без сегмента», «Без разметки»'],
+  ],
+  [INCIDENT_EVENT]: [
+    ['Источник', 'лист аварий incidents'],
+    ['Что показываем', 'начало, конец, длительность, доля затронутых, продукт'],
+    ['Каналы', 'все, кроме Альфа-Мобайла (физлица)'],
+    ['Сравнение', 'не сравнивается; цвет — доля затронутых × длительность'],
+  ],
+  [RELEASE_EVENT]: [
+    ['Источник', 'строка листа rollouts с версией приложения; первые оценки версии — из выгрузки'],
+    ['Сравнение', 'дата релиза против дня первых оценок версии'],
+    ['Отсечка', `сигнал — оценок нет через ${releaseLag()} после релиза или они пришли позже`],
+    ['Без строки в листе', `версия новее уже виденных на своей ОС (сравниваются версии от ${formatRatings(RELEASE_BASELINE_RATINGS)} или с релизом)`],
+  ],
+  [ROLLOUT_EVENT]: [
+    ['Источник', 'строка листа rollouts без версии приложения, канал ленты или все каналы'],
+    ['Что показываем', 'дата, фича, число пинов'],
+    ['Сравнение', 'не сравнивается'],
+  ],
+};
 
 const NEW_SLICE_CAPTION = { trigger: 'Новый триггер', role: 'Новая роль', segment: 'Новый сегмент', product: 'Новый продукт' };
 /* Подпись разреза пропажи данных: весь срез — как у снижения VOC, версия — ключом «iOS 15.1.1» */
@@ -280,7 +344,10 @@ function kindsHelp(channel, kinds) {
       /* Метка раскатки в ленте — с каналом, как чип */
       term.append(...kind.tags.map(({ label: text, color }) => tag(kind.channelLabel ? label : text, color)));
       term.setAttribute('aria-label', label);
-      list.append(term, element('dd', 'insight-help__text', kind.hint));
+      /* Формула типа — строки «ключ — значение» в две колонки */
+      const rules = element('dd', 'insight-help__rules');
+      for (const [key, value] of KIND_RULES[kind.value]) rules.append(element('span', 'insight-help__key', key), element('span', 'insight-help__value', value));
+      list.append(term, rules);
     }
     panel.append(list);
   }
@@ -317,7 +384,8 @@ function kindChips(block, context, counts, kinds) {
     chip.setAttribute('aria-pressed', String(pressed));
     /* Тип без событий выбрать нельзя; выбранный остаётся доступным, чтобы его снять */
     chip.disabled = !pressed && count === 0;
-    chip.append(element('span', 'insight-kind__label', label), element('span', 'insight-kind__count', formatCount(count)));
+    /* Чип — та же иконка типа, что в строке ленты: чип читается как легенда ленты */
+    chip.append(statusDot(KIND_ICON[value], 'event-sm'), element('span', 'insight-kind__label', label), element('span', 'insight-kind__count', formatCount(count)));
     chip.setAttribute('aria-label', `${label}, ${formatCount(count)} ${plural(count, ['событие', 'события', 'событий'])}`);
     chip.addEventListener('click', (event) => {
       const next = new Set(chosen);
@@ -381,7 +449,7 @@ function eventRow(block, context, event, index) {
     detail.append(value);
   }
   const marker = element('span', 'insight-row__marker');
-  marker.append(statusDot(text.color, 'row'));
+  marker.append(statusDot(KIND_ICON[event.kind] ?? text.color, 'event'));
   row.append(marker, headline);
   row.append(detail);
   row.addEventListener('click', () => {

@@ -1,6 +1,6 @@
 /* Выбор периода: одна сборка для шапки дашборда и local period блока — preset, свой диапазон, сброс к общему */
 
-import { PERIOD_PRESETS, periodForPreset, presetLabel, presetName, validateCustomPeriod } from '../state/controls.js';
+import { PERIOD_ROWS, periodForPreset, presetHasData, presetLabel, presetName, validateCustomPeriod } from '../state/controls.js';
 import { element } from '../ui/dom.js';
 import { formatDateRange } from '../core/format.js';
 import { icon } from '../ui/icons.js';
@@ -36,18 +36,39 @@ function periodTrigger(period, scope, triggerClass, iconClass) {
   return { trigger, show };
 }
 
+/*
+  Три строки — «Быстро», «Месяцы», «Кварталы» — с подписью слева, по три периода, новые слева. Период, у которого в
+  выгрузке нет ни одной даты, недоступен: выбор дал бы пустой дашборд
+*/
 function presetButtons(period, manifestPeriod, choose) {
   const presets = element('div', 'control-popover__presets');
-  for (const preset of PERIOD_PRESETS) {
-    const button = element('button', 'control-popover__preset', presetLabel(preset.value, manifestPeriod));
-    button.type = 'button';
-    button.setAttribute('aria-label', presetName(preset.value, manifestPeriod));
-    button.title = preset.kind;
-    button.setAttribute('aria-pressed', String(period.preset === preset.value));
-    button.addEventListener('click', () => choose(periodForPreset(preset.value, manifestPeriod)));
-    presets.append(button);
+  const buttons = [];
+  for (const row of PERIOD_ROWS) {
+    const group = element('div', 'control-popover__preset-row');
+    group.setAttribute('role', 'group');
+    group.setAttribute('aria-label', row.label);
+    const caption = element('span', 'control-popover__preset-label', row.label);
+    caption.setAttribute('aria-hidden', 'true');
+    const list = element('div', 'control-popover__preset-list');
+    for (const preset of row.presets) {
+      const button = element('button', 'control-popover__preset', presetLabel(preset.value, manifestPeriod));
+      button.type = 'button';
+      button.dataset.preset = preset.value;
+      button.setAttribute('aria-label', presetName(preset.value, manifestPeriod));
+      button.title = preset.kind;
+      button.setAttribute('aria-pressed', String(period.preset === preset.value));
+      if (!presetHasData(preset.value, manifestPeriod)) {
+        button.disabled = true;
+        button.title = `${preset.kind}: нет данных в выгрузке`;
+      }
+      button.addEventListener('click', () => choose(periodForPreset(preset.value, manifestPeriod)));
+      list.append(button);
+      buttons.push(button);
+    }
+    group.append(caption, list);
+    presets.append(group);
   }
-  return presets;
+  return { presets, buttons };
 }
 
 /* Свой диапазон: даты, ошибка проверки и «Применить»; «Как у дашборда» — только у local period */
@@ -102,16 +123,14 @@ export function periodPicker({ id, period, manifestPeriod, onChange, onReset = n
     close();
     onChange(next);
   };
-  const presets = presetButtons(period, manifestPeriod, choose);
+  const { presets, buttons } = presetButtons(period, manifestPeriod, choose);
   const custom = customRangeForm(period, { choose, onReset, close: () => close() });
   /* Preview таймлайна меняет представление и draft календаря, не URL и расчёт. */
   onPreviewReady?.((next) => {
     show(next);
     custom.from.value = next.from;
     custom.to.value = next.to;
-    [...presets.children].forEach((button, index) => {
-      button.setAttribute('aria-pressed', String(next.preset === PERIOD_PRESETS[index].value));
-    });
+    for (const button of buttons) button.setAttribute('aria-pressed', String(next.preset === button.dataset.preset));
   });
   panel.append(presets, custom.form);
   item.append(trigger, panel);

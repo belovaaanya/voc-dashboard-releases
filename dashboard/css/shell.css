@@ -1330,15 +1330,11 @@ body::before {
   transform: rotate(180deg);
 }
 
-/* Настройки расчёта: правым краем к кнопке (`align: 'end'`) — кнопка стоит у края строки шапки */
-.control-popover.shell-head__settings-popover {
-  width: calc(var(--space-10) * 7);
-}
-
-.shell-head__settings-note {
-  margin: 0;
-  color: var(--color-text-tertiary);
-  font: var(--type-caption);
+/* Раскрытый список — круглая кнопка-иконка высоты кнопок строки */
+.filters__more--open {
+  justify-content: center;
+  width: calc(var(--header-control-height) - 2 * var(--space-1) - 2 * var(--divider-width));
+  padding-inline: 0;
 }
 
 .filters__reset {
@@ -1415,8 +1411,9 @@ body::before {
   display: none;
 }
 
+/* Выбор периода: подпись строки слева и три периода — «Ноябрь · по 09.11» и соседи в одну строку */
 .control-popover--period {
-  width: calc(var(--space-10) * 9);
+  width: calc(var(--space-10) * 11);
 }
 
 .control-popover--end {
@@ -1435,6 +1432,26 @@ body::before {
 }
 
 .control-popover__presets {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-2) var(--space-3);
+  align-items: center;
+}
+
+/* Строка — подсетка общей сетки: подписи строк стоят одной колонкой, периоды начинаются на одной вертикали */
+.control-popover__preset-row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+}
+
+.control-popover__preset-label {
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+}
+
+.control-popover__preset-list {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
@@ -1461,10 +1478,22 @@ body::before {
 }
 
 .control-popover__preset:hover,
-.control-popover__preset[aria-pressed='true'],
 .control-popover__reset:hover {
   border-color: var(--color-text-strong);
   color: var(--color-text-strong);
+}
+
+/* Выбранный период — та же плашка, что выбранный канал, в обеих темах: выбор читается одинаково по всей шапке */
+.control-popover__preset[aria-pressed='true'] {
+  border-color: var(--channel-selected-edge);
+  background: var(--channel-selected);
+  box-shadow: 0 1px 3px var(--channel-selected-shadow);
+  color: var(--channel-selected-text);
+  font: var(--type-caption-strong);
+}
+
+.control-popover__preset {
+  white-space: nowrap;
 }
 
 .control-popover__apply:hover {
