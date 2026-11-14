@@ -203,7 +203,9 @@ const CARD = { width: 240, height: 24 };
   почти по всей высоте, и внутри области карточка неизбежно легла бы на линию. Ножки идут вниз к дате на оси
 */
 const CARD_GAP = 4;
-const CARD_ZONE = CARD.height + CARD_GAP * 2;
+/* Неделя 16–22.11: от верха сцены — 8, а не 4: под строкой легенды карточкам тесно (легенда → карточка — 16) */
+const CARD_TOP = CARD_GAP * 2;
+const CARD_ZONE = CARD_TOP + CARD.height + CARD_GAP;
 const CARD_LIMIT = 5;
 /* Кандидатов меряется с запасом: крупная карточка может не встать, и место займёт следующая */
 const CARD_MEASURED = CARD_LIMIT * 3;
@@ -211,16 +213,35 @@ const CARD_LABELS = { [INCIDENT_EVENT]: 'Авария', [ANOMALY_EVENT]: 'Кри
 /* Иконка — та же, что у типа в календаре событий и в полосе (J-269) */
 const CARD_TONES = Object.fromEntries(EVENT_LANES.map(({ kind, tone }) => [kind, tone]));
 
-function cardNumber(event) {
-  if (event.kind === INCIDENT_EVENT) return `${formatNumber((event.effect ?? 0) * 100, 0)}\u00a0%`;
-  if (event.kind === ANOMALY_EVENT) return formatDelta(roundDelta(event.delta));
-  return formatDelta(roundDelta(-event.planGap));
+/*
+  Число карточки — отклонение события, а не VOC разреза (J-286): «VOC 4,30» над графиком канала читается как VOC канала.
+  У снижения — падение VOC серии к средней окна («к норме»), у инцидента — к нижней границе плана, у аварии — доля
+  затронутых. VOC разреза и его оценки — в подсказке
+*/
+const CARD_NUMBER_SUFFIX = { [INCIDENT_EVENT]: 'затронуто', [ANOMALY_EVENT]: 'к норме', [SUSTAINED_EVENT]: 'к плану' };
+const CARD_NUMBER_HINT = { [INCIDENT_EVENT]: 'затронуто', [ANOMALY_EVENT]: 'VOC к средней окна', [SUSTAINED_EVENT]: 'к нижней границе плана' };
+
+/* Доля аварии в источнике шагом 10 %: 0 — «<10 %», пусто — доля не указана (как в ленте) */
+function cardNumber({ event, gap }) {
+  if (event.kind !== INCIDENT_EVENT) return formatDelta(roundDelta(-gap));
+  if (gap === null || gap === undefined) return 'доля не указана';
+  if (gap === 0) return '<10\u00a0%';
+  return `${formatNumber(gap * 100, 0)}\u00a0%`;
 }
 
-const CARD_NUMBER_HINT = { [INCIDENT_EVENT]: 'затронуто', [ANOMALY_EVENT]: 'VOC к средней окна', [SUSTAINED_EVENT]: 'к нижней границе плана' };
+/* Строки подсказки: разрез события с его VOC и оценками, затем вклад в VOC канала — по нему выбраны карточки */
+function cardDetails(candidate, text) {
+  const { event, impact, ratings, voc } = candidate;
+  const lead = text.detail.split(' · ')[0];
+  const subject = event.kind === INCIDENT_EVENT
+    ? lead
+    : [lead, `VOC ${formatVoc(roundVoc(voc))}`, formatRatings(ratings)].join(' · ');
+  return [subject, `Вклад в VOC канала: ${formatDelta(roundDelta(-impact))}`];
+}
 
 /* Строка ленты календаря в одну строку: иконка, дата, тег типа, VOC — те же части, что у `insight-row` */
 function eventCard(event, tone, text, label, number, date) {
+  const suffix = number === 'доля не указана' ? '' : CARD_NUMBER_SUFFIX[event.kind];
   const card = element('button', 'chart-card glass');
   card.type = 'button';
   if (event.kind === INCIDENT_EVENT) card.style.setProperty('--accident-tone', accidentColor(event.effect, event.duration_seconds));
@@ -228,7 +249,7 @@ function eventCard(event, tone, text, label, number, date) {
   /* Дата — день события на оси (ДД.ММ), а не диапазон серии ленты: длительность серии уже в теге («Инцидент 6 дн»),
      а узкая карточка оставляет место соседним */
   card.append(statusDot(tone, 'event'), element('span', 'chart-card__date', date.slice(0, 5)), tag(text.title, text.color));
-  if (text.value !== null && text.value !== 'VOC —') card.append(element('span', 'chart-card__value', text.value));
+  card.append(element('span', 'chart-card__value', suffix ? `${number} ${suffix}` : number));
   return card;
 }
 
@@ -238,21 +259,22 @@ function appendEventCards(stage, svg, candidates, series, points, plot, tooltip,
   /* Карточки ставятся в сцену невидимыми и меряются: ширина зависит от типа, числа и шрифта */
   const drafts = candidates.slice(0, CARD_MEASURED).map((candidate) => {
     const { event } = candidate;
-    const text = { tone: CARD_TONES[event.kind], label: CARD_LABELS[event.kind], number: cardNumber(event), date: formatDate(event.date) };
-    const card = eventCard(event, text.tone, eventText(event, context), text.label, text.number, text.date);
+    const feed = eventText(event, context);
+    const text = { tone: CARD_TONES[event.kind], label: CARD_LABELS[event.kind], number: cardNumber(candidate), date: formatDate(event.date) };
+    const card = eventCard(event, text.tone, feed, text.label, text.number, text.date);
     card.style.visibility = 'hidden';
     stage.append(card);
-    return { ...candidate, ...text, card, width: Math.ceil(card.offsetWidth || CARD.width) };
+    return { ...candidate, ...text, details: cardDetails(candidate, feed), card, width: Math.ceil(card.offsetWidth || CARD.width) };
   });
   /* Один ряд над подписями точек: в координатах области — выше её верха на поле подписей и саму полосу */
   const placed = placeCards(drafts, {
     xs: points.map(({ x }) => x), line: [], width: plot.width, card: CARD, gap: CARD_GAP, limit: CARD_LIMIT,
-    rows: [-(MARGIN.top + CARD_ZONE) + CARD_GAP],
+    rows: [-(MARGIN.top + CARD_ZONE) + CARD_TOP],
   });
   const kept = new Set(placed.map(({ card }) => card));
   for (const { card } of drafts) if (!kept.has(card)) card.remove();
   const stems = svgNode('g', 'chart-cards', { 'aria-hidden': 'true', transform: `translate(${plot.x} ${plot.y})` });
-  for (const { event, index, center, rect, label, number, date, card } of placed) {
+  for (const { event, index, center, rect, label, number, date, card, details } of placed) {
     /* Ножка — нейтральный пунктир, как направляющие сетки: от края карточки к оси дат под областью графика */
     stems.append(svgNode('line', 'chart-cards__stem', { x1: center, y1: rect.y + rect.height, x2: center, y2: plot.height }));
     card.style.left = `${plot.x + rect.x}px`;
@@ -262,6 +284,7 @@ function appendEventCards(stage, svg, candidates, series, points, plot, tooltip,
     /* Подсказка — у оси дат, как у точки графика: над карточкой ей не хватит места в сцене, и она закрыла бы карточку */
     const reveal = () => showChartTooltip(tooltip, {
       content: [element('span', 'chart-tooltip__value', `${date} · ${label} · ${number} ${CARD_NUMBER_HINT[event.kind]}`),
+        ...details.map((line) => element('span', 'chart-tooltip__value', line)),
         element('span', 'chart-tooltip__hint', POINT_HINT)],
       x: plot.x + center,
       y: plot.y + plot.height,
@@ -580,7 +603,59 @@ function selectedColumns(series, points, plot, state) {
   return group;
 }
 
-function appendPoints(block, marks, series, points, tooltip, plan, context, plot, interaction, damageMode) {
+/*
+  Неделя 16–22.11: выбранная и последняя точки — светящийся круг, как иконка типа события (J-269): тёмная сердцевина
+  сверху, яркий тон к краю и свечение тона. Градиент — свой на тон в defs графика, цвет — у классов в стилях
+*/
+const POINT_MARK_TONES = { above: 'positive', below: 'negative', 'in-plan': 'neutral', default: 'neutral' };
+
+function appendMarkGradients(defs, prefix) {
+  for (const tone of ['positive', 'negative', 'neutral']) {
+    const gradient = svgNode('radialGradient', `chart-mark chart-mark--${tone}`, { id: `${prefix}-mark-${tone}`, cx: 0.5, cy: 0.5, r: 0.5, fx: 0.5, fy: 0.3 });
+    gradient.append(svgNode('stop', 'chart-mark__core', { offset: 0 }), svgNode('stop', 'chart-mark__tone', { offset: 0.6 }),
+      svgNode('stop', 'chart-mark__rim', { offset: 1 }));
+    defs.append(gradient);
+  }
+}
+
+function markPoint(circle, prefix, tone) {
+  circle.classList.add('is-mark', `chart-point--mark-${tone}`);
+  circle.style.fill = `url(#${prefix}-mark-${tone})`;
+}
+
+const lastIndex = (points) => points.reduce((found, { y }, index) => (y === null ? found : index), -1);
+
+/* Урон — гладкая красная линия со свечением и заливкой, гаснущей к оси, по шкале урона справа (как столбики раньше) */
+function appendDamageLine(group, defs, points, plot, ids) {
+  const ys = points.filter(({ y }) => y !== null).map(({ y }) => y);
+  if (!ys.length) return;
+  appendGradient(defs, ids.damage, 'damage-area', { strong: Math.min(...ys), clear: plot.height });
+  appendPathGroup(group, areaPaths(points, plot.height), 'chart-area', filled(ids.damage));
+  const lines = linePaths(points);
+  appendPathGroup(group, lines, 'chart-line chart-line--glow chart-line--damage');
+  appendPathGroup(group, lines, 'chart-line chart-line--damage');
+}
+
+/* Последняя и выбранные точки урона — красный светящийся круг на его линии; мишени и подсказка — у точек VOC */
+function appendDamageMarks(marks, series, points, state, prefix) {
+  const days = selectionDays(state);
+  const last = lastIndex(points);
+  const group = svgNode('g', 'chart-damage-marks', { 'aria-hidden': 'true' });
+  series.forEach((bucket, index) => {
+    const point = points[index];
+    if (point.y === null) return;
+    const selected = days.some((day) => day >= bucket.from && day <= bucket.to);
+    if (!selected && index !== last) return;
+    const circle = svgNode('circle', 'chart-point chart-point--below', { cx: point.x, cy: point.y, r: POINT_RADIUS });
+    circle.classList.toggle('is-selected', selected);
+    markPoint(circle, prefix, 'negative');
+    group.append(circle);
+  });
+  marks.append(group);
+}
+
+function appendPoints(block, marks, series, points, tooltip, plan, context, plot, interaction, damageMode, prefix) {
+  const last = lastIndex(points);
   const hits = svgNode('g', 'chart-point-hits', { 'aria-hidden': 'true' });
   const group = svgNode('g', 'chart-points');
   /* Мишень — столбец во всю высоту до середины шага к соседям: интервал выбирается наведением на его вертикаль, а не только на кружок */
@@ -603,6 +678,8 @@ function appendPoints(block, marks, series, points, tooltip, plan, context, plot
     circle.setAttribute('data-focus-date', bucket.from);
     const selected = selectionDays(context.state).some((day) => day >= bucket.from && day <= bucket.to);
     circle.classList.toggle('is-selected', selected);
+    /* Выбранная и последняя точки — светящийся круг цвета точки, как иконка типа события (J-269); в уроне — на его линии */
+    if (!damageMode && (selected || index === last)) markPoint(circle, prefix, POINT_MARK_TONES[pointTone(bucket.voc, plan)]);
     circle.setAttribute('aria-pressed', String(selected));
     circle.setAttribute('aria-label', `${formatInterval(bucket)}: VOC ${formatVoc(bucket.voc)}, ${damageMode ? `урон ${formatDelta(roundVoc(bucket.damage))}, ` : ''}${formatRatings(bucket.count)}`);
     const reveal = () => {
@@ -676,17 +753,19 @@ function chartMode(block, context) {
 }
 
 function chartLegend(context, { plan, hasPrevious, previous }) {
+  /* Неделя 16–22.11: прошлый период — только в «Для аналитика»; на главной график без пунктира и его подписи */
+  const shownPrevious = hasPrevious && context.analyst;
   const compared = comparedPeriod(context.previousPeriod, context.rows);
   const legend = element('div', 'chart-legend');
   /* J-85: прошлый период шире неполного текущего, на графике видна только его часть — её и подписываем */
   const shownTo = [previous.at(-1)?.to ?? compared.to, compared.to].sort()[0];
   legend.append(legendList(modeOf(context) === MODE_DAMAGE
-    ? [legendItem(DAMAGE_CAPTION, 'negative', 'bar'), legendItem('VOC', 'neutral', 'line')]
+    ? [legendItem(DAMAGE_CAPTION, 'negative', 'line'), legendItem('VOC', 'neutral', 'line')]
     : [
       plan ? legendItem('VOC', null, 'zones') : legendItem('VOC', 'neutral', 'line'),
       plan && legendItem('План', 'plan', 'band'),
       /* J-37: даты прошлого периода в скобках — иначе их не пересчитать в голове */
-      hasPrevious && legendItem(`Прошлый период (${formatDayRange(compared.from, shownTo)})`, 'neutral', 'dash'),
+      shownPrevious && legendItem(`Прошлый период (${formatDayRange(compared.from, shownTo)})`, 'neutral', 'dash'),
     ].filter(Boolean)));
   return legend;
 }
@@ -701,7 +780,8 @@ function chartModel(context, scale, plan) {
     previous,
     hasPrevious: previous.some(({ voc }) => voc !== null),
     plan: shownPlan,
-    domain: chartDomain(current, previous, shownPlan),
+    /* Неделя 16–22.11: прошлый период рисуется только в «Для аналитика» — на главной он не растягивает шкалу; выгрузка его сохраняет */
+    domain: chartDomain(current, context.analyst ? previous : [], shownPlan),
   };
 }
 
@@ -720,7 +800,8 @@ function drawChart(block, context, stage, tooltip, model, size) {
   const frame = frameFor(size, bars, stripHeight(lanes), model.cards.length ? CARD_ZONE : 0);
   const { plot } = frame;
   const plan = damageMode ? null : model.plan;
-  const hasPrevious = !damageMode && model.hasPrevious;
+  /* Неделя 16–22.11: пунктир прошлого периода — только в «Для аналитика» */
+  const hasPrevious = !damageMode && model.hasPrevious && context.analyst;
   const domain = damageMode ? chartDomain(current, [], null) : model.domain;
   const currentPoints = plotPoints(current, { width: plot.width, height: plot.height, ...domain });
   const previousPoints = plotPoints(previous, { width: plot.width, height: plot.height, ...domain });
@@ -737,7 +818,7 @@ function drawChart(block, context, stage, tooltip, model, size) {
     «Клик покажет события и антидрайверы этой точки». Screen reader читает `desc` так же
   */
   svg.append(svgNode('desc', null));
-  svg.firstChild.textContent = 'Динамика VOC, план, предыдущий период и количество оценок';
+  svg.firstChild.textContent = hasPrevious ? 'Динамика VOC, план, предыдущий период и количество оценок' : 'Динамика VOC, план и количество оценок';
   const dated = xLabelIndices(plot.width, current.length, DATE_LABEL_WIDTH);
   appendGrid(svg, domain, plot, dated.map((index) => currentPoints[index].x));
   appendXAxis(svg, current, currentPoints, frame, dated);
@@ -745,14 +826,20 @@ function drawChart(block, context, stage, tooltip, model, size) {
 
   const defs = svgNode('defs');
   const prefix = `dynamics-${chartSequence += 1}`;
-  const ids = Object.fromEntries(['series', 'marks', 'above', 'below', 'zones', 'glow', 'fillAbove', 'fillBelow', 'volume'].map((name) => [name, `${prefix}-${name}`]));
+  const ids = Object.fromEntries(['series', 'marks', 'above', 'below', 'zones', 'glow', 'fillAbove', 'fillBelow', 'volume', 'damage']
+    .map((name) => [name, `${prefix}-${name}`]));
+  appendMarkGradients(defs, prefix);
   const bled = { y: -PLOT_BLEED, height: plot.height + PLOT_BLEED * 2 };
   appendClip(defs, ids.series, plot, bled);
   appendClip(defs, ids.marks, plot, { y: -MARGIN.top, height: plot.height + MARGIN.top + PLOT_BLEED, sideBleed: PLOT_BLEED });
   const plotGroup = svgNode('g', 'chart-plot', { transform: `translate(${plot.x} ${plot.y})` });
   const series = svgNode('g', 'chart-series', { 'clip-path': `url(#${ids.series})` });
   const marks = svgNode('g', 'chart-marks', { 'clip-path': `url(#${ids.marks})` });
-  if (bars) {
+  const damagePoints = damageMode && bars ? current.map((bucket, index) => ({
+    x: currentPoints[index].x, y: bucket.damage === null ? null : barY(bars.spec.value(bucket), bars, plot),
+  })) : null;
+  if (damagePoints) appendDamageLine(series, defs, damagePoints, plot, ids);
+  else if (bars) {
     appendBarGradient(defs, ids.volume, bars.spec.tone);
     appendBars(series, current, currentPoints, plot, ids.volume, bars);
   }
@@ -761,7 +848,8 @@ function drawChart(block, context, stage, tooltip, model, size) {
   const labels = svgNode('g', 'chart-point-labels', { 'aria-hidden': 'true' });
   marks.append(labels);
   const interaction = { suppressClick: false };
-  appendPoints(block, marks, current, currentPoints, tooltip, plan, context, plot, interaction, damageMode);
+  appendPoints(block, marks, current, currentPoints, tooltip, plan, context, plot, interaction, damageMode, prefix);
+  if (damagePoints) appendDamageMarks(marks, current, damagePoints, context.state, prefix);
   plotGroup.append(selectedColumns(current, currentPoints, plot, context.state), series, marks);
   attachDayBrush(svg, plotGroup, context, current, currentPoints, plot, interaction);
   svg.append(defs, plotGroup);
@@ -788,7 +876,7 @@ function renderChart(block, context, scale, plan) {
   const ready = wanted && calendarReady(context);
   if (wanted && !ready) awaitCalendar(block, context);
   const events = ready ? calendarEventsOf(context) : [];
-  const model = { ...base, lanes: ready ? eventLanes(events, base.current) : [], cards: majorEvents(events, base.current) };
+  const model = { ...base, lanes: ready ? eventLanes(events, base.current) : [], cards: majorEvents(events, base.current, context.slice) };
   const chart = element('div', modeOf(context) === MODE_DAMAGE ? 'chart chart--damage' : 'chart');
   chart.append(chartLegend(context, model));
   const stage = element('div', 'chart-stage');

@@ -254,6 +254,67 @@
   r: var(--chart-point-selected-radius);
 }
 
+/*
+  Неделя 16–22.11: последняя и выбранная точки — светящийся круг, как иконка типа события (J-269): градиент тона
+  в defs (`appendMarkGradients`), свечение тона. Последняя — чуть крупнее обычной; выбранная — крупнее и ярче, с мягким
+  ореолом вместо белой заливки
+*/
+.chart-mark {
+  color: var(--chart-line-neutral);
+}
+
+.chart-mark--positive {
+  color: var(--color-positive);
+}
+
+.chart-mark--negative {
+  color: var(--color-negative);
+}
+
+.chart-mark__core {
+  stop-color: var(--color-surface-sunken);
+}
+
+.chart-mark__tone {
+  stop-color: currentColor;
+}
+
+.chart-mark__rim {
+  stop-color: color-mix(in oklab, currentColor 70%, var(--color-surface-sunken));
+}
+
+.chart-point.is-mark {
+  r: calc(var(--chart-point-selected-radius) * 0.8);
+  stroke: none;
+  filter: drop-shadow(0 0 var(--space-1) currentColor);
+}
+
+.chart-point.is-mark.is-selected {
+  r: calc(var(--chart-point-selected-radius) * 1.2);
+  stroke: color-mix(in srgb, currentColor 30%, transparent);
+  stroke-width: calc(var(--divider-width) * 8);
+  paint-order: stroke;
+  filter: drop-shadow(0 0 var(--space-2) currentColor);
+}
+
+.chart-damage-marks {
+  pointer-events: none;
+}
+
+/* Метки урона — главный ряд режима: приглушение точек VOC на них не распространяется */
+.chart--damage .chart-damage-marks .chart-point {
+  opacity: 1;
+}
+
+/* Урон (неделя 16–22.11): гладкая красная линия со свечением, заливка под ней гаснет к оси */
+.chart-line--damage {
+  stroke: var(--color-negative);
+}
+
+.chart-gradient--damage-area {
+  --chart-fill: var(--color-negative);
+}
+
 .chart-selected-column {
   fill: var(--chart-selected-fill);
   pointer-events: none;

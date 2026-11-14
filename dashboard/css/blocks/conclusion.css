@@ -6,6 +6,8 @@
 
 /* Высоту строки задают плитки метрик (D-55): длинный вывод прокручивается в своей карточке */
 .card--summary .card__body {
+  /* Тело — на всю высоту карточки под шапкой: иначе ему не из чего центрировать причину и прижимать вторую строку к низу */
+  flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   /* Поле прокрутки вмещает рамку наведения строки: иначе её срезал бы край области */
@@ -15,13 +17,15 @@
 
 /*
   Одна главная причина (решение пользователя 14.11): подпись направления и тип — мелко, причина — крупно,
-  вторая строка — тише. Причина не длиннее двух строк, вторая строка — одной: полный текст и числа — в подсказке
+  вторая строка — тише. Причина не длиннее двух строк, вторая строка — одной: полный текст и числа — в подсказке.
+  Подпись и причина — одна группа по центру между шапкой и второй строкой, вторая строка — у нижнего поля карточки
+  (решение пользователя: прижатые к низу, они слипались по вертикали). Делают это автоматические отступы ниже
 */
 .summary-cause {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: var(--space-1);
   min-width: 0;
   border-radius: var(--radius-control);
@@ -29,6 +33,8 @@
 
 .summary-cause__lead {
   margin: 0;
+  /* Сверху — половина свободного места, вторая половина — над второй строкой: группа по центру между шапкой и ней */
+  margin-block-start: auto;
   color: var(--color-text-secondary);
   font: var(--type-caption);
   letter-spacing: var(--tracking-caption);
@@ -46,9 +52,16 @@
   -webkit-line-clamp: 2;
 }
 
+/* Без второй строки группа центрируется по всей высоте тела: свободное место поровну сверху и снизу */
+.summary-cause__name:not(:has(+ .summary-cause__detail)) {
+  margin-block-end: auto;
+}
+
 .summary-cause__detail {
   overflow: hidden;
   margin: 0;
+  /* Вторая строка — у нижнего поля карточки */
+  margin-block-start: auto;
   color: var(--color-text-secondary);
   font: var(--type-caption);
   letter-spacing: var(--tracking-caption);

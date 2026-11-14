@@ -111,6 +111,17 @@
   filter: none;
 }
 
+/* Ровная заливка токеном полосы плана графика VOC главной: без градиента, границ и размытия */
+.sparkline__band--flat {
+  fill: var(--color-plan-band);
+  filter: none;
+}
+
+/* Ступени коридора стыкуются без размытия: размытие рисовало бы светлые щели на стыках */
+.sparkline__band--step {
+  filter: none;
+}
+
 /* Границы коридора — линиями на шкале: видно, где план, при любом растяжении полосы */
 .sparkline__band-edge {
   stroke: color-mix(in srgb, var(--color-positive) var(--tone-rim), transparent);

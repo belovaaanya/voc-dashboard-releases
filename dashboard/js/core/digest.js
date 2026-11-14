@@ -6,12 +6,12 @@
 import { complaintValues } from './analytical-causes.js';
 import { CATEGORY_CUT } from './antidrivers.js';
 import { dashboardRows } from './cashback.js';
-import { latestDate, shiftDay, weekdayOf } from './dates.js';
+import { earliestDate, latestDate, shiftDay, weekdayOf } from './dates.js';
 import { periodFactors } from './conclusions.js';
 import { DIMENSIONS, MOBILE_CHANNEL, OS_ANDROID, OS_IOS, metricSegments, osCode, osName } from './dimensions.js';
 import { normalizeLabel } from './labels.js';
 import { voc } from './metrics.js';
-import { calendarRange } from './period.js';
+import { calendarRange, equalDaysPeriod, previousPeriod } from './period.js';
 import { planFor } from './plan.js';
 import { roundImpact } from './round.js';
 import { MINIMUM_RATINGS } from './sufficiency.js';
@@ -133,6 +133,20 @@ export function monthWeeks(month) {
   return { from: shiftDay(from, -((weekdayOf(from) + 6) % 7)), to: shiftDay(to, (7 - weekdayOf(to)) % 7) };
 }
 
+/*
+  Окно недель линий дайджеста. Месяц закончился — недели, целиком покрывающие месяц (как `monthWeeks`). Месяц идёт —
+  то же число недель, но последняя — неделя последней даты с данными: окно забирает последние недели прошлого месяца,
+  пустого хвоста и будущих недель нет (решение пользователя, как у «VOC ролей»)
+*/
+export function digestWeeks(month, rows) {
+  const full = monthWeeks(month);
+  const dataEnd = latestDate(rows);
+  if (!dataEnd || dataEnd >= monthRange(month).to) return full;
+  const count = Math.round((Date.parse(full.to) - Date.parse(full.from)) / 86400000 + 1) / 7;
+  const to = shiftDay(dataEnd, (7 - weekdayOf(dataEnd)) % 7);
+  return { from: shiftDay(to, -(count * 7) + 1), to };
+}
+
 /** Урон перекрёстной группы «Сбои / тех. проблемы» по формуле ДКО: её доля потерь размеченного негатива × (5 − VOC). */
 export function stabilityDamage(rows, reference) {
   const base = negativeBase(rows, dkoValues(reference));
@@ -154,8 +168,15 @@ export function buildDigest({ rows, month, reference, channel }) {
   const before = vocPair(previous, reference);
   const { from, to } = monthRange(month);
 
-  const weeks = monthWeeks(month);
+  const weeks = digestWeeks(month, rows);
   const segments = digestSegments({ rows, weeks, current, previous, byMonth, trendMonths, reference, channel });
+  /* Месяц ещё идёт — период для прогноза оценок по темпу (как карточки метрик главной, J-280) */
+  const dataEnd = latestDate(rows);
+  const period = { preset: 'month', from, to: dataEnd && dataEnd < to ? dataEnd : to, complete: !(dataEnd && dataEnd < to) };
+  const planOf = (key) => {
+    const range = monthRange(key);
+    return planFor(reference?.plan, { channel, from: range.from, to: range.to }) ?? null;
+  };
   const sharesBy = new Map(tableMonths.map((key) => [key, categoryShares(byMonth.get(key), reference)]));
   const nowShares = sharesBy.get(month);
 
@@ -166,7 +187,9 @@ export function buildDigest({ rows, month, reference, channel }) {
     voc: { ...now, delta: now.voc === null || before.voc === null ? null : now.voc - before.voc,
       plan: planFor(reference?.plan, { channel, from, to }) ?? null },
     weeks,
-    trend: trendMonths.map((key) => ({ month: key, ...vocPair(byMonth.get(key), reference) })),
+    period,
+    /* У каждого месяца полугода — свой план (как на графике главной): точки красятся по своему коридору */
+    trend: trendMonths.map((key) => ({ month: key, ...vocPair(byMonth.get(key), reference), plan: planOf(key) })),
     count: { value: now.count, delta: now.count - before.count, months: tableMonths.map((key) => ({ month: key, count: byMonth.get(key).length })) },
     segments,
     groups: digestGroups(nowShares, sharesBy, tableMonths),
@@ -294,18 +317,43 @@ export function buildRoles({ rows, month, reference, channel }) {
   const previousMonth = shiftMonth(month, -1);
   const current = inMonth(rows, month);
   const previous = inMonth(rows, previousMonth);
-  const weeks = monthWeeks(month);
-  const weekBuckets = weekBucketsOf(rows, weeks);
+  /*
+    Незаконченный месяц — выгрузка кончается внутри него: окно линии сдвигается, последняя точка — неделя последнего дня
+    с оценками канала, а недель столько же, сколько у полного месяца (остальные — последние недели прошлого месяца).
+    Пустого хвоста и будущих недель нет. Месяц, после которого данные есть, — его недели, как раньше. Так же — у
+    линий сегментов дайджеста
+  */
+  const lastDate = rows.reduce((latest, { appeal_date: date }) => (date > latest ? date : latest), '');
+  const { from, to } = monthRange(month);
+  const unfinished = lastDate >= from && lastDate < to;
+  const monthWeeksRange = monthWeeks(month);
+  const weekCount = weekBucketsOf([], monthWeeksRange).length;
+  const lastWeekStart = unfinished ? shiftDay(lastDate, -((weekdayOf(lastDate) + 6) % 7)) : null;
+  const lineWeeks = unfinished ? { from: shiftDay(lastWeekStart, -7 * (weekCount - 1)), to: shiftDay(lastWeekStart, 6) } : monthWeeksRange;
+  const weekBuckets = weekBucketsOf(rows, lineWeeks);
+  const weeks = { from: lineWeeks.from, to: unfinished ? lastDate : lineWeeks.to };
+  /* Период месяца для прогноза оценок по темпу (J-280): незаконченный — с первого дня по последний с данными */
+  const period = { preset: 'month', from, to: unfinished ? lastDate : to, complete: !unfinished };
+  /*
+    Жалобы по проблемам — к равному числу дней прошлого месяца, как «было» в «Топ проблем» главной (J-224, equalDaysPeriod):
+    01.11–09.11 → 01.10–09.10, и цвет дельты сохраняет смысл. Законченный месяц — к прошлому целиком. Окно раньше начала
+    выгрузки — сравнения нет
+  */
+  const problemBase = equalDaysPeriod(period, previousPeriod(period), earliestDate(rows) || null);
+  const problemPrevious = problemBase ? rows.filter(({ appeal_date: date }) => date >= problemBase.from && date <= problemBase.to) : [];
   /* Линия роли — по неделям месяца или по месяцам полугода, как линия итога дайджеста */
   const trendMonths = Array.from({ length: TREND_MONTHS }, (_, index) => shiftMonth(month, index - TREND_MONTHS + 1));
   const byMonth = new Map(trendMonths.map((key) => [key, key === month ? current : key === previousMonth ? previous : inMonth(rows, key)]));
   /* Четыре роли всегда на своих местах сетки: роль без оценок — плитка «Нет оценок за месяц», а не дыра */
   const roles = rows.some((row) => ROLE_ORDER.includes(row.role)) ? ROLE_ORDER : [];
-  const { from, to } = monthRange(month);
   return {
     channel,
     month,
     weeks,
+    /* Окно недель сдвинуто (незаконченный месяц): подпись страницы называет его «последние N недель» */
+    weekWindow: { count: weekCount, shifted: unfinished },
+    period,
+    problemBase,
     months: trendMonths,
     others: otherRoles(current),
     plan: planFor(reference?.plan, { channel, from, to }) ?? null,
@@ -314,17 +362,19 @@ export function buildRoles({ rows, month, reference, channel }) {
       const now = vocPair(pick(current), reference);
       const was = vocPair(pick(previous), reference);
       const problemsNow = problemCounts(pick(current), reference);
-      const problemsBefore = problemCounts(pick(previous), reference);
+      const basePicked = pick(problemPrevious);
+      const problemsBefore = problemCounts(basePicked, reference);
       return {
         role,
         ...now,
         delta: now.voc === null || was.voc === null ? null : now.voc - was.voc,
         /* J-172: прошлый месяц без оценок — дельты нет, а не «+всё» от нуля */
         countDelta: was.count ? now.count - was.count : null,
+        previousCount: was.count,
         weekly: weekBuckets.map(({ from: weekFrom, to: weekTo, ratings }) => ({ from: weekFrom, to: weekTo, ...vocPair(pick(ratings), reference) })),
         monthly: trendMonths.map((key) => ({ month: key, ...vocPair(pick(byMonth.get(key)), reference) })),
         problems: [...problemsNow].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0], 'ru')).slice(0, ROLE_PROBLEMS)
-          .map(([name, count]) => ({ name, count, delta: was.count ? count - (problemsBefore.get(name) ?? 0) : null })),
+          .map(([name, count]) => ({ name, count, delta: basePicked.length ? count - (problemsBefore.get(name) ?? 0) : null })),
       };
     }),
   };

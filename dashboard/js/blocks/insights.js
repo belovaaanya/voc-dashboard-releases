@@ -6,7 +6,7 @@ import {
   isWorkingDay,
 } from '../core/anomalies.js';
 import { DATA_LOSS_ALPHA, DATA_LOSS_MIN_ACTIVE_DAYS, DATA_LOSS_MIN_DAILY, DATA_LOSS_MIN_PERIOD_RATINGS, DATA_LOSS_RATIO, DATA_LOSS_VOLUME_DAYS, DATA_LOSS_WINDOW } from '../core/data-loss.js';
-import { INCIDENT_MIN_DAYS, INCIDENT_PLAN_GAP, INCIDENT_TOP_TRIGGERS } from '../core/calendar-analysis.js';
+import { INCIDENT_MIN_DAYS, INCIDENT_MIN_DAY_RATINGS, INCIDENT_MIN_RATINGS, INCIDENT_PLAN_GAP, INCIDENT_TOP_TRIGGERS } from '../core/calendar-analysis.js';
 import { latestDate } from '../core/dates.js';
 import { selectionDays } from '../state/chart-selection.js';
 import { EMPTY } from '../shell/block.js';
@@ -143,7 +143,7 @@ export const KIND_RULES = {
     ['Что', 'VOC триггера за рабочий день'],
     ['Сравнение', 'нижняя граница плана канала этого дня (рабочие — пн–пт, праздники не выделяются)'],
     ['Отсечка', `ниже на >\u00a0${formatNumber(INCIDENT_PLAN_GAP, 2)}, ${days(INCIDENT_MIN_DAYS, WORKING)} подряд и дольше`],
-    ['Мин. объём', `триггер из топ-${formatCount(INCIDENT_TOP_TRIGGERS)} по оценкам за всю выгрузку канала`],
+    ['Мин. объём', `триггер из топ-${formatCount(INCIDENT_TOP_TRIGGERS)} по оценкам за всю выгрузку канала; день — от ${formatRatings(INCIDENT_MIN_DAY_RATINGS)} триггера, серия — от ${formatRatings(INCIDENT_MIN_RATINGS)}`],
   ],
   [NEW_SLICE_EVENT]: [
     ['Что', 'триггер, роль, сегмент или продукт, которых раньше не было'],
@@ -224,9 +224,19 @@ export function insightText(insight, { label, state }) {
   };
 }
 
-/* J-25: эффект — доля затронутых пользователей, а не падение VOC. */
-function effectCaption(effect) {
+/*
+  J-25: эффект — доля затронутых пользователей, а не падение VOC. Неделя 16–22.11: в источнике доля шагом 10 %, поэтому
+  ровно 0 — «<10 %», а не «0 %»; до 1 % — «<1 %» (страховка, шагом 10 % не бывает); пусто — доля не указана; меньше 0
+  и больше 100 % — ошибка источника, число не показывается, чтобы его не приняли за долю
+*/
+export const EFFECT_STEP_NOTE = 'В источнике доля шагом 10 %';
+
+export function effectCaption(effect) {
+  if (effect === null || effect === undefined) return 'Затронуто: доля не указана';
+  if (!Number.isFinite(effect) || effect < 0 || effect > 1) return 'Затронуто: доля некорректна в источнике';
+  if (effect === 0) return `Затронуто: <10${NBSP}% пользователей`;
   const percent = roundShare(effect * 100);
+  if (percent < 1) return `Затронуто: <1${NBSP}% пользователей`;
   return `Затронуто: ${formatNumber(percent, Number.isInteger(percent) ? 0 : 1)}${NBSP}% пользователей`;
 }
 
@@ -250,7 +260,7 @@ function channelEventText(event, context) {
     value: null,
     delta: null,
     deltaTone: 'neutral',
-    window: event.kind === ROLLOUT_EVENT ? 'Раскатка фичи из листа rollouts' : `Авария из листа incidents${Number.isFinite(event.duration_seconds) ? `. Длительность: ${formatDuration(event.duration_seconds)}` : ''}`,
+    window: event.kind === ROLLOUT_EVENT ? 'Раскатка фичи из листа rollouts' : `Авария из листа incidents${Number.isFinite(event.duration_seconds) ? `. Длительность: ${formatDuration(event.duration_seconds)}` : ''}${event.effect === 0 ? `. ${EFFECT_STEP_NOTE}` : ''}`,
     sentence: `${date}. ${title}. ${parts.join(', ')}.`,
   };
 }

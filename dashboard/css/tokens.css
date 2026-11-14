@@ -425,7 +425,8 @@
   --scrollbar-size: 6px;
 
   /* График VOC — замеры Figma node 3204:2865 */
-  --chart-plot-height: 222px;
+  /* Неделя 16–22.11: область графика выше на 18 % (168 → 198), блок растёт на 30 */
+  --chart-plot-height: 252px;
   --chart-tooltip-max: 220px;
   /* J-46: выбранная точка крупнее обычной (радиус 3 в dynamics.js) — выбор виден без поиска */
   --chart-point-selected-radius: 5px;

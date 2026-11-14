@@ -15,11 +15,12 @@ import { colourScale } from '../core/antidrivers.js';
 import { STABILITY_PLAN, buildDigest, filledFrom, buildPlatforms, buildRoles, buildTriggers, defaultMonth, monthsOf } from '../core/digest.js';
 import { element } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
-import { MONTHS, formatBucket, formatCount, formatImpact, formatRatings, formatShare, formatVoc, plural } from '../core/format.js';
+import { MONTHS, formatBucket, formatCount, formatInterval, formatImpact, formatRatings, formatShare, formatVoc, plural } from '../core/format.js';
 import { roundDelta, roundImpact, roundVoc } from '../core/round.js';
 import { MOBILE_CHANNEL } from '../core/dimensions.js';
 import { MINIMUM_RATINGS } from '../core/sufficiency.js';
-import { DELTA_SHAPES, GROWTH, countGroupNode, countNode, leadNode, metaRowNode, planCaptionNode, pairNode, planDotNode, valueNode } from './metric-card.js';
+import { DELTA_SHAPES, GROWTH, countDeltaNode, countGroupNode, countNode, forecastNode, leadNode, metaRowNode, planCaptionNode, pairNode, planDotNode, valueNode } from './metric-card.js';
+import { ratingsForecast } from '../core/forecast.js';
 import { valueDelta } from '../components/value-delta.js';
 import { monthTitle } from '../components/month-picker.js';
 
@@ -66,11 +67,18 @@ export function digestMonthControl(context, onChange) {
 }
 
 /* Линия полугода — sparkline карточек: VOC с поправкой с первого месяца с оценками; подпись — первый и последний месяц */
-function trendNode(trend) {
+/*
+  Линия полугода итога — с коридором плана месяца, как график VOC главной: полоса плана за линией, линия и точки
+  красятся по зонам (выше — позитив, в коридоре — серая, ниже — негатив); подпись коридора — тихой строкой под линией
+*/
+/* У каждого месяца свой план (`planFor` по датам месяца, как график главной): коридор ступенькой, если план менялся */
+function trendNode(trend, plan) {
   const points = trend.slice(filledFrom(trend.map(({ voc }) => voc)));
+  const bands = points.map(({ plan: own }) => (own ? { min: own.min, max: own.max } : null));
   const wrap = element('div', 'digest-trend');
-  wrap.append(sparkline(points.map(({ voc }) => voc), { tone: 'neutral', wide: true, label: vocText, glow: true }),
-    element('span', 'digest-caption', [...new Set([points[0].month, points.at(-1).month])].map(monthShort).join(' — ')));
+  const span = [...new Set([points[0].month, points.at(-1).month])].map(monthShort).join(' — ');
+  wrap.append(sparkline(points.map(({ voc }) => voc), { tone: 'neutral', wide: true, label: vocText, glow: true, bands, flatBand: true }),
+    element('span', 'digest-caption', plan ? `${span} · План ${formatVoc(plan.min)}–${formatVoc(plan.max)}` : span));
   return wrap;
 }
 
@@ -83,7 +91,8 @@ function weeklyNode(weeks, plan) {
   const band = plan ? { min: plan.min, max: plan.max } : null;
   /* Недели и план — в базе чисел под итогом страницы, а не подписью в каждой карточке */
   /* Под точками — даты начала недель, ролью оси: видно, что шаг — неделя */
-  wrap.append(sparkline(points.map(({ voc }) => voc), { tone: 'neutral', wide: true, fill: true, label: vocText, band, glow: true,
+  /* Коридор плана — серой заливкой, как на главной: план нейтрален, зелёный читался бы как «хорошо» */
+  wrap.append(sparkline(points.map(({ voc }) => voc), { tone: 'neutral', wide: true, fill: true, label: vocText, band, flatBand: true, glow: true,
     axis: points.map(({ from }) => dayMonth(from)) }));
   return wrap;
 }
@@ -149,11 +158,21 @@ export function renderDigestSummary(block, context) {
   const count = element('div', 'digest-summary__count');
   const figure = element('div', 'metric');
   /* Число и дельта — неразрывной парой (valueDelta): «+557» не уходит под число */
-  figure.append(valueDelta(valueNode(formatCount(digest.count.value)), leadNode(digest.count.delta, { shape: DELTA_SHAPES.count, growth: GROWTH.volume })),
-    metaRowNode(element('span', 'metric__meta', `${plural(digest.count.value, ['оценка', 'оценки', 'оценок'])} за месяц`)));
-  count.append(figure, barsNode(digest.count.months.map(({ month, count: value }) => ({ month, size: value, text: formatCount(value) })), ' digest-bars--count'));
+  /*
+    Месяц ещё идёт (J-280, как карточки метрик главной): дельта к прошлому месяцу целиком — третьим серым и «?» с прогнозом
+    по темпу; у столбика месяца — бледное пунктирное продолжение до прогноза и «≈N» под числом
+  */
+  const previousCount = digest.count.value - digest.count.delta;
+  const forecast = ratingsForecast(digest.count.value, digest.period, previousCount);
+  const change = forecast ? countDeltaNode(digest.count.value, previousCount, forecast) : leadNode(digest.count.delta, { shape: DELTA_SHAPES.count, growth: GROWTH.volume });
+  figure.append(valueDelta(valueNode(formatCount(digest.count.value)), change),
+    metaRowNode(element('span', 'metric__meta', `${plural(digest.count.value, ['оценка', 'оценки', 'оценок'])} за месяц`), forecastNode(digest.count.value, previousCount, digest.period)));
+  count.append(figure, barsNode(digest.count.months.map(({ month, count: value }) => ({
+    month, size: value, text: formatCount(value),
+    ...(forecast && month === digest.month ? { forecast: forecast.forecast, forecastText: `≈${formatCount(Math.round(forecast.forecast))}` } : {}),
+  })), ' digest-bars--count'));
 
-  content.append(main, trendNode(digest.trend), count);
+  content.append(main, trendNode(digest.trend, digest.voc.plan), count);
   /* База чисел — одна на страницу, как у «VOC ролей»: не повторяется в каждой карточке сегмента */
   /* План уже стоит под VOC итога — в базе его не повторяем */
   const { from, to } = digest.weeks;
@@ -173,7 +192,7 @@ export const digestSegment = (index) => (block, context) => {
   const numbers = element('div', 'metric digest-segment__numbers');
   /* Анатомия карточки сегмента главной: число с дельтой, под ним «N оценок» с дельтой одним узлом (countGroupNode) */
   numbers.append(pairNode(vocText(segment.voc), leadNode(segment.delta)),
-    metaRowNode(countGroupNode(segment.count, segment.count - segment.countDelta)),
+    metaRowNode(countGroupNode(segment.count, segment.count - segment.countDelta, digest.period), forecastNode(segment.count, segment.count - segment.countDelta, digest.period)),
     ...(segment.raw !== null && roundVoc(segment.raw) !== roundVoc(segment.voc) ? [metaRowNode(element('span', 'metric__meta', `${vocText(segment.raw)} без поправки`))] : []));
   /* J-152: тезисов у сегментов пока нет — по просьбе заказчика; вывод считается и вернётся с архивом формулировок */
   const story = element('div', 'digest-segment__story');
@@ -273,15 +292,24 @@ export function renderDigestDko(block, context) {
 
 /* Серые столбики по месяцам (J-152): высота — доля от наибольшего, число и месяц — под столбиком */
 function barsNode(points, className = '') {
-  const peak = Math.max(0.0001, ...points.map(({ size }) => size));
+  const peak = Math.max(0.0001, ...points.map(({ size, forecast }) => Math.max(size, forecast ?? 0)));
   const bars = element('div', `digest-bars${className}`);
-  for (const { month, size, text } of points) {
+  for (const { month, size, text, forecast, forecastText } of points) {
     const item = element('div', 'digest-bars__item');
     const bar = element('span', 'digest-bars__bar');
     bar.style.setProperty('--bar', String(Math.round((size / peak) * 100) / 100));
+    /* Незаконченный месяц: над реальной частью — бледное пунктирное продолжение до прогноза по темпу */
+    const stack = forecast ? element('span', 'digest-bars__stack') : null;
+    if (stack) {
+      const ghost = element('span', 'digest-bars__ghost');
+      ghost.style.setProperty('--bar', String(Math.round((Math.max(0, forecast - size) / peak) * 100) / 100));
+      stack.append(ghost, bar);
+      stack.title = `${forecastText} к концу месяца, если темп сохранится`;
+    }
     const value = element('span', 'digest-bars__value');
     value.append(text === null ? emptyValue() : text);
-    item.append(bar, value, element('span', 'digest-bars__month', monthShort(month)));
+    if (forecastText) value.append(element('span', 'digest-bars__forecast', forecastText));
+    item.append(stack ?? bar, value, element('span', 'digest-bars__month', monthShort(month)));
     bars.append(item);
   }
   return bars;
@@ -351,7 +379,11 @@ export function renderDigestTriggers(block, context) {
   }
   content.append(hbarsHead());
   /* Направление группы — словом и стрелкой-иконкой (цвет только дублирует): «Подняли VOC» / «Снизили VOC» */
-  for (const [title, items, tone, arrow] of [['Подняли VOC', triggers.drivers, 'up', 'trend-up'], ['Снизили VOC', triggers.antidrivers, 'down', 'trend-down']]) {
+  /*
+    Одна шкала сверху вниз — от самого большого плюса к самому большому минусу: «Подняли» — сильнейший сверху,
+    «Снизили» — наоборот, сильнейший снизу (решение пользователя: так привычнее продактам)
+  */
+  for (const [title, items, tone, arrow] of [['Подняли VOC', triggers.drivers, 'up', 'trend-up'], ['Снизили VOC', [...triggers.antidrivers].reverse(), 'down', 'trend-down']]) {
     if (!items.length) continue;
     const section = element('section', 'digest-triggers__group');
     const heading = element('h4', `digest-subhead digest-subhead--${tone}`, title);
@@ -385,17 +417,12 @@ export function renderDigestPlatforms(block, context) {
   const months = detail.months.slice(start);
   const series = detail.platforms.map(({ months: values }) => values.slice(start).map(({ voc: value }) => value));
   const domain = chartDomain(series.flat().map((value) => ({ voc: value })), [], band);
-  const gap = detail.gap === null ? null : roundDelta(detail.gap);
-  const before = detail.previousGap === null ? null : roundDelta(detail.previousGap);
-  const side = (value) => (value > 0 ? `выше Android на ${formatVoc(value)}` : value < 0 ? `ниже Android на ${formatVoc(-value)}` : 'вровень с Android');
-  const headline = gap === null ? 'VOC iOS и Android по месяцам'
-    : `iOS ${side(gap)}${before === null ? '' : `, месяцем раньше — ${side(before)}`}`;
   /*
     Обе ОС — на одном графике, потому что их сравнивают: одна шкала, две линии своих тонов (iOS — серая, Android —
     фиолетовая; зелёный на дашборде значит «хорошо»), коридор плана полосой за ними. Значения месяца — в легенде
   */
   const content = element('div', 'digest-platforms');
-  content.append(element('p', 'digest-headline', headline));
+  /* Тезиса «iOS выше Android на …» нет: значения месяца уже в легенде (решение пользователя) */
   const [ios, android] = detail.platforms;
   const tones = { [ios.code]: 'neutral', [android.code]: 'purple' };
   const legendText = (platform) => {
@@ -404,7 +431,7 @@ export function renderDigestPlatforms(block, context) {
   };
   content.append(legendList([
     ...detail.platforms.map((platform) => legendItem(legendText(platform), tones[platform.code], 'line')),
-    ...(band ? [legendItem(`План ${formatVoc(plan.min)}–${formatVoc(plan.max)}`, 'positive', 'band')] : []),
+    ...(band ? [legendItem(`План ${formatVoc(plan.min)}–${formatVoc(plan.max)}`, 'plan', 'band')] : []),
   ], 'digest-platforms__legend'));
   /* Подпись нижней линии месяца — под точкой, чтобы подписи двух линий не сталкивались */
   const rounded = series.map((values) => values.map((value) => (value === null ? null : roundVoc(value))));
@@ -418,9 +445,10 @@ export function renderDigestPlatforms(block, context) {
   };
   const chart = element('div', 'digest-platforms__chart');
   chart.append(...detail.platforms.map((platform, index) => sparkline(series[index],
-    { tone: tones[platform.code], wide: true, fill: true, domain, band: index === 0 ? band : null, crispBand: true, zones: false, glow: true,
+    { tone: tones[platform.code], wide: true, fill: true, domain, band: index === 0 ? band : null, flatBand: true, zones: false, glow: true,
       label: label(index), labelBelow: (point) => below(index, point), axis: months.map(monthShort) })));
-  content.append(chart, element('p', 'digest-caption', 'VOC с поправкой'));
+  /* Подписи «VOC с поправкой» нет: карточка показывает тот же VOC, что весь дашборд */
+  content.append(chart);
   block.setContent(content);
 }
 
@@ -513,7 +541,7 @@ export function renderRoles(block, context) {
   const start = roleStart(data);
   const span = roleScale === 'months'
     ? `месяцы ${[...new Set([data.months[start], data.months.at(-1)])].map(monthShort).join(' — ')}`
-    : `недели ${dayMonth(data.roles[0].weekly[start].from)} — ${dayMonth(data.weeks.to)}`;
+    : `${weekWindowCaption(data.weekWindow)} ${dayMonth(data.roles[0].weekly[start].from)} — ${dayMonth(data.weeks.to)}`;
   block.setContent(element('p', 'digest-caption roles-caption', `Дельты — к прошлому месяцу · ${span}${planText(data.plan)}`));
 }
 
@@ -531,7 +559,8 @@ function roleLead(value, hasPrevious, options) {
 }
 
 /* Топ-3 проблем роли — таблицей: название, жалоб, дельта; числа — столбцами вправо (J-194) */
-function problemTable(problems) {
+/* Дельта жалоб — к равному числу дней прошлого месяца (J-224): окно сравнения — в подсказке заголовка колонки */
+function problemTable(problems, base) {
   if (!problems.length) return statusPanel('role-card__none', { title: 'Жалоб с проблемой нет', look: 'quiet' });
   const table = element('table', 'role-card__problems');
   table.append(element('caption', 'visually-hidden', 'Топ-3 проблем роли по числу жалоб'));
@@ -539,6 +568,7 @@ function problemTable(problems) {
   for (const [text, className] of [['Проблема', null], ['Жалоб', 'role-card__number'], ['Дельта', 'role-card__number']]) {
     const cell = element('th', className, text);
     cell.scope = 'col';
+    if (text === 'Дельта' && base) cell.title = `Изменение числа жалоб к ${formatInterval(base)}`;
     head.append(cell);
   }
   const thead = element('thead');
@@ -568,6 +598,9 @@ function roleAvatar(role) {
   } else avatar.append(icon('users', 'role-card__avatar-icon'));
   return avatar;
 }
+
+/* Незаконченный месяц: окно сдвинуто к последней дате с оценками — «последние 5 недель», иначе «недели» */
+const weekWindowCaption = ({ count, shifted }) => (shifted ? `последние ${count} ${plural(count, ['неделя', 'недели', 'недель'])}` : 'недели');
 
 const roleSeries = (role) => (roleScale === 'months' ? role.monthly : role.weekly);
 /* Плитки ролей — одной шкалой: линии и подпись страницы — с первой точки, где оценки есть хотя бы у одной роли */
@@ -615,12 +648,18 @@ export const digestRole = (index) => (block, context) => {
   const vocFigure = element('div', 'metric');
   const hasPrevious = role.countDelta !== null;
   vocFigure.append(pairNode(vocText(role.voc), roleLead(role.delta, hasPrevious)),
-    metaRowNode(countNode(role.count), roleLead(role.countDelta, hasPrevious, { shape: DELTA_SHAPES.count, growth: GROWTH.volume })),
+    /*
+      Оценки с дельтой — общей парой карточек метрик (J-280): в незаконченном месяце дельта третьим серым, за ней «?» с
+      прогнозом по темпу; без прошлого месяца — прочерк (J-172)
+    */
+    hasPrevious
+      ? metaRowNode(countGroupNode(role.count, role.previousCount, data.period), forecastNode(role.count, role.previousCount, data.period, { focusable: true }))
+      : metaRowNode(countNode(role.count), roleLead(null, false)),
     ...(role.raw !== null && roundVoc(role.raw) !== roundVoc(role.voc) ? [metaRowNode(element('span', 'metric__meta', `${vocText(role.raw)} без поправки`))] : []));
   lead.append(vocFigure);
   const side = element('div', 'role-card__side');
   /* Подписи «По неделям · план» над линией нет: шаг и план — в шапке страницы, план ещё и в подсказке линии */
-  side.append(roleTrend(role, data), problemTable(role.problems));
+  side.append(roleTrend(role, data), problemTable(role.problems, data.problemBase));
   content.append(lead, side);
   block.setContent(content);
 };

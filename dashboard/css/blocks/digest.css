@@ -34,8 +34,12 @@
 
 .digest__segments {
   grid-area: segments;
-  /* Строки — по содержимому; лишнюю высоту колонки сетка делит между ними поровну (align-content: stretch) */
+  /*
+    Карточки сегментов — компактные, по содержимому, и не растягиваются под высоту соседних колонок (ДКО, триггеры):
+    колонка прижата к верху, линия недель фиксированной высоты (решение пользователя, 14.11)
+  */
   grid-auto-rows: auto;
+  align-content: start;
 }
 
 .digest__dko {
@@ -56,9 +60,11 @@
   flex: 1 1 auto;
 }
 
-/* Линия недель сегмента — от 80: колонка сегментов не выше соседних (у плиток ролей своя высота) */
+/* Линия недель сегмента — 180 px: пять недель с подписями значений и датами, без пустоты над линией */
 .digest-trend--fill.digest-trend--segment {
-  min-height: calc(var(--space-10) * 2);
+  flex: none;
+  height: calc(var(--space-10) * 4.5);
+  min-height: 0;
 }
 
 @media (max-width: 1100px) {
@@ -69,11 +75,19 @@
 }
 
 /* Итог месяца: VOC с поправкой, линия полугода, оценки; колонка оценок — по содержимому: на 1200 число налезало на столбики */
+/*
+  Итог: число и оценки — по своему содержимому, линия полугода — остаток между ними с равными отступами 32 с обеих
+  сторон; поле линии вмещает крайние точки и подписи, ничего не выходит за колонку
+*/
 .digest-summary {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) auto;
-  gap: var(--space-6);
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-8);
   align-items: end;
+}
+
+.digest-summary > .digest-trend {
+  padding-inline: var(--space-2);
 }
 
 @media (max-width: 900px) {
@@ -225,7 +239,31 @@
   background: linear-gradient(var(--color-negative), transparent);
 }
 
-.digest-bars__item--below .digest-bars__value {
+.digest-bars__item--below /* Прогноз незаконченного месяца: над реальным столбиком — бледное пунктирное продолжение, под числом — «≈N» */
+.digest-bars__stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.digest-bars__ghost {
+  display: block;
+  box-sizing: border-box;
+  width: var(--space-2);
+  height: calc(var(--space-10) * 1.5 * var(--bar, 0));
+  border: var(--hairline) dashed var(--color-text-tertiary);
+  border-bottom: none;
+  border-radius: var(--radius-pill) var(--radius-pill) 0 0;
+}
+
+.digest-bars__forecast {
+  display: block;
+  color: var(--color-text-tertiary);
+  font: var(--type-axis);
+  letter-spacing: var(--tracking-axis);
+}
+
+.digest-bars__value {
   color: var(--color-negative);
 }
 
@@ -566,8 +604,15 @@
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: var(--space-6);
+  /* Как зазор строк карточки под шапкой: портрет с margin-block: auto встаёт ровно посередине между названием и VOC */
+  gap: var(--space-3);
   min-width: 0;
+}
+
+/* Портрет — по центру левой колонки: по горизонтали и по высоте в промежутке между названием роли и VOC */
+.role-card__lead > .role-card__avatar {
+  align-self: center;
+  margin-block: auto;
 }
 
 /* Разделитель колонок — посередине зазора, как календарь событий и лента отзывов на VOC ЦК (J-175) */
@@ -593,6 +638,15 @@
 .digest-trend--fill {
   flex: 1 1 auto;
   min-height: calc(var(--space-10) * 3);
+}
+
+/*
+  Линия плитки роли — постоянной высоты: верх, низ и ось дат у всех плиток на одном уровне, какой бы длины ни была
+  таблица проблем под линией; остаток высоты плитки — под таблицей
+*/
+.role-card__side > .digest-trend--fill {
+  flex: none;
+  height: calc(var(--space-10) * 4);
 }
 
 /* J-165: VOC роли — 72 px */
@@ -671,6 +725,11 @@
 
 .role-card__lead--empty {
   justify-content: flex-start;
+}
+
+/* Пустая роль — портрет сразу под названием, надпись под ним: место не зависит от высоты соседней плитки */
+.role-card__lead--empty > .role-card__avatar {
+  margin-block: 0;
 }
 
 @media (max-width: 1100px) {

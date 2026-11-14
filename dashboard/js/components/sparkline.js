@@ -48,13 +48,28 @@ function appendFill(svg, points) {
   `endRule` — тонкая вертикаль последней точки во всю высоту линии до оси; `level` — тихая пунктирная горизонталь уровня
   (граница плана), только если он внутри шкалы ряда: иначе она сплющила бы линию
 */
-export function sparkline(values, { tone, domain, wide = false, fill = false, band = null, zones = true, label = null, axis = null, glow = false, crispBand = false, labelBelow = null, halo = false, endRule = false, level = null }) {
-  const scale = domain ?? rangeOf(band ? [...values, band.min, band.max] : values);
+/*
+  `bands` — коридор плана по точкам (у каждого месяца свой план): одинаковые — обычная полоса `band`, разные — полоса
+  ступенькой (граница ступени — посередине между точками), линия своего тона, а точки красятся по своему коридору.
+  `flatBand` — коридор ровной заливкой токеном полосы плана графика VOC главной (`--color-plan-band`), без границ и градиента
+*/
+export function sparkline(values, { tone, domain, wide = false, fill = false, band: singleBand = null, bands = null, zones = true, label = null, axis = null, glow = false, crispBand = false, flatBand = false, labelBelow = null, halo = false, endRule = false, level = null }) {
+  const sameBand = (left, right) => left && right && left.min === right.min && left.max === right.max;
+  const known = bands?.filter(Boolean) ?? [];
+  const stepped = known.length > 0 && !known.every((item) => sameBand(item, known[0])) ? bands : null;
+  const band = singleBand ?? (!stepped && known.length ? known[0] : null);
+  const bandAt = (index) => (stepped ? stepped[index] ?? null : band);
+  const bandValues = [band, ...(stepped ?? [])].filter(Boolean).flatMap(({ min, max }) => [min, max]);
+  const scale = domain ?? rangeOf([...values, ...bandValues]);
   const points = plotPoints(values.map((voc) => ({ voc })), { ...VIEWBOX, ...scale });
   const svg = svgNode('svg', `sparkline${wide ? ' sparkline--wide' : ''}${wide && fill ? ' sparkline--fill' : ''} tone--${tone}`, {
     viewBox: `0 0 ${VIEWBOX.width} ${VIEWBOX.height}`, 'aria-hidden': 'true', focusable: 'false', ...(wide ? { preserveAspectRatio: 'none' } : {}),
   });
-  if (band) {
+  if (stepped) appendSteppedBand(svg, points, stepped, scale, flatBand);
+  if (band && flatBand) {
+    const y = (value) => VIEWBOX.height - ((value - scale.min) / (scale.max - scale.min)) * VIEWBOX.height;
+    svg.append(svgNode('rect', 'sparkline__band sparkline__band--flat', { x: 0, y: y(band.max), width: VIEWBOX.width, height: Math.max(0.5, y(band.min) - y(band.max)) }));
+  } else if (band) {
     const y = (value) => VIEWBOX.height - ((value - scale.min) / (scale.max - scale.min)) * VIEWBOX.height;
     /* Коридор плана — горизонтальный градиент тона «хорошо»: прозрачный слева, насыщеннее к текущей точке справа */
     const id = `sparkline-band-${sequence += 1}`;
@@ -81,10 +96,13 @@ export function sparkline(values, { tone, domain, wide = false, fill = false, ba
     for (const d of lines) svg.append(svgNode('path', 'sparkline__line', { d }));
   }
   /* J-156: с коридором плана точка ниже него — тоном негатива, выше — позитива, в коридоре — тоном линии */
-  const planTone = (value) => (!band || !zones || value === null ? '' : value < band.min ? ' tone--negative' : value > band.max ? ' tone--positive' : '');
+  const planTone = (value, index) => {
+    const own = bandAt(index);
+    return !own || !zones || value === null ? '' : value < own.min ? ' tone--negative' : value > own.max ? ' tone--positive' : '';
+  };
   if (!wide) {
     points.forEach(({ x, y }, index) => {
-      if (y !== null) svg.append(svgNode('circle', `sparkline__dot${planTone(values[index])}`, { cx: x, cy: y, r: DOT_RADIUS }));
+      if (y !== null) svg.append(svgNode('circle', `sparkline__dot${planTone(values[index], index)}`, { cx: x, cy: y, r: DOT_RADIUS }));
     });
     return svg;
   }
@@ -104,7 +122,7 @@ export function sparkline(values, { tone, domain, wide = false, fill = false, ba
   if (endRule && last) plot.append(at(element('span', `sparkline__rule tone--${tone}`), last.x, last.y));
   points.forEach(({ x, y }, index) => {
     if (y === null) return;
-    plot.append(at(element('span', `sparkline__marker${planTone(values[index]) || ` tone--${tone}`}`), x, y));
+    plot.append(at(element('span', `sparkline__marker${planTone(values[index], index) || ` tone--${tone}`}`), x, y));
     const text = label?.(values[index], index);
     if (text === null || text === undefined) return;
     const edge = index === 0 && points.length > 1 ? ' sparkline-labels__value--start' : index === points.length - 1 && points.length > 1 ? ' sparkline-labels__value--end' : '';
@@ -163,6 +181,30 @@ function appendPlanLines(svg, lines, scale, band, glow = false) {
     path.style.setProperty('--sparkline-zones', `url(#${id})`);
     svg.append(path);
   }
+}
+
+/* Коридор ступенькой: у точки своя полоса от середины до соседей слева и справа; градиент — один на всю ширину */
+function appendSteppedBand(svg, points, bands, scale, flat) {
+  const y = (value) => VIEWBOX.height - ((value - scale.min) / (scale.max - scale.min)) * VIEWBOX.height;
+  let fillRef = null;
+  if (!flat) {
+    const id = `sparkline-band-${sequence += 1}`;
+    const gradient = svgNode('linearGradient', 'sparkline__band-gradient', { id, gradientUnits: 'userSpaceOnUse', x1: 0, x2: VIEWBOX.width, y1: 0, y2: 0 });
+    gradient.append(svgNode('stop', 'sparkline__band-stop sparkline__band-stop--clear', { offset: 0 }), svgNode('stop', 'sparkline__band-stop', { offset: 1 }));
+    const defs = svgNode('defs');
+    defs.append(gradient);
+    svg.append(defs);
+    fillRef = `url(#${id})`;
+  }
+  points.forEach(({ x }, index) => {
+    const own = bands[index];
+    if (!own) return;
+    const left = index === 0 ? 0 : (points[index - 1].x + x) / 2;
+    const right = index === points.length - 1 ? VIEWBOX.width : (points[index + 1].x + x) / 2;
+    svg.append(svgNode('rect', `sparkline__band sparkline__band--step${flat ? ' sparkline__band--flat' : ''}`, {
+      x: left, y: y(own.max), width: Math.max(0, right - left), height: Math.max(0.5, y(own.min) - y(own.max)), ...(fillRef ? { fill: fillRef } : {}),
+    }));
+  });
 }
 
 function rangeOf(values) {

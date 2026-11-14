@@ -106,8 +106,17 @@ export function collapseSeries(anomalies, period) {
     const last = members.at(-1);
     if (last.date < period.from) return [];
     const days = workingDaysBack(last.date, last.streak);
+    /* Серия целиком — для карточки над графиком: оценки отмеченных дней, их VOC и падение к средней окна */
+    const seriesRatings = members.reduce((sum, { ratings }) => sum + (ratings ?? 0), 0);
+    const weighted = (value) => (seriesRatings ? members.reduce((sum, member) => sum + value(member) * (member.ratings ?? 0), 0) / seriesRatings : null);
     return [{
       ...last,
+      seriesRatings,
+      seriesDays: members.map(({ date }) => date),
+      seriesVoc: weighted(({ value }) => value ?? 0),
+      seriesDelta: weighted(({ delta }) => delta ?? 0),
+      /* По дням — для вклада в VOC канала за дни, видимые на графике (серия может начаться до периода) */
+      seriesByDay: members.map(({ date, ratings, value, delta }) => ({ date, ratings: ratings ?? 0, voc: value ?? null, gap: -(delta ?? 0) })),
       kind: ANOMALY_EVENT,
       from: days[0],
       days,
@@ -449,27 +458,85 @@ export function sortEvents(events, mode = 'chronology') {
 
 /*
   Карточки крупных событий на графике (неделя 16–22.11, «Для аналитика»): авария, крит. снижение VOC и инцидент.
-  Размер события — доля для сравнения разных типов: у аварии — доля затронутых, у снижения — падение VOC к средней
-  окна (0,5 и больше — максимум), у инцидента — отрыв от нижней границы плана (0,25 и больше — максимум)
+  Порядок — вклад события в VOC канала (J-286): насколько VOC канала за дни события был бы выше, не будь этого
+  отклонения. У снижения и инцидента — отклонение серии (от средней окна, от нижней границы плана) × доля её оценок в
+  канале за те же дни: это слагаемое «изменение оценок» разложения `D-10` при неизменной структуре. Малый разрез с
+  большим отклонением VOC канала не двигает. Всё — только по дням серии, видимым на графике: серия могла начаться
+  до периода, а доля канала считается по его оценкам на графике. У аварии разреза нет — вклад это просадка VOC канала
+  в её дни к VOC канала за остальные дни периода: верхняя оценка, просадку того же дня авария делит с другими
+  причинами. Событие на меньше чем 30 оценках — не карточка, а точка полосы: на таком объёме отклонение — разброс. Вклад меньше
+  0,01 балла VOC канала — тоже: в подписи двух знаков он ноль, и крупным событие не назвать
 */
 const CARD_KINDS = new Set([INCIDENT_EVENT, ANOMALY_EVENT, SUSTAINED_EVENT]);
-const DROP_FULL = 0.5;
-const PLAN_GAP_FULL = 0.25;
+export const MAJOR_EVENT_MIN_RATINGS = 30;
+export const MAJOR_EVENT_MIN_IMPACT = 0.01;
 
-export function eventWeight(event) {
-  if (event.kind === INCIDENT_EVENT) return Math.min(1, Math.max(0, event.effect ?? 0));
-  if (event.kind === ANOMALY_EVENT) return Math.min(1, Math.abs(event.delta ?? 0) / DROP_FULL);
-  if (event.kind === SUSTAINED_EVENT) return Math.min(1, Math.max(0, event.planGap ?? 0) / PLAN_GAP_FULL);
-  return 0;
+/* Оценки и сумма баллов канала по дням — один проход по оценкам среза; повтор `voc_ccode` за день — одна оценка */
+const channelDaysCache = new WeakMap();
+function channelDays(rows) {
+  if (channelDaysCache.has(rows)) return channelDaysCache.get(rows);
+  const byDay = new Map();
+  for (const row of rows) {
+    if (!byDay.has(row.appeal_date)) byDay.set(row.appeal_date, new Map());
+    const codes = byDay.get(row.appeal_date);
+    if (!codes.has(row.voc_ccode)) codes.set(row.voc_ccode, Number(row.mark));
+  }
+  const days = new Map([...byDay].map(([day, codes]) => {
+    const marks = [...codes.values()].filter(Number.isFinite);
+    return [day, { ratings: marks.length, sum: marks.reduce((total, mark) => total + mark, 0) }];
+  }));
+  const all = [...days.values()].reduce((total, day) => ({ ratings: total.ratings + day.ratings, sum: total.sum + day.sum }), { ratings: 0, sum: 0 });
+  const result = { days, voc: all.ratings ? all.sum / all.ratings : null };
+  channelDaysCache.set(rows, result);
+  return result;
+}
+
+const sumOver = (days, dates, field) => dates.reduce((total, date) => total + (days.get(date)?.[field] ?? 0), 0);
+
+/**
+ * Размер события для карточки: `{ impact, ratings, gap }` — вклад в VOC канала (баллы VOC канала), оценки события
+ * и отклонение, которое покажет карточка (у аварии — доля затронутых). `null` — не крупное событие.
+ */
+export function eventImpact(event, rows) {
+  const { days, voc } = channelDays(rows);
+  if (event.kind === INCIDENT_EVENT) {
+    /* Доля вне 0–100 % — ошибка источника: такая авария во вклад не идёт. 0 (в источнике шаг 10 %) и пусто — идут */
+    if (Number.isFinite(event.effect) && (event.effect < 0 || event.effect > 1)) return null;
+    const dates = (event.days ?? [event.date]).filter((date) => days.has(date));
+    const ratings = sumOver(days, dates, 'ratings');
+    const all = [...days.values()].reduce((total, day) => ({ ratings: total.ratings + day.ratings, sum: total.sum + day.sum }), { ratings: 0, sum: 0 });
+    const restRatings = all.ratings - ratings;
+    if (ratings < MAJOR_EVENT_MIN_RATINGS || voc === null || !restRatings) return null;
+    const baseline = (all.sum - sumOver(days, dates, 'sum')) / restRatings;
+    return { impact: Math.max(0, baseline - sumOver(days, dates, 'sum') / ratings), ratings, gap: event.effect ?? null };
+  }
+  if (event.kind !== ANOMALY_EVENT && event.kind !== SUSTAINED_EVENT) return null;
+  /* Отклонение вниз — положительное: падение к средней окна у снижения, отрыв от нижней границы плана у инцидента */
+  const byDay = event.seriesByDay ?? [{
+    date: event.date, ratings: event.ratings ?? 0, voc: event.value ?? null,
+    gap: event.kind === ANOMALY_EVENT ? -(event.delta ?? 0) : event.planGap ?? 0,
+  }];
+  const shown = byDay.filter(({ date }) => days.has(date));
+  const ratings = shown.reduce((total, day) => total + day.ratings, 0);
+  const channelRatings = sumOver(days, shown.map(({ date }) => date), 'ratings');
+  if (ratings < MAJOR_EVENT_MIN_RATINGS || !channelRatings) return null;
+  const weighted = (field) => shown.reduce((total, day) => total + (day[field] ?? 0) * day.ratings, 0) / ratings;
+  const gap = weighted('gap');
+  return { impact: Math.max(0, gap) * Math.min(1, ratings / channelRatings), ratings, gap, voc: weighted('voc') };
 }
 
 /**
- * Кандидаты в карточки: крупные события, чей последний день лежит в интервалах графика, от самого крупного;
- * при равном размере — свежее. Сколько из них встанет на график, решает раскладка (`placeCards`).
+ * Кандидаты в карточки: крупные события, чей последний день лежит в интервалах графика, от большего вклада в VOC
+ * канала; при равном — свежее. На интервал — один кандидат, с большим вкладом: карточки одной даты встали бы друг на
+ * друга, а разрезы одного снижения (канал, сегмент, триггер) заняли бы весь топ. `rows` — оценки среза графика.
+ * Сколько из них встанет на график, решает раскладка.
  */
-export function majorEvents(events, buckets) {
-  return events.filter((event) => CARD_KINDS.has(event.kind))
-    .map((event) => ({ event, index: bucketIndex(buckets, event.date), weight: eventWeight(event) }))
-    .filter(({ index, weight }) => index >= 0 && weight > 0)
+export function majorEvents(events, buckets, rows = []) {
+  const ranked = events.filter((event) => CARD_KINDS.has(event.kind))
+    .map((event) => ({ event, index: bucketIndex(buckets, event.date), size: eventImpact(event, rows) }))
+    .filter(({ index, size }) => index >= 0 && size && size.impact >= MAJOR_EVENT_MIN_IMPACT - 1e-9)
+    .map(({ size, ...candidate }) => ({ ...candidate, ...size, weight: size.impact }))
     .sort((left, right) => right.weight - left.weight || right.event.date.localeCompare(left.event.date));
+  const taken = new Set();
+  return ranked.filter(({ index }) => !taken.has(index) && taken.add(index));
 }

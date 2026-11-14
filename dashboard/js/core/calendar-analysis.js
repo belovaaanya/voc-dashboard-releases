@@ -7,7 +7,7 @@ import { earliestDate, latestDate } from './dates.js';
 import { ignoredCauseKey } from './analytical-causes.js';
 import { breakdown, UNLABELLED } from './breakdown.js';
 import { ANOMALY_EVENT, SUSTAINED_EVENT, collapseSeries, sortEvents } from './calendar.js';
-import { dropVerdicts, hasDropWindow } from './critical-drop.js';
+import { CRITICAL_DROP_MIN_WINDOW_RATINGS, dropVerdicts, hasDropWindow } from './critical-drop.js';
 import { CRITICAL, NEGATIVE, describeAnomaly } from './insights.js';
 import { createLabels } from './labels.js';
 import { planFor, BELOW_PLAN } from './plan.js';
@@ -16,6 +16,12 @@ const VOC_TRACKS = ANOMALY_TRACKS.filter(({ metric }) => metric === VOC_METRIC);
 export const INCIDENT_MIN_DAYS = 3;
 export const INCIDENT_PLAN_GAP = 0.05;
 export const INCIDENT_TOP_TRIGGERS = 15;
+/*
+  Объём (J-286, неделя 16–22.11): VOC дня из двух-трёх оценок — разброс, а не сбой. День входит в серию от 5 оценок
+  триггера; серия — инцидент от 30 оценок за все её дни, как минимум окна у «Крит. снижения VOC»
+*/
+export const INCIDENT_MIN_DAY_RATINGS = 5;
+export const INCIDENT_MIN_RATINGS = CRITICAL_DROP_MIN_WINDOW_RATINGS;
 
 /** Будни сравниваются с рабочими датами, выходные — с календарными; пропуски не расширяют окно. */
 export function calendarAnomalies({ rows, reference, period, channel, filters = {}, dataEnd = latestDate(rows), minimumRatings = MIN_EVENT_RATINGS }) {
@@ -72,7 +78,11 @@ function topTriggers(allRows, channel, reference) {
   return ranked;
 }
 
-export function detectIncidents({ rows, allRows = rows, reference, period, channel, dataEnd = latestDate(rows) }) {
+/** `minDayRatings` и `minRatings` — объём дня и серии; тесты других правил снимают их нулём, как `minimumRatings` у снижений. */
+export function detectIncidents({
+  rows, allRows = rows, reference, period, channel, dataEnd = latestDate(rows),
+  minDayRatings = INCIDENT_MIN_DAY_RATINGS, minRatings = INCIDENT_MIN_RATINGS,
+}) {
   if (!rows.length) return [];
   const project = (row) => row.operations ?? [];
   const ranked = topTriggers(allRows, channel, reference);
@@ -86,14 +96,21 @@ export function detectIncidents({ rows, allRows = rows, reference, period, chann
   for (const { key, mentions: totalRatings } of ranked) {
     let run = [];
     const flush = () => {
-      if (run.length >= INCIDENT_MIN_DAYS && run.at(-1).date >= period.from) {
+      const seriesRatings = run.reduce((sum, { group }) => sum + group.mentions, 0);
+      if (run.length >= INCIDENT_MIN_DAYS && seriesRatings >= minRatings && run.at(-1).date >= period.from) {
         const last = run.at(-1);
+        /* Серия целиком: VOC и отрыв от нижней границы плана — по всем её оценкам, а не по последнему дню */
+        const weighted = (value) => run.reduce((sum, item) => sum + value(item) * item.group.mentions, 0) / seriesRatings;
         events.push({
           kind: SUSTAINED_EVENT, channel, dimension: 'trigger', key, metric: VOC_METRIC, direction: BELOW,
           from: run[0].date, date: last.date, days: run.map(({ date }) => date), streak: run.length,
           startsBeforePeriod: run[0].date < period.from, totalRatings,
           value: last.group.voc, dayVoc: last.group.voc, ratings: last.group.mentions,
           plan: last.plan, planStatus: BELOW_PLAN, planGap: last.plan.min - last.group.voc,
+          seriesRatings, seriesVoc: weighted(({ group }) => group.voc),
+          seriesGap: weighted(({ group, plan }) => plan.min - group.voc),
+          /* По дням — для вклада в VOC канала за дни, видимые на графике (серия может начаться до периода) */
+          seriesByDay: run.map(({ date, group, plan }) => ({ date, ratings: group.mentions, voc: group.voc, gap: plan.min - group.voc })),
           tone: NEGATIVE, severity: CRITICAL,
         });
       }
@@ -102,7 +119,7 @@ export function detectIncidents({ rows, allRows = rows, reference, period, chann
     for (const date of days) {
       const group = groups.get(date).get(key);
       const plan = plans.get(date);
-      if (group && plan && plan.min - group.voc > INCIDENT_PLAN_GAP + 1e-9) run.push({ date, group, plan });
+      if (group && plan && group.mentions >= minDayRatings && plan.min - group.voc > INCIDENT_PLAN_GAP + 1e-9) run.push({ date, group, plan });
       else flush();
     }
     flush();
