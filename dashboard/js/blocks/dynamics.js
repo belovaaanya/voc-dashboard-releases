@@ -33,6 +33,10 @@ const POINT_RADIUS = 2;
 const PLOT_BLEED = 7;
 /* Переход тона линии — по центру границы коридора (J-15): точка у границы не стоит на сером участке */
 const ZONE_FADE = 16;
+/* Заливка под линией за коридором гаснет, не доходя до него: зелёная заливка над планом не сливалась с зелёной полосой */
+const BAND_FILL_GAP = 8;
+/* Скругление коридора плана — токен --radius-plan-band; запасное значение, пока стили не прочитаны */
+const BAND_RADIUS_FALLBACK = 6;
 const LABEL_OFFSET = POINT_RADIUS + 5;
 const LABEL_GAP = 2;
 const LINE_SAMPLE = 3;
@@ -413,6 +417,13 @@ function appendZoneGradient(defs, id, plot, top, bottom, modifier = '') {
   defs.append(gradient);
 }
 
+/* Радиус коридора из токена: график рисуется после вставки в документ, стили уже применены */
+function bandRadius(node) {
+  const host = node.isConnected ? node : globalThis.document?.documentElement;
+  const value = host && globalThis.getComputedStyle ? parseFloat(globalThis.getComputedStyle(host).getPropertyValue('--radius-plan-band')) : NaN;
+  return Number.isFinite(value) ? value : BAND_RADIUS_FALLBACK;
+}
+
 function appendSeries(group, defs, points, plan, domain, ids, plot) {
   const ys = points.filter(({ y }) => y !== null).map(({ y }) => y);
   const [highest, lowest] = [Math.min(...ys), Math.max(...ys)];
@@ -424,14 +435,21 @@ function appendSeries(group, defs, points, plan, domain, ids, plot) {
 
   const top = yPosition(plan.max, domain, plot);
   const bottom = yPosition(plan.min, domain, plot);
-  group.append(svgNode('rect', 'chart-plan-band', { x: 0, y: top, width: plot.width, height: bottom - top }));
+  /* Коридор плана — зелёный градиент слева направо, как везде (неделя 16–22.11): цвет стопов — токен --color-plan-band */
+  const band = svgNode('linearGradient', 'chart-plan-band-gradient', { id: ids.planBand, gradientUnits: 'userSpaceOnUse', x1: 0, x2: plot.width, y1: 0, y2: 0 });
+  band.append(svgNode('stop', 'chart-plan-band-stop chart-plan-band-stop--clear', { offset: 0 }), svgNode('stop', 'chart-plan-band-stop', { offset: 1 }));
+  defs.append(band);
+  const radius = Math.min(bandRadius(group), (bottom - top) / 2);
+  group.append(svgNode('rect', 'chart-plan-band', { x: 0, y: top, width: plot.width, height: bottom - top, rx: radius, ry: radius, fill: `url(#${ids.planBand})` }));
 
   appendClip(defs, ids.above, plot, { y: -PLOT_BLEED, height: top + PLOT_BLEED });
   appendClip(defs, ids.below, plot, { y: bottom, height: plot.height - bottom + PLOT_BLEED });
   appendZoneGradient(defs, ids.zones, plot, top, bottom);
   appendZoneGradient(defs, ids.glow, plot, top, bottom, ' chart-zones--glow');
-  appendGradient(defs, ids.fillAbove, 'positive', { strong: Math.min(highest, top), clear: top });
-  appendGradient(defs, ids.fillBelow, 'negative', { strong: Math.max(lowest, bottom), clear: bottom });
+  const clearAbove = Math.max(top - BAND_FILL_GAP, 0);
+  const clearBelow = Math.min(bottom + BAND_FILL_GAP, plot.height);
+  appendGradient(defs, ids.fillAbove, 'positive', { strong: Math.min(highest, clearAbove), clear: clearAbove });
+  appendGradient(defs, ids.fillBelow, 'negative', { strong: Math.max(lowest, clearBelow), clear: clearBelow });
 
   appendPathGroup(group, areaPaths(points, top), 'chart-area', { ...clipped(ids.above), ...filled(ids.fillAbove) });
   appendPathGroup(group, areaPaths(points, bottom), 'chart-area', { ...clipped(ids.below), ...filled(ids.fillBelow) });
@@ -826,7 +844,7 @@ function drawChart(block, context, stage, tooltip, model, size) {
 
   const defs = svgNode('defs');
   const prefix = `dynamics-${chartSequence += 1}`;
-  const ids = Object.fromEntries(['series', 'marks', 'above', 'below', 'zones', 'glow', 'fillAbove', 'fillBelow', 'volume', 'damage']
+  const ids = Object.fromEntries(['series', 'marks', 'above', 'below', 'zones', 'glow', 'fillAbove', 'fillBelow', 'volume', 'damage', 'planBand']
     .map((name) => [name, `${prefix}-${name}`]));
   appendMarkGradients(defs, prefix);
   const bled = { y: -PLOT_BLEED, height: plot.height + PLOT_BLEED * 2 };

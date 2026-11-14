@@ -9,8 +9,7 @@ import { emptyValue } from '../components/empty-value.js';
 import { element, svgNode } from '../ui/dom.js';
 import { formatCount, formatDayRange, formatShare, plural } from '../core/format.js';
 import { isWholeMonth, surveyConversion } from '../core/conversion.js';
-import { ratingsForecast } from '../core/forecast.js';
-import { DELTA_SHAPES, GROWTH, deltaNode, forecastNode } from './metric-card.js';
+import { DELTA_SHAPES, GROWTH, deltaNode } from './metric-card.js';
 
 export const CONVERSION_TITLE = 'Конверсия опроса';
 
@@ -149,26 +148,15 @@ function beamNode(steps, compact) {
 }
 
 /*
-  Изменение к прошлому периоду — в строке крупного значения: у оценок — в процентах («−76 %», рост зелёный), у 1–3 и
-  «с ОС» — доля в п.п., цвет по смыслу роста. Незаконченный месяц или квартал сравнивается с прошлым целиком (J-85):
-  изменение оценок — третьим серым и «?» с прогнозом по темпу, как у карточек метрик; доли сравнимы и при неполном
-  периоде — их цвет прежний
+  Изменение доли к прошлому периоду — в строке крупной доли, в п.п., цвет по смыслу роста. У оценок изменения нет:
+  их доля — база, всегда 100 %. Доли сравнимы и при неполном периоде — цвет по смыслу и тогда
 */
-function changeNode(change, count, period, compact) {
+function changeNode(change, compact) {
   /* В узкой карточке изменение без стрелки: направление несут знак и цвет, словом — для screen reader */
   const arrow = !compact;
   const slot = element('span', 'conversion__change');
   if (!change) {
     slot.setAttribute('aria-hidden', 'true');
-    return slot;
-  }
-  if (change.kind === 'count') {
-    if (change.percent === null) return slot;
-    const previous = count - change.value;
-    const forecast = ratingsForecast(count, period, previous);
-    const growth = forecast ? GROWTH.unfinished : GROWTH[change.growth];
-    const node = deltaNode(change.percent, { shape: DELTA_SHAPES.percent, growth, arrow });
-    slot.append(...[node, forecast && forecastNode(count, previous, period, { focusable: true })].filter(Boolean));
     return slot;
   }
   const node = deltaNode(change.value, { shape: DELTA_SHAPES.share, growth: GROWTH[change.growth], arrow });
@@ -177,11 +165,12 @@ function changeNode(change, count, period, compact) {
 }
 
 /*
-  Ступень: подпись капсом сверху; ниже крупно главное значение и в той же строке изменение; под ними мелко серым —
-  второе значение. У оценок главное — число (второе «100 %»), у 1–3 и «с ОС» — доля от оценивших (второе — число).
-  Не помещаясь, изменение уходит под значение, а не наезжает на соседнюю ступень. Полное название — в доступном имени
+  Ступень (решение пользователя, исправляет J-299): подпись капсом сверху; ниже крупно доля от оценивших и в той же
+  строке её изменение в п.п.; под ними мелко серым — число. Первая известная ступень — «Оценки» — база: «100 %» без
+  изменения, мелко — число оценок. Не помещаясь, изменение уходит под долю, а не наезжает на соседнюю ступень.
+  Полное название — в доступном имени
 */
-function stepNode({ key, label, short, count, share, change }, period, compact) {
+function stepNode({ key, label, short, count, share, change }, compact) {
   const item = element('li', `conversion__step conversion__step--${key}`);
   item.title = label;
   const caption = element('span', 'conversion__label', short);
@@ -192,11 +181,8 @@ function stepNode({ key, label, short, count, share, change }, period, compact) 
   if (count === null) {
     line.append(emptyValue('нет в выгрузке'));
     small.setAttribute('aria-hidden', 'true');
-  } else if (key === 'rated') {
-    line.append(element('span', 'conversion__value', formatCount(count)), changeNode(change, count, period, compact));
-    small.textContent = share === null ? '' : formatShare(share);
   } else {
-    line.append(share === null ? emptyValue() : element('span', 'conversion__value', formatShare(share)), changeNode(change, count, period, compact));
+    line.append(share === null ? emptyValue() : element('span', 'conversion__value', formatShare(share)), changeNode(change, compact));
     small.append(formatCount(count), element('span', 'visually-hidden', ` ${plural(count, ['оценка', 'оценки', 'оценок'])}`));
   }
   item.append(caption, name, line, small);
@@ -225,7 +211,7 @@ export function renderConversion(block, { slice, previousSlice, period, rows, co
   layout.style.setProperty('--beam-headroom', HEADROOM / VIEW.height);
   const list = element('ol', 'conversion__steps');
   list.setAttribute('role', 'list');
-  list.append(...shown.map((step) => stepNode(step, period, narrow)));
+  list.append(...shown.map((step) => stepNode(step, narrow)));
   layout.append(beamNode(shown, narrow), list);
   block.setContent(layout);
 }

@@ -22,7 +22,6 @@ import {
   formatCount,
   formatDelta,
   formatDeltaCount,
-  formatDeltaPercent,
   formatDeltaShare,
   formatPeriodDative,
   formatVoc,
@@ -42,8 +41,6 @@ export const DELTA_SHAPES = {
   voc: { round: roundDelta, format: formatDelta },
   count: { round: roundCount, format: formatDeltaCount },
   share: { round: roundShare, format: formatDeltaShare },
-  /* Изменение в процентах к прошлому — целые проценты: «−76 %» */
-  percent: { round: roundCount, format: formatDeltaPercent },
 };
 
 /* Тон дельты — по смыслу роста: рост низких оценок плох, спад числа оценок плох, а его рост ни хорош, ни плох (D-49) */

@@ -111,9 +111,8 @@
   filter: none;
 }
 
-/* Ровная заливка токеном полосы плана графика VOC главной: без градиента, границ и размытия */
+/* Коридор без размытия и скругления (`flatBand`) — тот же зелёный градиент, что везде */
 .sparkline__band--flat {
-  fill: var(--color-plan-band);
   filter: none;
 }
 
@@ -130,13 +129,7 @@
 }
 
 .sparkline__band-stop {
-  --sparkline-band-strength: calc(var(--tone-rim) / 3);
-  stop-color: color-mix(in srgb, var(--color-positive) var(--sparkline-band-strength), transparent);
-}
-
-/* На светлом фоне 13 % зелёного не видно: коридор насыщеннее, чтобы читался так же, как на тёмном */
-:root[data-theme='light'] .sparkline__band-stop {
-  --sparkline-band-strength: calc(var(--tone-rim) * 0.75);
+  stop-color: var(--color-plan-band);
 }
 
 .sparkline__band-stop--clear {

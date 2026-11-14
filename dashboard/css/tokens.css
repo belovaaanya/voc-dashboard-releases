@@ -117,8 +117,14 @@
   /* «В плане» — серая нейтральная ячейка макета (R-16): отличима от ячейки без подсветки */
   --color-heat-neutral: #2A2B30;
 
-  /* Коридор плана на графике (Figma 3204:2952) */
-  --color-plan-band: rgba(217, 217, 217, 0.08);
+  /*
+    Коридор плана — везде зелёный градиент (неделя 16–22.11, решение пользователя): прозрачный слева, насыщеннее к
+    текущей точке справа, как у линий дайджеста. Один источник: график VOC главной, ключ легенды «План», мини-линии.
+    --color-plan-band — насыщенный конец полосы (стоп SVG-градиента), --plan-band-gradient — тот же градиент для CSS-фона
+  */
+  --plan-band-strength: calc(var(--tone-rim) / 3);
+  --color-plan-band: color-mix(in srgb, var(--color-positive) var(--plan-band-strength), transparent);
+  --plan-band-gradient: linear-gradient(90deg, transparent, var(--color-plan-band));
 
   /* Шкала отступов: только кратное 4 (V-02) */
   --space-1: 4px;
@@ -419,6 +425,10 @@
   --radius-tooltip: 12px;
   --radius-action: 8px;
   --radius-tag: 4px;
+  /* Коридор плана — скруглённая полоса: на графике 6, в мини-линиях меньше — 4, ключ легенды — 2 */
+  --radius-plan-band: 6px;
+  --radius-plan-band-line: 4px;
+  --radius-plan-band-key: 2px;
   --radius-pill: 999px;
   /* J-167: портрет роли уходит в прозрачность к левому нижнему углу, как на макете заказчика */
   --portrait-fade: linear-gradient(to top right, transparent 8%, #000 62%);
@@ -567,7 +577,8 @@
   --icon-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6.2 5 8.6 9.5 3.6' fill='none' stroke='%23FFFFFF' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 
   --color-heat-neutral: #EEF0F3;
-  --color-plan-band: rgba(22, 23, 26, 0.06);
+  /* На светлом фоне 13 % зелёного не видно: коридор насыщеннее, чтобы читался так же, как на тёмном */
+  --plan-band-strength: calc(var(--tone-rim) * 0.75);
 
   /* Карточка — белая, к краю чуть серее: та же форма градиента, что в тёмной теме */
   --color-card-border: rgba(22, 23, 26, 0.08);

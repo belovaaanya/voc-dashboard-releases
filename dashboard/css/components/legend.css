@@ -76,3 +76,9 @@
   border: var(--hairline) solid var(--color-control-border);
   background: var(--tone);
 }
+
+/* Ключ «План» — тот же градиент, что коридор на графике */
+.legend-item__band.tone--plan {
+  border-radius: var(--radius-plan-band-key);
+  background: var(--plan-band-gradient);
+}

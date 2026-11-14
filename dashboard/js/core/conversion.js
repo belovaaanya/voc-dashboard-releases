@@ -36,12 +36,11 @@ export function isWholeMonth(period, rows = null) {
 }
 
 /*
-  Изменение к прошлому периоду (то же сравнение, что у карточек метрик): у «поставили оценку» — число оценок,
-  у сниженных и «с ОС» — доля от оценивших в п.п.: число 1–3 растёт и вместе с объёмом, важна их доля.
-  `growth` — смысл роста: больше оценок и больше «с ОС» — хорошо, больше доли 1–3 — плохо
+  Изменение к прошлому периоду (то же сравнение, что у карточек метрик) — доля от оценивших в п.п.: число 1–3 растёт
+  и вместе с объёмом, важна их доля. У «поставили оценку» изменения нет: их доля — база, всегда 100 %.
+  `growth` — смысл роста: больше «с ОС» — хорошо, больше доли 1–3 — плохо
 */
 const CHANGE = {
-  rated: { kind: 'count', growth: 'good' },
   negative: { kind: 'share', growth: 'bad' },
   feedback: { kind: 'share', growth: 'good' },
 };
@@ -66,7 +65,7 @@ const shareOf = (count, rated) => (count === null || rated === 0 ? null : (count
 /**
  * Ступени конверсии по оценкам среза. `count` — `null`, если ступени нет в выгрузке; `share` — доля
  * от «поставили оценку» в процентах, `null` без оценок или без значения ступени. `change` — изменение к
- * `previous` (`{ kind, value, percent, growth }`; `percent` — у числа оценок, в процентах к прошлому), `null` без прошлого периода или у ступени без изменения.
+ * `previous` (`{ kind, value, growth }`); у оценок изменения нет — их доля всегда 100 %, `null` без прошлого периода или у ступени без изменения.
  */
 export function surveyConversion(ratings, previous = null) {
   const counts = counted(ratings);
@@ -78,9 +77,7 @@ export function surveyConversion(ratings, previous = null) {
     let change = null;
     if (rule && before && count !== null && before[step.key] !== null) {
       const value = rule.kind === 'count' ? count - before[step.key] : (share ?? 0) - (shareOf(before[step.key], before.rated) ?? 0);
-      /* У оценок — ещё и изменение в процентах к прошлому периоду: его показывает карточка, число — в подсказке прогноза */
-      const percent = rule.kind === 'count' && before[step.key] ? (value * 100) / before[step.key] : null;
-      change = counts.rated && before.rated ? { kind: rule.kind, value, percent, growth: rule.growth } : null;
+      change = counts.rated && before.rated ? { kind: rule.kind, value, growth: rule.growth } : null;
     }
     return { ...step, count, share, change };
   });

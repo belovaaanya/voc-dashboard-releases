@@ -77,7 +77,7 @@ function trendNode(trend, plan) {
   const bands = points.map(({ plan: own }) => (own ? { min: own.min, max: own.max } : null));
   const wrap = element('div', 'digest-trend');
   const span = [...new Set([points[0].month, points.at(-1).month])].map(monthShort).join(' — ');
-  wrap.append(sparkline(points.map(({ voc }) => voc), { tone: 'neutral', wide: true, label: vocText, glow: true, bands, flatBand: true }),
+  wrap.append(sparkline(points.map(({ voc }) => voc), { tone: 'neutral', wide: true, label: vocText, glow: true, bands }),
     element('span', 'digest-caption', plan ? `${span} · План ${formatVoc(plan.min)}–${formatVoc(plan.max)}` : span));
   return wrap;
 }
@@ -91,8 +91,8 @@ function weeklyNode(weeks, plan) {
   const band = plan ? { min: plan.min, max: plan.max } : null;
   /* Недели и план — в базе чисел под итогом страницы, а не подписью в каждой карточке */
   /* Под точками — даты начала недель, ролью оси: видно, что шаг — неделя */
-  /* Коридор плана — серой заливкой, как на главной: план нейтрален, зелёный читался бы как «хорошо» */
-  wrap.append(sparkline(points.map(({ voc }) => voc), { tone: 'neutral', wide: true, fill: true, label: vocText, band, flatBand: true, glow: true,
+  /* Коридор плана — зелёным градиентом, как у всех линий дайджеста (решение пользователя, 14.11) */
+  wrap.append(sparkline(points.map(({ voc }) => voc), { tone: 'neutral', wide: true, fill: true, label: vocText, band, glow: true,
     axis: points.map(({ from }) => dayMonth(from)) }));
   return wrap;
 }
@@ -431,7 +431,7 @@ export function renderDigestPlatforms(block, context) {
   };
   content.append(legendList([
     ...detail.platforms.map((platform) => legendItem(legendText(platform), tones[platform.code], 'line')),
-    ...(band ? [legendItem(`План ${formatVoc(plan.min)}–${formatVoc(plan.max)}`, 'plan', 'band')] : []),
+    ...(band ? [legendItem(`План ${formatVoc(plan.min)}–${formatVoc(plan.max)}`, 'positive', 'band')] : []),
   ], 'digest-platforms__legend'));
   /* Подпись нижней линии месяца — под точкой, чтобы подписи двух линий не сталкивались */
   const rounded = series.map((values) => values.map((value) => (value === null ? null : roundVoc(value))));
@@ -445,7 +445,7 @@ export function renderDigestPlatforms(block, context) {
   };
   const chart = element('div', 'digest-platforms__chart');
   chart.append(...detail.platforms.map((platform, index) => sparkline(series[index],
-    { tone: tones[platform.code], wide: true, fill: true, domain, band: index === 0 ? band : null, flatBand: true, zones: false, glow: true,
+    { tone: tones[platform.code], wide: true, fill: true, domain, band: index === 0 ? band : null, zones: false, glow: true,
       label: label(index), labelBelow: (point) => below(index, point), axis: months.map(monthShort) })));
   /* Подписи «VOC с поправкой» нет: карточка показывает тот же VOC, что весь дашборд */
   content.append(chart);

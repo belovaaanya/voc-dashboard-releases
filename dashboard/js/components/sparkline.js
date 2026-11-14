@@ -5,8 +5,50 @@ import { element, svgNode } from '../ui/dom.js';
 
 const VIEWBOX = { width: 91, height: 28 };
 const DOT_RADIUS = 1.5;
-/* Скругление коридора плана у `glow`, в единицах viewBox */
-const BAND_RADIUS = 3;
+/*
+  Скругление коридора плана — токен --radius-plan-band-line в пикселях экрана (неделя 16–22.11, везде скруглённый).
+  Растянутая линия масштабируется по осям по-разному: rx и ry в единицах viewBox пересчитываются по реальному размеру,
+  иначе угол вытягивался бы в эллипс. До замера — запасное значение
+*/
+const BAND_RADIUS_FALLBACK = 4;
+
+function roundBands(svg) {
+  /* Полосы коридора — прямые дети svg; ровный `crispBand` с границами-линиями остаётся прямоугольным */
+  const rects = () => [...(svg.children ?? [])].filter((node) => {
+    const names = (node.getAttribute?.('class') ?? '').split(' ');
+    return names.includes('sparkline__band') && !names.includes('sparkline__band--crisp');
+  });
+  const apply = () => {
+    const width = svg.clientWidth;
+    const height = svg.clientHeight;
+    if (!width || !height) return;
+    const token = parseFloat(globalThis.getComputedStyle?.(svg).getPropertyValue('--radius-plan-band-line'));
+    const radius = Number.isFinite(token) ? token : BAND_RADIUS_FALLBACK;
+    for (const rect of rects()) {
+      const rectWidth = Number(rect.getAttribute('width'));
+      const rectHeight = Number(rect.getAttribute('height'));
+      rect.setAttribute('rx', Math.min((radius * VIEWBOX.width) / width, rectWidth / 2));
+      rect.setAttribute('ry', Math.min((radius * VIEWBOX.height) / height, rectHeight / 2));
+    }
+  };
+  /* До замера — радиус по типовому размеру: узкая линия 91 × 28 без растяжения, широкая — около 300 × 60 */
+  const wide = svg.getAttribute('preserveAspectRatio') === 'none';
+  const [estimateX, estimateY] = wide ? [VIEWBOX.width / 300, VIEWBOX.height / 60] : [1, 1];
+  for (const rect of rects()) {
+    rect.setAttribute('rx', Math.min(BAND_RADIUS_FALLBACK * estimateX, Number(rect.getAttribute('width')) / 2));
+    rect.setAttribute('ry', Math.min(BAND_RADIUS_FALLBACK * estimateY, Number(rect.getAttribute('height')) / 2));
+  }
+  if (typeof globalThis.ResizeObserver !== 'function') return;
+  /* Первый вызов приходит до вставки линии в документ — наблюдение снимается, только когда линию из него убрали */
+  let shown = false;
+  const observer = new globalThis.ResizeObserver(() => {
+    if (svg.isConnected) {
+      shown = true;
+      apply();
+    } else if (shown) observer.disconnect();
+  });
+  observer.observe(svg);
+}
 let sequence = 0;
 
 /* Заливка под линией гаснет к низу, как у графика динамики (R-50) */
@@ -51,7 +93,8 @@ function appendFill(svg, points) {
 /*
   `bands` — коридор плана по точкам (у каждого месяца свой план): одинаковые — обычная полоса `band`, разные — полоса
   ступенькой (граница ступени — посередине между точками), линия своего тона, а точки красятся по своему коридору.
-  `flatBand` — коридор ровной заливкой токеном полосы плана графика VOC главной (`--color-plan-band`), без границ и градиента
+  `flatBand` — коридор без размытия и скругления; заливка та же, что везде: зелёный градиент `--color-plan-band` слева направо
+  (неделя 16–22.11 — коридор плана везде зелёный, раньше `flatBand` давал серую ровную заливку)
 */
 export function sparkline(values, { tone, domain, wide = false, fill = false, band: singleBand = null, bands = null, zones = true, label = null, axis = null, glow = false, crispBand = false, flatBand = false, labelBelow = null, halo = false, endRule = false, level = null }) {
   const sameBand = (left, right) => left && right && left.min === right.min && left.max === right.max;
@@ -66,10 +109,7 @@ export function sparkline(values, { tone, domain, wide = false, fill = false, ba
     viewBox: `0 0 ${VIEWBOX.width} ${VIEWBOX.height}`, 'aria-hidden': 'true', focusable: 'false', ...(wide ? { preserveAspectRatio: 'none' } : {}),
   });
   if (stepped) appendSteppedBand(svg, points, stepped, scale, flatBand);
-  if (band && flatBand) {
-    const y = (value) => VIEWBOX.height - ((value - scale.min) / (scale.max - scale.min)) * VIEWBOX.height;
-    svg.append(svgNode('rect', 'sparkline__band sparkline__band--flat', { x: 0, y: y(band.max), width: VIEWBOX.width, height: Math.max(0.5, y(band.min) - y(band.max)) }));
-  } else if (band) {
+  if (band) {
     const y = (value) => VIEWBOX.height - ((value - scale.min) / (scale.max - scale.min)) * VIEWBOX.height;
     /* Коридор плана — горизонтальный градиент тона «хорошо»: прозрачный слева, насыщеннее к текущей точке справа */
     const id = `sparkline-band-${sequence += 1}`;
@@ -78,11 +118,12 @@ export function sparkline(values, { tone, domain, wide = false, fill = false, ba
     const defs = svgNode('defs');
     defs.append(gradient);
     svg.append(defs);
-    svg.append(svgNode('rect', `sparkline__band${crispBand ? ' sparkline__band--crisp' : ''}`, { x: 0, y: y(band.max), width: VIEWBOX.width, height: Math.max(0.5, y(band.min) - y(band.max)), fill: `url(#${id})`, ...(glow && !crispBand ? { rx: BAND_RADIUS, ry: BAND_RADIUS } : {}) }));
+    svg.append(svgNode('rect', `sparkline__band${crispBand ? ' sparkline__band--crisp' : ''}${flatBand ? ' sparkline__band--flat' : ''}`, { x: 0, y: y(band.max), width: VIEWBOX.width, height: Math.max(0.5, y(band.min) - y(band.max)), fill: `url(#${id})` }));
     if (crispBand) {
       for (const edge of [band.max, band.min]) svg.append(svgNode('line', 'sparkline__band-edge', { x1: 0, x2: VIEWBOX.width, y1: y(edge), y2: y(edge) }));
     }
   }
+  if (stepped || band) roundBands(svg);
   if (Number.isFinite(level) && level >= scale.min && level <= scale.max) {
     const y = VIEWBOX.height - ((level - scale.min) / (scale.max - scale.min)) * VIEWBOX.height;
     svg.append(svgNode('line', 'sparkline__level', { x1: 0, x2: VIEWBOX.width, y1: y, y2: y }));
@@ -186,8 +227,9 @@ function appendPlanLines(svg, lines, scale, band, glow = false) {
 /* Коридор ступенькой: у точки своя полоса от середины до соседей слева и справа; градиент — один на всю ширину */
 function appendSteppedBand(svg, points, bands, scale, flat) {
   const y = (value) => VIEWBOX.height - ((value - scale.min) / (scale.max - scale.min)) * VIEWBOX.height;
+  /* Градиент — и у ровного коридора: `flat` снимает только размытие (класс), заливка везде зелёная */
   let fillRef = null;
-  if (!flat) {
+  {
     const id = `sparkline-band-${sequence += 1}`;
     const gradient = svgNode('linearGradient', 'sparkline__band-gradient', { id, gradientUnits: 'userSpaceOnUse', x1: 0, x2: VIEWBOX.width, y1: 0, y2: 0 });
     gradient.append(svgNode('stop', 'sparkline__band-stop sparkline__band-stop--clear', { offset: 0 }), svgNode('stop', 'sparkline__band-stop', { offset: 1 }));

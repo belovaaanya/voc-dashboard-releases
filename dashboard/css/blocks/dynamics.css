@@ -66,8 +66,13 @@
   overflow: hidden;
 }
 
-.chart-plan-band {
-  fill: var(--color-plan-band);
+/* Коридор плана — градиентом из defs (`fill` атрибутом); стопы — токен полосы плана, общий с мини-линиями и легендой */
+.chart-plan-band-stop {
+  stop-color: var(--color-plan-band);
+}
+
+.chart-plan-band-stop--clear {
+  stop-color: transparent;
 }
 
 .chart-bars {
