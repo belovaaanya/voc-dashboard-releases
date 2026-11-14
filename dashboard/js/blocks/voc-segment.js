@@ -91,6 +91,14 @@ function render(block, context, index) {
   const trend = steps.length ? trendNode(values, steps, trendStep(context.period), { tone, level: plan?.min ?? null }) : null;
   /* Тренд — своей зоной справа под бейджем, число и объём — слева у нижнего края (metrics.css, `.metric--with-trend`) */
   if (trend) toggle.classList.add('metric--with-trend');
+  /* Зона тренда — по ширине бейджа плана: невидимая копия бейджа задаёт ширину колонки (metrics.css) */
+  const sizerBadge = trend ? badgeNode(voc(rows), plan) : null;
+  if (sizerBadge) {
+    const sizer = element('span', 'metric__trend-sizer');
+    sizer.setAttribute('aria-hidden', 'true');
+    sizer.append(sizerBadge);
+    trend.append(sizer);
+  }
   appendAll(toggle, pairNode(formatVoc(voc(rows)), leadNode(delta)), metaRowNode(countGroupNode(rows.length, previous?.length, context.period), forecast, warning), trend);
   /* aria-label кнопки заменяет её текст: прогноз и пометку выборки screen reader иначе не услышит */
   if (forecast) toggle.setAttribute('aria-label', `${toggle.getAttribute('aria-label')}. Период не закончен: ${forecast.dataset.forecast.toLowerCase()}`);

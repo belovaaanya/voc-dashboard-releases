@@ -42,7 +42,7 @@
 */
 .metric--with-trend {
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) max-content;
   grid-template-rows: 1fr auto auto;
   align-items: end;
   column-gap: var(--space-3);
@@ -63,19 +63,34 @@
   grid-row: 3;
 }
 
-/* Ширина тренда — контейнер для правил узкой карточки ниже */
+/*
+  Зона тренда — ровно по краям бейджа плана в шапке (решение пользователя): ширину колонке задаёт невидимая копия
+  бейджа (`.metric__trend-sizer`), поэтому «В плане» и «Ниже плана» разной ширины ведут зону за собой. Вертикально —
+  от бейджа до строки «N оценок», не заходя на неё. Без плана бейджа нет — зона не уже двух `--space-10`
+*/
 .metric--with-trend > .metric__trend {
   display: flex;
+  flex-direction: column;
   grid-column: 2;
   grid-row: 1 / 3;
   align-self: stretch;
-  min-width: 0;
-  container-type: inline-size;
+  min-inline-size: calc(var(--space-10) * 2);
 }
 
+/* Копия бейджа нулевой высоты: задаёт только ширину колонки, не видна и не озвучивается; стоит первой в колонке */
+.metric__trend-sizer {
+  display: block;
+  order: -1;
+  block-size: 0;
+  overflow: hidden;
+  visibility: hidden;
+}
+
+/* Ширина линии — контейнер для правил узкой зоны ниже; сам тренд им быть не может: обнулил бы ширину копии бейджа */
 .metric__trend > .sparkline-labels {
   flex: 1 1 auto;
   width: 100%;
+  container-type: inline-size;
   /* Сверху — место под подпись значения самой высокой точки */
   padding-block-start: var(--space-3);
 }
@@ -103,19 +118,18 @@
 }
 
 /*
-  Ширина тренда — остаток карточки за числом и дельтой (docs/blocks-metrics.md — замеры по ширинам). Подписи обеих
-  крайних точек (2 × ≈23 px и зазор) помещаются от 56 px; уже — линия и последнее значение; уже 28 px — тренда нет:
-  тонкий высокий столбик не читается линией. Карточка не растёт, ничего не вылезает
+  Подписи крайних точек — внутри зоны: обе (2 × ≈23 px и зазор) помещаются от 56 px; уже — последнее значение и шаги;
+  уже 28 px — тренда нет. Зона по ширине бейджа (≈80–100 px), так что это запас
 */
 @container (width < 56px) {
-  .metric__trend .sparkline-labels__axis,
   .metric__trend .sparkline-labels__value--start {
     display: none;
   }
 }
 
 @container (width < 28px) {
-  .metric__trend > .sparkline-labels {
+  .metric__trend .sparkline-labels__plot,
+  .metric__trend .sparkline-labels__axis {
     visibility: hidden;
   }
 }
