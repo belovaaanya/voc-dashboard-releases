@@ -2,9 +2,9 @@
   Большая карточка: VOC текущего среза, объём всех оценок среза (J-85), дельта к предыдущему
   аналогичному периоду и плановый коридор канала.
 
-  Композиция (J-65): заголовок и бейдж в шапке; внизу крупное значение, справа
-  сверху от него дельта VOC, под ним строкой — коридор плана, объём с дельтой
-  объёма и пометка выборки. Геометрия наша (V-01…V-03).
+  Композиция (J-65): заголовок и бейдж в шапке, под бейджем справа — коридор плана;
+  внизу крупное значение, справа сверху от него дельта VOC, под ним строкой — объём
+  с дельтой объёма и пометка выборки. Геометрия наша (V-01…V-03).
 
   Заголовок ставит сама карточка: он обязан называть тот же срез, который
   показан числом. «VOC канала» над значением одного сегмента — то же
@@ -19,11 +19,13 @@ import { CHANNEL_DIMENSION } from '../core/dimensions.js';
 import { appendAll, element } from '../ui/dom.js';
 import { formatVoc } from '../core/format.js';
 import { voc, vocDelta } from '../core/metrics.js';
-import { planFor } from '../core/plan.js';
+import { planFor, planGlow } from '../core/plan.js';
 import { withFilter } from '../state/url-state.js';
 import {
   badgeNode,
   countGroupNode,
+  setPlanGlow,
+  forecastNode,
   leadNode,
   metaRowNode,
   pairNode,
@@ -66,8 +68,9 @@ export function renderVocChannel(block, context) {
 
   const title = titleOf(state, dimensions, label);
   block.setTitle(title.text, title.full);
-  /* Бейдж живёт в шапке карточки и обязан исчезать вместе с содержимым */
+  /* Бейдж и стекло статуса живут на карточке и обязаны исчезать вместе с содержимым */
   block.setHead();
+  setPlanGlow(block, null);
   if (slice.length === 0) {
     block.setState(EMPTY);
     return;
@@ -81,16 +84,19 @@ export function renderVocChannel(block, context) {
   });
 
   block.setHead({ note: badgeNode(value, plan) });
+  setPlanGlow(block, planGlow(value, plan));
 
   /*
     Анатомия сегментов: дельта VOC справа сверху от числа; без сравнения слот пуст и держит место (B-07).
-    Нижняя строка — как у сегментов: объём с дельтой и пометка выборки; коридор плана — своей строкой над
-    ней, а не через точку: в узкой карточке строка переносилась и начиналась с разделителя
+    Нижняя строка — как у сегментов: объём с дельтой, прогноз незаконченного периода и пометка выборки.
+    Коридор плана — справа сверху, под бейджем плана: читается вместе с ним. На его прежнем месте между числом и
+    объёмом — пустая строка той же высоты: число и «N оценок» стоят, где стояли, карточка «дышит»
   */
-  const planRow = metaRowNode(planCaptionNode(plan));
-  const caption = metaRowNode(countGroupNode(slice.length, previousSlice?.length), sufficiencyNode(slice, { focusable: true }))
+  const count = slice.length;
+  const previousCount = previousSlice?.length;
+  const caption = metaRowNode(countGroupNode(count, previousCount, period), forecastNode(count, previousCount, period, { focusable: true }), sufficiencyNode(slice, { focusable: true }))
     ?? emptyCaption();
   const layout = element('div', 'metric metric--big');
-  appendAll(layout, pairNode(formatVoc(value), leadNode(vocDelta(slice, previousSlice), { large: true }), 'metric__value--big'), planRow, caption);
+  appendAll(layout, planCaptionNode(plan, { corner: true }), pairNode(formatVoc(value), leadNode(vocDelta(slice, previousSlice), { large: true }), 'metric__value--big'), emptyCaption(), caption);
   block.setContent(layout);
 }

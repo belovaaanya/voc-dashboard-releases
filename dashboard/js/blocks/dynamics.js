@@ -2,20 +2,20 @@ import { chartTimeline } from '../components/chart-timeline.js';
 import { chartTooltip, showChartTooltip } from '../components/chart-tooltip.js';
 import { observeStage } from '../components/stage-observer.js';
 import { dateRange, selectionDays, toggleDays } from '../state/chart-selection.js';
-import { areaPaths, chartDomain, planZoneStops, countAxis, curveSamples, damageAxis, gapPaths, hitColumns, labelOrder, linePaths, placeLabels, plotPoints, xLabelIndices } from '../core/chart-geometry.js';
+import { areaPaths, chartDomain, planZoneStops, countAxis, curveSamples, damageAxis, gapPaths, hitColumns, labelOrder, linePaths, placeCards, placeLabels, plotPoints, xLabelIndices } from '../core/chart-geometry.js';
 import { legendItem, legendList } from '../components/legend.js';
 import { segmented } from '../components/segmented.js';
 import { periodScaleMemory, scaleTabs } from '../components/scale-tabs.js';
 import { stateText } from '../components/status-panel.js';
 import { element, svgNode } from '../ui/dom.js';
-import { formatCount, formatDate, formatDateRange, formatDayRange, formatDelta, formatInterval, formatRatings, formatVoc } from '../core/format.js';
+import { formatCount, formatDate, formatDateRange, formatDayRange, formatDelta, formatInterval, formatNumber, formatRatings, formatVoc } from '../core/format.js';
 import { comparedPeriod } from '../core/period.js';
 import { dynamicsSheets, exportFileName } from '../core/export.js';
 import { downloadAction } from '../ui/download.js';
 import { planFor } from '../core/plan.js';
-import { roundVoc } from '../core/round.js';
+import { roundDelta, roundVoc } from '../core/round.js';
 import { SCALE_OPTIONS, buildTimeSeries, recommendedScale, withDamage } from '../core/timeseries.js';
-import { ROLLOUT_EVENT, eventLanes } from '../core/calendar.js';
+import { ANOMALY_EVENT, INCIDENT_EVENT, ROLLOUT_EVENT, SUSTAINED_EVENT, eventLanes, majorEvents } from '../core/calendar.js';
 import { calendarEventsOf, calendarReady } from '../state/event-analysis.js';
 
 /* График рисуется в пикселях сцены, а не в растянутом viewBox: иначе на узкой странице текст мельче роли (B-17) */
@@ -119,13 +119,14 @@ const LANE_GAP = 4;
 const laneRadius = (count) => (count >= 4 ? 4 : count >= 2 ? 3 : 2);
 const stripHeight = (lanes) => (lanes.length ? LANE_GAP + lanes.length * LANE_HEIGHT : 0);
 
-function frameFor({ width, height }, bars, strip = 0) {
+function frameFor({ width, height }, bars, strip = 0, cards = 0) {
   const right = bars ? barsAxisWidth(bars) : MARGIN.right;
   return {
     width,
     height,
     strip,
-    plot: { x: MARGIN.left, y: MARGIN.top, width: width - MARGIN.left - right, height: height - MARGIN.top - MARGIN.bottom - strip },
+    cards,
+    plot: { x: MARGIN.left, y: MARGIN.top + cards, width: width - MARGIN.left - right, height: height - MARGIN.top - MARGIN.bottom - strip - cards },
   };
 }
 
@@ -161,7 +162,7 @@ function appendGrid(svg, domain, plot, xs) {
     }
     svg.append(svgText('chart-axis-label chart-axis-label--y', formatVoc(tick), { x: 0, y: plot.y + y, 'dominant-baseline': 'middle' }));
   });
-  svg.append(svgText('chart-axis-label chart-axis-label--y chart-axis-title', 'VOC', { x: 0, y: AXIS_TITLE_Y, 'dominant-baseline': 'middle' }));
+  svg.append(svgText('chart-axis-label chart-axis-label--y chart-axis-title', 'VOC', { x: 0, y: plot.y - MARGIN.top + AXIS_TITLE_Y, 'dominant-baseline': 'middle' }));
   for (const x of xs) grid.append(svgNode('line', 'chart-grid__minor', { x1: x, y1: 0, x2: x, y2: plot.height }));
   svg.append(grid);
 }
@@ -186,6 +187,83 @@ function appendXAxis(svg, series, points, frame, indices) {
   4+ событиях. Наведение — подсказка «дата · тип · число», клик — как клик по точке графика: события и антидрайверы
   этого интервала. Мишень — столбец интервала во всю высоту строки
 */
+/*
+  Карточки крупных событий (неделя 16–22.11, «Для аналитика»): стеклянная карточка цвета типа на тонкой ножке к своей
+  дате на оси. Внутри — тип, дата и одно число: доля затронутых у аварии, падение VOC у снижения, отрыв от плана у
+  инцидента. Размер — как у `.chart-card` в стилях: раскладка (`placeCards`) должна знать его заранее
+*/
+const CARD = { width: 112, height: 40 };
+/*
+  Карточки — в своей полосе над областью графика (над подписями точек): при ежедневном масштабе линия VOC проходит
+  почти по всей высоте, и внутри области карточка неизбежно легла бы на линию. Ножки идут вниз к дате на оси
+*/
+const CARD_GAP = 4;
+const CARD_ZONE = CARD.height + CARD_GAP * 2;
+const CARD_LIMIT = 5;
+const CARD_LABELS = { [INCIDENT_EVENT]: 'Авария', [ANOMALY_EVENT]: 'Крит. снижение', [SUSTAINED_EVENT]: 'Инцидент' };
+const CARD_TONES = { [INCIDENT_EVENT]: 'orange', [ANOMALY_EVENT]: 'negative', [SUSTAINED_EVENT]: 'incident' };
+
+function cardNumber(event) {
+  if (event.kind === INCIDENT_EVENT) return `${formatNumber((event.effect ?? 0) * 100, 0)}\u00a0%`;
+  if (event.kind === ANOMALY_EVENT) return formatDelta(roundDelta(event.delta));
+  return formatDelta(roundDelta(-event.planGap));
+}
+
+const CARD_NUMBER_HINT = { [INCIDENT_EVENT]: 'затронуто', [ANOMALY_EVENT]: 'VOC к средней окна', [SUSTAINED_EVENT]: 'к нижней границе плана' };
+
+function appendEventCards(stage, svg, candidates, series, points, plot, tooltip, interaction, context) {
+  for (const old of stage.querySelectorAll('.chart-card')) old.remove();
+  if (!candidates.length) return;
+  /* Один ряд над подписями точек: в координатах области — выше её верха на поле подписей и саму полосу */
+  const placed = placeCards(candidates, {
+    xs: points.map(({ x }) => x), line: [], width: plot.width, card: CARD, gap: CARD_GAP, limit: CARD_LIMIT,
+    rows: [-(MARGIN.top + CARD_ZONE) + CARD_GAP],
+  });
+  const stems = svgNode('g', 'chart-cards', { 'aria-hidden': 'true', transform: `translate(${plot.x} ${plot.y})` });
+  for (const { event, index, center, rect } of placed) {
+    const tone = CARD_TONES[event.kind];
+    const label = CARD_LABELS[event.kind];
+    const number = cardNumber(event);
+    const date = formatDate(event.date);
+    /* Ножка — от края карточки к оси дат под областью графика */
+    stems.append(svgNode('line', `chart-cards__stem tone--${tone}`, {
+      x1: center, y1: rect.y + rect.height, x2: center, y2: plot.height,
+    }));
+    stems.append(svgNode('circle', `chart-cards__foot tone--${tone}`, { cx: center, cy: plot.height, r: 2 }));
+    const card = element('button', `chart-card glass tone--${tone}`);
+    card.type = 'button';
+    card.style.left = `${plot.x + rect.x}px`;
+    card.style.top = `${plot.y + rect.y}px`;
+    card.setAttribute('aria-label', `${date}. ${label}: ${number} ${CARD_NUMBER_HINT[event.kind]}. ${POINT_HINT}`);
+    const value = element('span', 'chart-card__value', number);
+    value.append(element('span', 'chart-card__date', date.slice(0, 5)));
+    card.append(element('span', 'chart-card__head', label), value);
+    const bucket = series[index];
+    /* Подсказка — у оси дат, как у точки графика: над карточкой ей не хватит места в сцене, и она закрыла бы карточку */
+    const reveal = () => showChartTooltip(tooltip, {
+      content: [element('span', 'chart-tooltip__value', `${date} · ${label} · ${number} ${CARD_NUMBER_HINT[event.kind]}`),
+        element('span', 'chart-tooltip__hint', POINT_HINT)],
+      x: plot.x + center,
+      y: plot.y + plot.height,
+    });
+    const conceal = () => { tooltip.hidden = true; };
+    card.addEventListener('pointerenter', reveal);
+    card.addEventListener('focus', reveal);
+    card.addEventListener('pointerleave', conceal);
+    card.addEventListener('blur', conceal);
+    card.dataset.focusCard = `${event.kind}:${event.date}`;
+    card.addEventListener('click', (click) => {
+      const id = card.dataset.focusCard;
+      if (interaction.select && points[index]?.y !== null) interaction.select(index, click);
+      else context.setState({ ...context.state, focus: null, days: dateRange(bucket.from, bucket.to), detailEvent: null });
+      /* Клик перерисовывает график: фокус возвращается на ту же карточку новой отрисовки */
+      stage.closest('.card')?.querySelector(`[data-focus-card="${id}"]`)?.focus({ preventScroll: true });
+    });
+    stage.append(card);
+  }
+  svg.append(stems);
+}
+
 function appendEventStrip(svg, lanes, series, points, frame, tooltip, interaction, context) {
   const { plot } = frame;
   const top = plot.y + plot.height + MARGIN.bottom + LANE_GAP;
@@ -245,7 +323,7 @@ function appendBarsAxis(svg, bars, frame) {
     }));
   }
   labels.append(svgText('chart-axis-label chart-axis-label--count chart-axis-title', bars.spec.caption, {
-    x: frame.width, y: AXIS_TITLE_Y, 'dominant-baseline': 'middle',
+    x: frame.width, y: plot.y - MARGIN.top + AXIS_TITLE_Y, 'dominant-baseline': 'middle',
   }));
   svg.append(labels);
 }
@@ -620,7 +698,7 @@ function drawChart(block, context, stage, tooltip, model, size) {
   const damageMode = modeOf(context) === MODE_DAMAGE;
   const { current, previous, lanes } = model;
   const bars = chartBars(current, damageMode);
-  const frame = frameFor(size, bars, stripHeight(lanes));
+  const frame = frameFor(size, bars, stripHeight(lanes), model.cards.length ? CARD_ZONE : 0);
   const { plot } = frame;
   const plan = damageMode ? null : model.plan;
   const hasPrevious = !damageMode && model.hasPrevious;
@@ -676,6 +754,7 @@ function drawChart(block, context, stage, tooltip, model, size) {
   stage.querySelector('.chart-svg')?.remove();
   stage.prepend(svg);
   placePointLabels(labels, current, currentPoints, plan, plot);
+  appendEventCards(stage, svg, model.cards, current, currentPoints, plot, tooltip, interaction, context);
   if (focused) svg.querySelector(`[data-focus-date="${focused}"]`)?.focus();
 }
 
@@ -689,12 +768,15 @@ function renderChart(block, context, scale, plan) {
   const wanted = context.analyst && context.slice.length > 0;
   const ready = wanted && calendarReady(context);
   if (wanted && !ready) awaitCalendar(block, context);
-  const model = { ...base, lanes: ready ? eventLanes(calendarEventsOf(context), base.current) : [] };
+  const events = ready ? calendarEventsOf(context) : [];
+  const model = { ...base, lanes: ready ? eventLanes(events, base.current) : [], cards: majorEvents(events, base.current) };
   const chart = element('div', modeOf(context) === MODE_DAMAGE ? 'chart chart--damage' : 'chart');
   chart.append(chartLegend(context, model));
   const stage = element('div', 'chart-stage');
   /* Сцена выше на полосу событий: область графика не сжимается */
-  if (model.lanes.length) stage.style.setProperty('--chart-events-height', `${stripHeight(model.lanes)}px`);
+  /* Сцена выше на полосу событий и полосу карточек: область графика не сжимается */
+  const extra = stripHeight(model.lanes) + (model.cards.length ? CARD_ZONE : 0);
+  if (extra) stage.style.setProperty('--chart-events-height', `${extra}px`);
   /* Урон с пятёрками и подсказку клика знает только подсказка: диктор читает её, а не одно имя точки */
   const tooltip = chartTooltip({ spoken: true });
   stage.append(tooltip);

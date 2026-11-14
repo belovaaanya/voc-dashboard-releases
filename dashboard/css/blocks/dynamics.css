@@ -280,3 +280,64 @@
   fill: transparent;
   cursor: pointer;
 }
+
+/*
+  Карточки крупных событий на графике (неделя 16–22.11, «Для аналитика»): стекло с краем и свечением цвета типа,
+  тонкая ножка того же цвета к дате на оси. Размер — как `CARD` в dynamics.js: раскладка знает его заранее
+*/
+.chart-card {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-1);
+  width: calc(var(--space-10) * 2.8);
+  height: var(--space-10);
+  padding: 0 var(--space-2);
+  border-color: color-mix(in srgb, var(--tone) var(--tone-rim), transparent);
+  border-radius: var(--radius-control);
+  box-shadow: var(--glass-shadow), 0 0 var(--space-3) color-mix(in srgb, var(--tone) var(--tone-glow), transparent);
+  color: var(--color-text-strong);
+  text-align: start;
+  cursor: pointer;
+}
+
+.chart-card:hover {
+  border-color: var(--tone);
+}
+
+.chart-card__head {
+  overflow: hidden;
+  color: var(--tone-ink, var(--tone));
+  font: var(--type-caption);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.chart-card__value {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1);
+  font: var(--type-caption-strong);
+}
+
+.chart-card__date {
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+}
+
+.chart-cards {
+  /* Ножки не перехватывают наведение и клик у точек графика */
+  pointer-events: none;
+}
+
+.chart-cards__stem {
+  stroke: color-mix(in srgb, var(--tone) var(--tone-rim), transparent);
+  stroke-width: var(--divider-width);
+}
+
+.chart-cards__foot {
+  fill: var(--tone);
+}

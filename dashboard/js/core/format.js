@@ -124,6 +124,18 @@ export function monthName(iso) {
   return MONTHS_FULL[month - 1] ?? '—';
 }
 
+const MONTHS_DATIVE = ['январю', 'февралю', 'марту', 'апрелю', 'маю', 'июню', 'июлю', 'августу', 'сентябрю', 'октябрю', 'ноябрю', 'декабрю'];
+const QUARTERS = ['I', 'II', 'III', 'IV'];
+
+/** Период «к чему»: месяц — «к октябрю», квартал — «к III кварталу»; год не пишется — сравнение всегда с соседним. */
+export function formatPeriodDative(from, unit) {
+  const parts = parseIsoDate(from);
+  if (!parts) return '—';
+  const month = Number(parts.month);
+  if (unit === 'quarter') return `${QUARTERS[Math.floor((month - 1) / 3)]}${NBSP}кварталу`;
+  return MONTHS_DATIVE[month - 1];
+}
+
 /** Интервал тренда одной подписью: месяц — «май 26», квартал — «II кв. 26», неделя — «неделя с 04.05.26». */
 export function formatBucket(from, scale) {
   const parts = parseIsoDate(from);

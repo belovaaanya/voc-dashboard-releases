@@ -14,7 +14,6 @@ import { delta } from '../components/delta.js';
 import { valueDelta } from '../components/value-delta.js';
 import { EMPTY_MARK, emptyValue } from '../components/empty-value.js';
 import { sparkline } from '../components/sparkline.js';
-import { buildTimeSeries, SCALE_OPTIONS, sparklineScale } from '../core/timeseries.js';
 import { hoverTooltip } from '../components/hover-tooltip.js';
 import { statusDot } from '../components/status-dot.js';
 import { element } from '../ui/dom.js';
@@ -24,8 +23,10 @@ import {
   formatDelta,
   formatDeltaCount,
   formatDeltaShare,
+  formatPeriodDative,
   formatVoc,
 } from '../core/format.js';
+import { ratingsForecast } from '../core/forecast.js';
 import { trendOf } from '../core/metrics.js';
 import { ABOVE_PLAN, BELOW_PLAN, GLOW_ABOVE_STRONG, GLOW_BELOW_STRONG, IN_PLAN, planGlow, planStatus } from '../core/plan.js';
 import { roundCount, roundDelta, roundShare } from '../core/round.js';
@@ -51,6 +52,9 @@ export const GROWTH = {
 
 /* Объём оценок в шапке: рост — вторым серым текста, а не --color-neutral (четвёртый серый карточки) */
 const HEADER_VOLUME = { up: 'quiet', down: 'negative', flat: 'quiet' };
+/* Незаконченный период: часть месяца против целого прошлого — дельта не хороша и не плоха, третьим серым */
+const UNFINISHED_VOLUME = { up: 'faint', down: 'faint', flat: 'faint' };
+const FORECAST_END = { month: 'к концу месяца', quarter: 'к концу квартала' };
 
 const TREND_CAPTION = {
   up: 'рост к предыдущему периоду',
@@ -95,22 +99,29 @@ export function pairNode(valueText, lead, modifier, { wrap = false } = {}) {
   return valueDelta(valueNode(valueText, modifier), lead, { className: 'metric__pair', wrap });
 }
 
-/* Шаг мини-тренда словом — для подсказки: «по дням», «по неделям» */
-const TREND_STEP = { day: 'по дням', week: 'по неделям', month: 'по месяцам', quarter: 'по кварталам' };
+/* Шаг мини-тренда словом — для подсказки и доступного имени */
+const TREND_STEP = { month: 'по месяцам', quarter: 'по кварталам', week: 'по неделям' };
 
 /**
- * Мини-тренд VOC сегмента (решение пользователя, отменяет J-107): VOC по шагам выбранного периода — шаг по длине
- * периода, не больше 16 точек (`sparklineScale`, D-52): месяц — дни, квартал — недели. Нейтральный, без осей;
- * меньше двух шагов с оценками — тренда нет. Справа в строке значения, на всё свободное место.
+ * Мини-тренд VOC сегмента: три точки по шагу периода (`core/segment-trend.js`), справа от числа в строке значения.
+ * Подписи — только у крайних точек: VOC над точкой, шаг под линией («сен … ноя»); средняя точка без подписи —
+ * три подписи в остаток строки не помещаются. В узкой карточке подписи гаснут (metrics.css). Все шаги и значения —
+ * в подсказке и доступном имени. Шаг без оценок — разрыв; меньше двух точек с оценками — тренда нет.
  */
-export function trendNode(rows, period) {
-  if (!period?.from || !period?.to) return null;
-  const scale = sparklineScale(period);
-  const values = buildTimeSeries(rows, period, scale).map(({ voc: value }) => value);
+export function trendNode(values, steps, step, { direction = null, level = null } = {}) {
   if (values.filter((value) => value !== null).length < 2) return null;
   const trend = element('span', 'metric__trend');
-  trend.title = `VOC ${TREND_STEP[scale] ?? SCALE_OPTIONS.find(({ value }) => value === scale)?.label ?? ''} за период`;
-  trend.append(sparkline(values, { tone: 'neutral' }));
+  const caption = `VOC ${TREND_STEP[step] ?? ''}: ${steps.map(({ label }, index) => `${label} ${values[index] === null ? 'нет оценок' : formatVoc(values[index])}`).join(', ')}`;
+  trend.title = caption;
+  trend.setAttribute('role', 'img');
+  trend.setAttribute('aria-label', caption);
+  const end = (index) => index === 0 || index === steps.length - 1;
+  /* Цвет — направление динамики, а не статус плана: бейдж и тренд могут расходиться (ниже плана, но растёт — зелёный) */
+  trend.append(sparkline(values, {
+    tone: GROWTH.good[direction] ?? 'neutral', wide: true, fill: true, halo: true, endRule: true, level,
+    label: (value, index) => (end(index) ? formatVoc(value) : null),
+    axis: steps.map(({ label }, index) => (end(index) ? label : '')),
+  }));
   return trend;
 }
 
@@ -150,6 +161,14 @@ export function badgeNode(value, plan) {
   return node;
 }
 
+/** Стекло по статусу плана (J-67) — атрибут карточки, стили в metrics.css; без плана или данных атрибута нет (D-04). */
+export function setPlanGlow(block, glow) {
+  const card = block.element;
+  if (!card?.dataset) return;
+  if (glow) card.dataset.planGlow = glow;
+  else delete card.dataset.planGlow;
+}
+
 /* J-67: сила отклонения — словом, а не только плотностью свечения (D-26) */
 const STRONG_CAPTION = {
   [GLOW_BELOW_STRONG]: 'Сильно ниже плана',
@@ -170,24 +189,62 @@ export function planDotNode(value, plan) {
   return dot;
 }
 
-export function planCaptionNode(plan) {
+/** Коридор плана; `corner` — справа сверху большой карточки, под бейджем плана (в строке подписи дайджеста — без него). */
+export function planCaptionNode(plan, { corner = false } = {}) {
   if (!plan) return null;
-  return element('span', 'metric__meta', `План: ${formatVoc(plan.min)}–${formatVoc(plan.max)}`);
+  return element('span', corner ? 'metric__meta metric__plan' : 'metric__meta', `План: ${formatVoc(plan.min)}–${formatVoc(plan.max)}`);
 }
 
 export function countNode(count) {
   return element('span', 'metric__meta', `${formatCount(count)} ${pluralRatings(count)}`);
 }
 
-/** Дельта числа оценок — сразу после «N оценок»; без предыдущего периода её нет. Рост объёма нейтрален, спад — тревога (D-49). */
-export function countDeltaNode(count, previousCount) {
+/**
+ * Дельта числа оценок — сразу после «N оценок»; без предыдущего периода её нет. Рост объёма нейтрален, спад — тревога (D-49).
+ * Незаконченный месяц или квартал (`forecast`) сравнивается с прошлым целиком (J-85): дельта третьим серым, без смысла роста.
+ */
+export function countDeltaNode(count, previousCount, forecast = null) {
   if (!previousCount) return null;
-  return deltaNode(count - previousCount, { shape: DELTA_SHAPES.count, growth: HEADER_VOLUME, className: 'metric__count-delta' });
+  return deltaNode(count - previousCount, { shape: DELTA_SHAPES.count, growth: forecast ? UNFINISHED_VOLUME : HEADER_VOLUME, className: 'metric__count-delta' });
 }
 
 /** «N оценок» с дельтой — пара общего `valueDelta`: у карточки канала и сегментов одна анатомия, «+557» не уходит на строку ниже. */
-export function countGroupNode(count, previousCount) {
-  return valueDelta(countNode(count), countDeltaNode(count, previousCount), { className: 'metric__count' });
+export function countGroupNode(count, previousCount, period = null) {
+  const forecast = ratingsForecast(count, period, previousCount);
+  return valueDelta(countNode(count), countDeltaNode(count, previousCount, forecast), { className: 'metric__count' });
+}
+
+/*
+  Прогноз двумя строками: подсказка не переносит строки и не шире 440 px, а «к концу квартала … к III кварталу»
+  одной строкой в неё не помещается
+*/
+function forecastLines(count, previousCount, period) {
+  const forecast = ratingsForecast(count, period, previousCount);
+  if (!forecast) return null;
+  const total = roundCount(forecast.forecast);
+  const change = forecast.change === null ? '' : ` (${formatDeltaCount(roundCount(forecast.change))} к ${formatPeriodDative(forecast.previous.from, forecast.unit)})`;
+  return [`Если темп сохранится, ${FORECAST_END[forecast.unit]}`, `будет ≈${formatCount(total)} ${pluralRatings(total)}${change}`];
+}
+
+/** Текст прогноза: «Если темп сохранится, к концу месяца будет ≈N оценок (+M к октябрю)»; null — периода, который идёт, нет. */
+export function forecastText(count, previousCount, period) {
+  return forecastLines(count, previousCount, period)?.join(' ') ?? null;
+}
+
+/**
+ * «?» после дельты оценок незаконченного периода: прогноз по темпу — в подсказке (J-94: как у пометки выборки).
+ * Внутри кнопки карточки знак не получает фокус: кнопка называет прогноз в доступном имени.
+ */
+export function forecastNode(count, previousCount, period, { focusable = false } = {}) {
+  const lines = forecastLines(count, previousCount, period);
+  if (!lines) return null;
+  const hint = element('span', 'metric__forecast', '?');
+  hint.dataset.forecast = lines.join(' ');
+  hint.setAttribute('role', 'img');
+  hint.setAttribute('aria-label', 'Период не закончен');
+  if (focusable) hint.setAttribute('tabindex', '0');
+  hoverTooltip(hint, ['Период не закончен', ...lines]);
+  return hint;
 }
 
 /**

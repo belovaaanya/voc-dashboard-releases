@@ -6,21 +6,24 @@ import { breakdown, UNLABELLED } from './breakdown.js';
 
 const EPSILON = 1e-12;
 
-/** J-12: оба направления — итоговый вклад D-10 за один и тот же период сравнения. */
-export function periodFactors(previous, current, project, label = (_dimension, key) => key) {
+/**
+ * J-12: оба направления — итоговый вклад D-10 за один и тот же период сравнения. `dimension` — разрез подписей
+ * и исключённых причин: триггер по умолчанию, пул «Главного вывода» считает так же сегмент, ОС, версию и проблему.
+ */
+export function periodFactors(previous, current, project, label = (_dimension, key) => key, dimension = 'trigger') {
   const decomposition = decomposeVocChange(previous, current, project);
   // Один факт с несколькими кодами одной подписи учитывается в объёме и среднем только один раз.
   const namedKeys = row => {
     const keys = project(row) ?? [];
     return [...new Set((keys.length ? keys : [UNLABELLED]).map(key =>
-      label('trigger', key === null || key === undefined || String(key).trim() === '' ? UNLABELLED : key)))];
+      label(dimension, key === null || key === undefined || String(key).trim() === '' ? UNLABELLED : key)))];
   };
   const before = new Map(breakdown(previous, namedKeys).map(group => [group.key, group]));
   const after = new Map(breakdown(current, namedKeys).map(group => [group.key, group]));
   const byName = new Map();
   for (const factor of decomposition.contributions) {
-    if (ignoredCauseKey('trigger', factor.key, label)) continue;
-    const name = label('trigger', factor.key);
+    if (ignoredCauseKey(dimension, factor.key, label)) continue;
+    const name = label(dimension, factor.key);
     const existing = byName.get(name);
     if (existing) {
       existing.impact += factor.impact;

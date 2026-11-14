@@ -43,7 +43,12 @@ function appendFill(svg, points) {
   `crispBand` — коридор плана ровной полосой с границами-линиями на шкале, без размытия и скругления: размытие в единицах
   растянутого viewBox расплывалось в пятно. `labelBelow(index)` — подпись точки под ней; `label` вернул null — без подписи
 */
-export function sparkline(values, { tone, domain, wide = false, fill = false, band = null, zones = true, label = null, axis = null, glow = false, crispBand = false, labelBelow = null }) {
+/*
+  Мини-тренд сегмента (стиль Apple Health): `halo` — под линией её размытая копия тем же тоном, заливка остаётся;
+  `endRule` — тонкая вертикаль последней точки во всю высоту линии до оси; `level` — тихая пунктирная горизонталь уровня
+  (граница плана), только если он внутри шкалы ряда: иначе она сплющила бы линию
+*/
+export function sparkline(values, { tone, domain, wide = false, fill = false, band = null, zones = true, label = null, axis = null, glow = false, crispBand = false, labelBelow = null, halo = false, endRule = false, level = null }) {
   const scale = domain ?? rangeOf(band ? [...values, band.min, band.max] : values);
   const points = plotPoints(values.map((voc) => ({ voc })), { ...VIEWBOX, ...scale });
   const svg = svgNode('svg', `sparkline${wide ? ' sparkline--wide' : ''}${wide && fill ? ' sparkline--fill' : ''} tone--${tone}`, {
@@ -63,11 +68,18 @@ export function sparkline(values, { tone, domain, wide = false, fill = false, ba
       for (const edge of [band.max, band.min]) svg.append(svgNode('line', 'sparkline__band-edge', { x1: 0, x2: VIEWBOX.width, y1: y(edge), y2: y(edge) }));
     }
   }
+  if (Number.isFinite(level) && level >= scale.min && level <= scale.max) {
+    const y = VIEWBOX.height - ((level - scale.min) / (scale.max - scale.min)) * VIEWBOX.height;
+    svg.append(svgNode('line', 'sparkline__level', { x1: 0, x2: VIEWBOX.width, y1: y, y2: y }));
+  }
   if (!glow) appendFill(svg, points);
   /* Точка без соседей — отрезок нулевой длины: её видно только кружком */
   const lines = linePaths(points).filter((path) => path.includes(' C '));
   if (band && zones) appendPlanLines(svg, lines, scale, band, glow);
-  else for (const d of lines) svg.append(svgNode('path', 'sparkline__line', { d }));
+  else {
+    if (halo) for (const d of lines) svg.append(svgNode('path', 'sparkline__line sparkline__line--glow', { d }));
+    for (const d of lines) svg.append(svgNode('path', 'sparkline__line', { d }));
+  }
   /* J-156: с коридором плана точка ниже него — тоном негатива, выше — позитива, в коридоре — тоном линии */
   const planTone = (value) => (!band || !zones || value === null ? '' : value < band.min ? ' tone--negative' : value > band.max ? ' tone--positive' : '');
   if (!wide) {
@@ -88,6 +100,8 @@ export function sparkline(values, { tone, domain, wide = false, fill = false, ba
     node.style.setProperty('--y', `${(y / VIEWBOX.height) * 100}%`);
     return node;
   };
+  const last = points.findLast(({ y }) => y !== null);
+  if (endRule && last) plot.append(at(element('span', `sparkline__rule tone--${tone}`), last.x, last.y));
   points.forEach(({ x, y }, index) => {
     if (y === null) return;
     plot.append(at(element('span', `sparkline__marker${planTone(values[index]) || ` tone--${tone}`}`), x, y));

@@ -63,6 +63,28 @@
   stroke-width: var(--chart-glow-radius);
 }
 
+/* Вертикаль последней точки (`endRule`): во всю высоту линии до оси, тонкая, тоном линии — как «98 BPM» в Apple Health.
+   Не от точки: последняя точка часто внизу шкалы, и отрезок от неё был бы нулевым */
+.sparkline__rule {
+  position: absolute;
+  left: var(--x);
+  top: 0;
+  bottom: 0;
+  width: var(--hairline);
+  background: color-mix(in srgb, var(--tone) var(--tone-rim), transparent);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+/* Уровень (`level`) — граница плана тихим пунктиром; толщина и шаг не растягиваются вместе с линией */
+.sparkline__level {
+  stroke: var(--color-text-tertiary);
+  stroke-width: 1px;
+  stroke-dasharray: 2 3;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.6;
+}
+
 /* Значения VOC над точками линий дайджеста — кеглем текста, а не оси: их читают, а не сверяют */
 .sparkline-labels--glow .sparkline-labels__value {
   font: var(--type-text);

@@ -17,20 +17,13 @@ import { formatVoc } from '../core/format.js';
 import { voc, vocDelta } from '../core/metrics.js';
 import { withFilter } from '../state/url-state.js';
 import { planFor, planGlow } from '../core/plan.js';
-import { badgeNode, countGroupNode, leadNode, metaRowNode, pairNode, sufficiencyNode, trendNode, valueRowNode } from './metric-card.js';
+import { badgeNode, countGroupNode, setPlanGlow, forecastNode, leadNode, metaRowNode, pairNode, sufficiencyNode, trendNode, valueRowNode } from './metric-card.js';
+import { trendDirection, trendStep, trendSteps, trendValues } from '../core/segment-trend.js';
 
 const SEGMENT = 'segment';
 
 /* Клик перерисовывает дашборд и пересоздаёт кнопку: фокус клавиатуры возвращается на карточку того же сегмента */
 let refocusCode = null;
-
-/* J-67: свечение по плану — атрибут карточки; без плана атрибута нет (D-04) */
-function setGlow(block, glow) {
-  const card = block.element;
-  if (!card?.dataset) return;
-  if (glow) card.dataset.planGlow = glow;
-  else delete card.dataset.planGlow;
-}
 
 /** Реестр держит по строке на карточку, а сегмент карточки — её порядковый номер в данных. */
 export function vocSegment(index) {
@@ -43,7 +36,7 @@ function render(block, context, index) {
 
   block.setHead();
   /* Свечение живёт на самой карточке и обязано гаснуть вместе с содержимым */
-  setGlow(block, null);
+  setPlanGlow(block, null);
   if (!code) {
     block.setState(EMPTY, 'Сегмента нет в выгрузке.');
     return;
@@ -61,7 +54,7 @@ function render(block, context, index) {
   const plan = planFor(context.reference?.plan, { channel: state.channel, from: context.period?.from, to: context.period?.to });
   /* Статус плана — бейджем словами справа в шапке, как у карточки канала (было — точка) */
   block.setHead({ note: badgeNode(voc(rows), plan) });
-  setGlow(block, planGlow(voc(rows), plan));
+  setPlanGlow(block, planGlow(voc(rows), plan));
 
   /* Выбрана — когда фильтр равен ровно этому сегменту: при двух выбранных ни одна карточка не «нажата» */
   const chosen = state.filters?.[SEGMENT] ?? [];
@@ -86,9 +79,17 @@ function render(block, context, index) {
 
   /* J-94: пометка — иконка в строке объёма, отдельной строки нет: содержимое стоит у нижнего края, числа на общей линии (B-08) */
   const warning = sufficiencyNode(rows);
-  /* Мини-тренд VOC — справа от числа и дельты, в строке значения */
-  appendAll(toggle, valueRowNode(pairNode(formatVoc(voc(rows)), leadNode(delta)), trendNode(rows, context.period)), metaRowNode(countGroupNode(rows.length, previous?.length), warning));
-  /* aria-label кнопки заменяет её текст: пометку выборки screen reader иначе не услышит */
+  /* Незаконченный месяц или квартал: «?» после дельты оценок, прогноз по темпу — в подсказке */
+  const forecast = forecastNode(rows.length, previous?.length, context.period);
+  /* Мини-тренд VOC — справа от числа и дельты: три шага периода, последний — выбранный; подписи у крайних точек */
+  const steps = trendSteps(context.period);
+  const history = steps.length ? select({ filters: withFilter(state.filters, SEGMENT, [code]), from: steps[0].from, to: steps.at(-1).to }).rows : [];
+  const values = steps.length ? trendValues(history, steps) : [];
+  /* Пунктир уровня — нижняя граница плана: под ней сегмент «Ниже плана»; вне шкалы ряда не рисуется */
+  const trend = steps.length ? trendNode(values, steps, trendStep(context.period), { direction: trendDirection(values), level: plan?.min ?? null }) : null;
+  appendAll(toggle, valueRowNode(pairNode(formatVoc(voc(rows)), leadNode(delta)), trend), metaRowNode(countGroupNode(rows.length, previous?.length, context.period), forecast, warning));
+  /* aria-label кнопки заменяет её текст: прогноз и пометку выборки screen reader иначе не услышит */
+  if (forecast) toggle.setAttribute('aria-label', `${toggle.getAttribute('aria-label')}. Период не закончен: ${forecast.dataset.forecast.toLowerCase()}`);
   if (warning) toggle.setAttribute('aria-label', `${toggle.getAttribute('aria-label')}. Мало оценок: ${warning.dataset.threshold.toLowerCase()}`);
 
   block.setContent(toggle);

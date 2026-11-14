@@ -284,7 +284,7 @@ const stepText = (value, metric) => {
 /* J-142: шаг подсвечен тоном негатива по силе: чем больше жалоб, доли или урона, тем краснее — как карта антидрайверов */
 /*
   Шаг — пилюля тепловой карты (heatCell, как в антидрайверах и дайджесте): ячейка таблицы
-  без заливки, сила значения — свечением и яркостью края пилюли по квантильной шкале списка (heatRank). Похвала —
+  без заливки, сила значения — свечением, яркостью края и заливкой центра пилюли по уровню heatLevel. Похвала —
   зелёной пилюлей.
   Доля и урон — значение крупно, число жалоб шага под ним тише: частотность видна в любом режиме; в «Частотности»
   значение и есть число жалоб — второй строки нет. Пустой шаг — пилюля без тона с прочерком
@@ -306,20 +306,42 @@ export function heatRank(values) {
     return Math.min(1, Math.max(0, (low + high) / 2 / last));
   };
 }
-/* Диапазон яркости: наименьшее — едва тронутый край, наибольшее — во всю силу */
+/*
+  Уровень подсветки 0…1 — смесь ранга и самого значения: 0,5 · ранг + 0,5 · √(значение / максимум). Ранг растягивает
+  низ (один выброс не гасит остальные), корень из значения — верх: 19 заметно ярче 10, а 10 — ярче 5, хотя у всех
+  ранг выше половины. Ноль и нет данных — null
+*/
+export function heatLevel(values) {
+  const rank = heatRank(values);
+  const max = Math.max(0, ...values.filter((value) => value > 0));
+  return (value) => {
+    const position = rank(value);
+    if (position === null || !(max > 0)) return null;
+    return Math.min(1, 0.5 * position + 0.5 * Math.sqrt(value / max));
+  };
+}
+/*
+  Уровень задаёт три свойства пилюли: радиус свечения (10–100 %), яркость края (25–100 %) и заливку центра —
+  со степенью 1,8, чтобы во всю силу входили только верхние значения (0–42 % тона в центре)
+*/
 const HEAT_FLOOR = 0.1;
 const EDGE_FLOOR = 0.25;
+const FILL_MAX = 0.42;
+const FILL_GAMMA = 1.8;
 
-function bucketCell(bucket, positive, gap, heatRankOf, metric) {
+function bucketCell(bucket, positive, gap, heatLevelOf, metric) {
   const value = stepValue(bucket, positive, gap, metric);
   const main = stepText(value, metric);
   /* В «Доле» и «Уроне» вторая строка у каждого шага, и у пустого («нет жалоб»): пилюли строки одной высоты */
   const withCount = metric !== 'count';
   const cell = element('td', `problem-table__count problem-table__step${withCount ? ' problem-table__step--with-count' : ''}${main === null ? ' problem-table__none' : ''}`);
-  const rank = value === null ? null : heatRankOf(value);
-  const strength = rank === null ? null : HEAT_FLOOR + (1 - HEAT_FLOOR) * rank;
-  const pill = heatCell({ tone: rank === null ? null : (positive ? 'good' : 'bad'), strength, className: 'problem-step-pill' });
-  if (rank !== null) pill.style.setProperty('--pill-edge', `${Math.round((EDGE_FLOOR + (1 - EDGE_FLOOR) * rank) * 100)}%`);
+  const level = value === null ? null : heatLevelOf(value);
+  const strength = level === null ? null : HEAT_FLOOR + (1 - HEAT_FLOOR) * level;
+  const pill = heatCell({ tone: level === null ? null : (positive ? 'good' : 'bad'), strength, className: 'problem-step-pill' });
+  if (level !== null) {
+    pill.style.setProperty('--pill-edge', `${Math.round((EDGE_FLOOR + (1 - EDGE_FLOOR) * level) * 100)}%`);
+    pill.style.setProperty('--pill-fill', `${Math.round(FILL_MAX * level ** FILL_GAMMA * 100)}%`);
+  }
   const shown = element('span', 'problem-table__step-main');
   if (main === null) shown.append(emptyValue());
   else shown.append(main);
@@ -449,7 +471,7 @@ function problemRow(item, { columns, selected, onSelect, base }) {
   if (columns.analyst) row.append(peak);
   /* J-142: динамика — после итога за период, правой частью таблицы */
   item.buckets.forEach((bucket, index) => {
-    const cell = bucketCell(bucket, item.positive, columns.bucketGaps[index], columns.heatRank, columns.metric);
+    const cell = bucketCell(bucket, item.positive, columns.bucketGaps[index], columns.heatLevel, columns.metric);
     if (index === 0) cell.classList.add('problem-table__step--first');
     row.append(cell);
   });
@@ -765,7 +787,7 @@ function problemColumns(context, { cards, complaintCards, buckets, previous, com
     bucketGaps: buckets.map((_, index) => cards.negative?.buckets?.[index]?.gap ?? 0),
   };
   /* Шкала подсветки шагов — по всем жалобам списка, а не по показанным: «Показать ещё» цвета не меняет */
-  columns.heatRank = heatRank(complaintCards.flatMap((item) => item.buckets
+  columns.heatLevel = heatLevel(complaintCards.flatMap((item) => item.buckets
     .map((bucket, index) => stepValue(bucket, false, columns.bucketGaps[index], columns.metric) ?? 0)));
   return columns;
 }

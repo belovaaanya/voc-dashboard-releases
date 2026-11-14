@@ -5,7 +5,7 @@ import {
   VOC_METRIC,
   isWorkingDay,
 } from '../core/anomalies.js';
-import { DATA_LOSS_ALPHA, DATA_LOSS_MIN_ACTIVE_DAYS, DATA_LOSS_MIN_DAILY, DATA_LOSS_RATIO, DATA_LOSS_WINDOW } from '../core/data-loss.js';
+import { DATA_LOSS_ALPHA, DATA_LOSS_MIN_ACTIVE_DAYS, DATA_LOSS_MIN_DAILY, DATA_LOSS_MIN_PERIOD_RATINGS, DATA_LOSS_RATIO, DATA_LOSS_VOLUME_DAYS, DATA_LOSS_WINDOW } from '../core/data-loss.js';
 import { INCIDENT_MIN_DAYS, INCIDENT_PLAN_GAP, INCIDENT_TOP_TRIGGERS } from '../core/calendar-analysis.js';
 import { latestDate } from '../core/dates.js';
 import { selectionDays } from '../state/chart-selection.js';
@@ -133,11 +133,11 @@ export const KIND_RULES = {
     ['Цвет тега', 'красный — ниже плана, жёлтый — в плане, мятный — выше плана, оранжевый — плана нет'],
   ],
   [DATA_LOSS_EVENT]: [
-    ['Что', 'число оценок разреза за день: срез, ОС, сегмент, продукт, триггер, роль, версия'],
-    ['Сравнение', `средняя за ${days(DATA_LOSS_WINDOW, PAST)} того же типа: будни — с буднями, выходные и праздники — с выходными`],
-    ['Отсечка', `≤\u00a0${formatNumber(DATA_LOSS_RATIO * 100, 0)}\u00a0% средней (в ${times(Math.round(1 / DATA_LOSS_RATIO))} меньше) или 0 и p\u00a0<\u00a0${percent(DATA_LOSS_ALPHA)}`],
-    ['Не считается', 'копия пропажи всего среза или ОС в тот же день; переход оценок на новую версию'],
-    ['Мин. объём', `в среднем ≥\u00a0${formatCount(DATA_LOSS_MIN_DAILY)} в день, оценки в ≥\u00a0${formatCount(DATA_LOSS_MIN_ACTIVE_DAYS)} днях из ${formatCount(DATA_LOSS_WINDOW)}`],
+    ['Что', 'число оценок разреза за день: срез, ОС, сегмент, продукт, триггер, роль'],
+    ['Сравнение', `средняя за ${days(DATA_LOSS_WINDOW, PAST)} того же типа (будни — с буднями, выходные и праздники — с выходными), с поправкой на просадку остального канала в этот день`],
+    ['Отсечка', `≤\u00a0${formatNumber(DATA_LOSS_RATIO * 100, 0)}\u00a0% ожидания (в ${times(Math.round(1 / DATA_LOSS_RATIO))} меньше) или 0 и p\u00a0<\u00a0${percent(DATA_LOSS_ALPHA)} с поправкой Бенджамини — Хохберга на все разрезы дня`],
+    ['Мин. объём', `разрез ≥\u00a0${formatRatings(DATA_LOSS_MIN_PERIOD_RATINGS)} за ${days(DATA_LOSS_VOLUME_DAYS, CALENDAR)} до дня; в среднем ≥\u00a0${formatCount(DATA_LOSS_MIN_DAILY)} в день, оценки в ≥\u00a0${formatCount(DATA_LOSS_MIN_ACTIVE_DAYS)} днях из ${formatCount(DATA_LOSS_WINDOW)}`],
+    ['Не считается', `копия пропажи всего среза в тот же день; уровень, продержавшийся ${days(DATA_LOSS_WINDOW, PAST)}, — новая норма; версии приложения — в «Релизах АБМ»`],
   ],
   [SUSTAINED_EVENT]: [
     ['Что', 'VOC триггера за рабочий день'],

@@ -1,44 +1,41 @@
 import { EMPTY, ERROR, LOADING } from '../shell/block.js';
-import { ABOVE, BELOW } from '../core/anomalies.js';
-import { conclusionGroups } from '../core/conclusions.js';
+import { DOWN, FLAT, UP, contextEvent, mainConclusion } from '../core/conclusion-pool.js';
+import { eventType } from '../core/calendar.js';
 import { element } from '../ui/dom.js';
-import { icon } from '../ui/icons.js';
-import { formatCount, formatDateRange, formatImpact, formatVoc } from '../core/format.js';
+import { formatCount, formatDate, formatDateRange, formatImpact, formatVoc } from '../core/format.js';
 import { closeHoverTooltip, hoverTooltip } from '../components/hover-tooltip.js';
 import { statusPanel } from '../components/status-panel.js';
 import { roundImpact } from '../core/round.js';
 import { conclusionFactors, conclusionKey, isConclusion } from '../core/conclusion-payload.js';
 import { buildConclusionPayload, llm } from '../io/llm-conclusion.js';
+import { calendarEventsOf, eventSelectionContext } from '../state/event-analysis.js';
 
-
-function directionIcon(name) {
-  const box = element('span', 'summary-row__icon');
-  box.setAttribute('aria-hidden', 'true');
-  box.append(icon(name));
-  return box;
-}
 
 /*
-  Строка — 3–10 слов без прокрутки (J-07): тип по знаку итогового вклада (J-12) и причина. Тип
-  называет себя («Драйвер» / «Антидрайвер», J-91), поэтому отдельной подписи группы нет; числа и дата — в подсказке
+  Вывод — одна главная причина по знаку ΔVOC (решение пользователя 14.11): рост — драйвер, снижение — антидрайвер,
+  без изменений — сильнейший фактор. Карточка тонирована тоном направления; тип причины — мелко над ней, причина —
+  крупно, вторая строка тише: второй кандидат другого типа и событие календаря периода. Числа — в подсказке
 */
-function causeInsight(lead, subject) {
-  const item = element('li', 'summary-insight');
-  item.append(element('span', 'summary-row__lead', `${lead}: `), subject);
-  return item;
-}
+const HEADLINE = {
+  [UP]: 'VOC вырос — драйвер',
+  [DOWN]: 'VOC снизился — антидрайвер',
+  [FLAT]: 'VOC без изменений — сильнейший фактор',
+};
+const TONE = { [UP]: 'positive', [DOWN]: 'negative', [FLAT]: 'neutral' };
 
-function factorInsight(direction, factor, context) {
-  const item = causeInsight(direction === ABOVE ? 'Драйвер' : 'Антидрайвер', factor.name);
-  item.title = factorLines(factor, context).join('\n');
-  return item;
+/* Тон — атрибут карточки, как свечение сегментов: каркас сам поверхность не перекрашивает (C-02) */
+function setTone(block, direction) {
+  const card = block.element;
+  if (!card?.dataset) return;
+  if (direction) card.dataset.conclusionTone = TONE[direction];
+  else delete card.dataset.conclusionTone;
 }
 
 function factorLines(factor, context) {
   const before = context.previousPeriod;
   const previous = before ? formatDateRange(before.from, before.to) : 'предыдущий аналогичный период';
   const scope = Object.values(context.state.filters ?? {}).some(values => values?.length) ? 'выбранный срез канала' : 'канал';
-  return [factor.name,
+  return [factor.caption ? `${factor.caption}: ${factor.name}` : factor.name,
     `Вклад в ΔVOC: ${formatImpact(roundImpact(factor.impact))} (${scope} ${context.state.channel ?? ''})`,
     `Оценок: ${formatCount(factor.ratings)} (было ${formatCount(factor.previousRatings)})`,
     `VOC параметра: ${formatVoc(factor.voc)} (было ${formatVoc(factor.previousVoc)})`,
@@ -47,41 +44,52 @@ function factorLines(factor, context) {
   ];
 }
 
-function summaryRow(group, context) {
-  const { direction, tone, items } = group;
-  const caption = direction === ABOVE ? 'Драйвер' : 'Антидрайвер';
-  const row = element('div', `summary-row hover-row tone--${tone}`);
-  row.setAttribute('tabindex', '0');
-  row.setAttribute('role', 'group');
-  row.setAttribute('aria-label', caption);
-  const copy = element('div', 'summary-row__text');
-  const list = element('ul', 'summary-group');
-  for (const { factor } of items) list.append(factorInsight(direction, factor, context));
-  copy.append(list);
-  row.append(directionIcon(direction === ABOVE ? 'trend-up' : 'trend-down'), copy);
-  const lines = items.flatMap(({ factor }) => factorLines(factor, context));
-  hoverTooltip(row, lines);
-  for (const item of list.children) item.removeAttribute('title');
-  return row;
+/* Вторая строка: второй кандидат другого типа и событие календаря периода с датой */
+function contextLine(second, event) {
+  return [second && `${second.caption}: ${second.name}`, event && `${eventType(event)?.label ?? 'Событие'} ${formatDate(event.date)}`]
+    .filter(Boolean).join(' · ');
+}
+
+function causeNode({ direction, main, detail, tooltip }) {
+  const cause = element('div', 'summary-cause');
+  cause.setAttribute('tabindex', '0');
+  cause.setAttribute('role', 'group');
+  cause.setAttribute('aria-label', `${HEADLINE[direction]}: ${main.caption ? `${main.caption.toLowerCase()} ` : ''}${main.name}`);
+  const lead = element('p', 'summary-cause__lead', main.caption ? `${HEADLINE[direction]} · ${main.caption}` : HEADLINE[direction]);
+  const name = element('p', 'summary-cause__name', main.name);
+  cause.append(lead, name);
+  if (detail) cause.append(element('p', 'summary-cause__detail', detail));
+  hoverTooltip(cause, tooltip);
+  return cause;
+}
+
+function calendarEvent(context, direction) {
+  try {
+    return contextEvent(calendarEventsOf(eventSelectionContext(context)), context.period, direction);
+  } catch {
+    return null;
+  }
 }
 
 function renderComputed(block, context, { llmNote = false } = {}) {
-  const conclusion = conclusionGroups(conclusionFactors(context));
-  const list = element('div', 'summary-list');
-  for (const group of conclusion.groups) list.append(summaryRow(group, context));
-  if (!conclusion.groups.length) {
-    list.append(statusPanel('summary-note', {
-      title: conclusion.delta === null ? 'Нет данных предыдущего периода' : 'Нет факторов изменения VOC',
-      look: 'text',
-    }));
-  }
+  const { direction, delta, main, second } = mainConclusion(conclusionFactors(context));
   /* Источник — в шапке, а не строкой тела: вывод помещается без прокрутки (J-07) */
   block.setHead({ ai: false, note: llmNote ? sourceNote() : undefined });
-  block.setContent(list);
+  if (!main) {
+    setTone(block, null);
+    block.setContent(statusPanel('summary-note', {
+      title: delta === null ? 'Нет данных предыдущего периода' : 'Нет факторов изменения VOC',
+      look: 'text',
+    }));
+    return;
+  }
+  setTone(block, direction);
+  const tooltip = [...factorLines(main, context), ...(second ? factorLines(second, context) : [])];
+  block.setContent(causeNode({ direction, main, detail: contextLine(second, calendarEvent(context, direction)), tooltip }));
 }
 
 /* J-196: подпись говорит, чем вывод отличается от вывода LLM; подсказка — как он посчитан */
-export const LLM_FALLBACK_NOTE = 'LLM недоступна — драйверы и антидрайверы выбраны по вкладу в изменение VOC, без текста модели';
+export const LLM_FALLBACK_NOTE = 'LLM недоступна — главная причина выбрана по вкладу в изменение VOC, без текста модели';
 export const LLM_FALLBACK_LABEL = 'Вывод без LLM';
 
 function sourceNote() {
@@ -91,46 +99,24 @@ function sourceNote() {
   return note;
 }
 
-/* Строки LLM: антидрайвер — вниз и негатив, драйвер — вверх и позитив (Figma 3204:2849) */
-function llmRow({ caption, direction, tone, factor, evidence, context }) {
-  const row = element('div', `summary-row hover-row tone--${tone}`);
-  row.setAttribute('tabindex', '0');
-  row.setAttribute('role', 'group');
-  row.setAttribute('aria-label', caption);
-  const item = element('p', 'summary-insight summary-insight--llm');
-  item.append(element('span', 'summary-row__prefix', `${caption}: `), element('span', 'summary-row__factors', factor.name), ` — ${factor.why}`);
-  item.title = `${caption}: ${factor.name} — ${factor.why}`;
-  const copy = element('div', 'summary-row__text');
-  copy.append(item);
-  row.append(directionIcon(direction === ABOVE ? 'trend-up' : 'trend-down'), copy);
-  hoverTooltip(row, [...factorLines(evidence, context), factor.why]);
-  item.removeAttribute('title');
-  return row;
-}
-
+/* LLM называет одну причину из пула того же направления; вторая строка — её пояснение */
 function renderLlm(block, answer, context) {
-  const evidence = conclusionFactors(context);
-  const list = element('div', 'summary-list');
-  if (answer.antidriver) list.append(llmRow({ caption: 'Ключевой антидрайвер', direction: BELOW, tone: 'negative', factor: answer.antidriver,
-    evidence: evidence.negative.find(factor => factor.name === answer.antidriver.name), context }));
-  if (answer.driver) list.append(llmRow({ caption: 'Ключевой драйвер', direction: ABOVE, tone: 'positive', factor: answer.driver,
-    evidence: evidence.positive.find(factor => factor.name === answer.driver.name), context }));
+  const pool = conclusionFactors(context);
+  const factor = answer.antidriver ?? answer.driver;
+  const evidence = pool.candidates.find(candidate => candidate.name === factor.name) ?? { name: factor.name };
+  const { direction } = mainConclusion(pool);
+  setTone(block, direction);
   block.setHead({ ai: true });
-  block.setContent(list);
+  block.setContent(causeNode({ direction, main: evidence, detail: factor.why,
+    tooltip: evidence.impact === undefined ? [factor.name, factor.why] : [...factorLines(evidence, context), factor.why] }));
 }
 
-/* Скелет — две строки той же композиции: загрузка не меняет высоту карточки */
+/* Скелет — та же композиция одной причины: загрузка не меняет высоту карточки */
 function skeleton() {
-  const list = element('div', 'summary-list summary-list--skeleton');
-  list.setAttribute('aria-hidden', 'true');
-  for (const direction of [BELOW, ABOVE]) {
-    const row = element('div', 'summary-row hover-row');
-    const copy = element('div', 'summary-row__text');
-    copy.append(element('div', 'state__skeleton'));
-    row.append(directionIcon(direction === ABOVE ? 'trend-up' : 'trend-down'), copy);
-    list.append(row);
-  }
-  return list;
+  const cause = element('div', 'summary-cause summary-cause--skeleton');
+  cause.setAttribute('aria-hidden', 'true');
+  for (const part of ['lead', 'name', 'detail']) cause.append(element('div', `state__skeleton summary-cause__${part}`));
+  return cause;
 }
 
 /* Запрос блока в полёте: тот же payload его не отменяет, другой — отменяет */
@@ -153,6 +139,7 @@ export function detachConclusion(block) {
 export function conclusionPlaceholder(block) {
   detachConclusion(block);
   block.setHead();
+  setTone(block, null);
   block.setState(LOADING, skeleton());
 }
 
@@ -162,6 +149,7 @@ export function renderConclusion(block, context) {
   block.element?.querySelector('.card__body')?.classList.add('scroll-area');
   if (context.slice.length === 0) {
     cancelRequest(block);
+    setTone(block, null);
     block.setState(EMPTY);
     return;
   }
@@ -192,6 +180,7 @@ export function renderConclusion(block, context) {
   const request = { key, controller: new AbortController(), context };
   const { signal } = request.controller;
   requests.set(block, request);
+  setTone(block, null);
   block.setState(LOADING, skeleton());
   client.fetchConclusion(payload, { signal })
     .then((answer) => {

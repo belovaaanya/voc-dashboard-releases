@@ -1,29 +1,28 @@
 /** Вход LLM «Главного вывода» (`R-46`): только агрегаты и подписи справочника, без комментариев клиентов и текста агента. */
 
 import { elementDamage } from './antidrivers.js';
-import { periodFactors } from './conclusions.js';
+import { candidatePool, directionCandidates } from './conclusion-pool.js';
 import { DIMENSIONS, DIMENSION_CAPTION } from './dimensions.js';
 import { sortInsights } from './insights.js';
 import { roundImpact } from './round.js';
 
 const ANOMALY_LIMIT = 20;
 const ANTIDRIVER_LIMIT = 5;
-const DRIVER_LIMIT = 3;
+const DRIVER_LIMIT = 5;
 /* Лимиты повторяют проверку тела в `tools/local_server.py`: длиннее — 400 и расчётный вывод */
 const FILTER_VALUE_LIMIT = 50;
 
-const TRIGGER = DIMENSIONS.find(({ key }) => key === 'trigger');
 const factorsBySlice = new WeakMap();
 const NO_PREVIOUS = Object.freeze([]);
 
-/** Факторы J-12 по триггерам: один расчёт на пару срезов для LLM-payload и расчётного вывода. */
+/** Пул кандидатов вывода (`conclusion-pool.js`): один расчёт на пару срезов для LLM-payload и расчётного вывода. */
 export function conclusionFactors({ slice, previousSlice, reference, label }) {
   const previous = previousSlice ?? NO_PREVIOUS;
   if (!factorsBySlice.has(slice)) factorsBySlice.set(slice, new WeakMap());
   const byPrevious = factorsBySlice.get(slice);
   const saved = byPrevious.get(previous);
   if (saved?.reference === reference && saved.label === label) return saved.factors;
-  const factors = periodFactors(previous, slice, (row) => TRIGGER.values(row, reference), label);
+  const factors = candidatePool(previous, slice, { reference, label });
   byPrevious.set(previous, { reference, label, factors });
   return factors;
 }
@@ -65,9 +64,10 @@ function filtersOf({ state, label }) {
 }
 
 /** Факторы уже несут VOC и оценки по подписи триггера в обоих периодах: второго разреза среза не нужно. */
-function antidriverOf({ name, impact, voc, ratings }, sliceSize) {
+function antidriverOf({ name, caption, impact, voc, ratings }, sliceSize) {
   return {
     name,
+    type: caption,
     damage: voc === null ? null : roundImpact(elementDamage({ mentions: ratings, voc }, sliceSize)),
     contribution: roundImpact(impact),
     voc: roundImpact(voc),
@@ -75,21 +75,23 @@ function antidriverOf({ name, impact, voc, ratings }, sliceSize) {
   };
 }
 
-const driverOf = ({ name, impact, voc, previousVoc }) =>
-  ({ name, contribution: roundImpact(impact), voc: roundImpact(voc), previousVoc: roundImpact(previousVoc) });
+const driverOf = ({ name, caption, impact, voc, previousVoc }) =>
+  ({ name, type: caption, contribution: roundImpact(impact), voc: roundImpact(voc), previousVoc: roundImpact(previousVoc) });
 
 /** `anomalies` — события среза (`state/event-analysis`): ядро не знает, как их собирает экран. */
 export function conclusionPayload(context, anomalies) {
   const { slice, period, state, label } = context;
   const decomposition = conclusionFactors(context);
+  const ranked = directionCandidates(decomposition);
   return {
     channel: state.channel ?? null,
     period: { from: period.from, to: period.to },
     filters: filtersOf(context),
     voc: { current: roundImpact(decomposition.currentVoc), previous: roundImpact(decomposition.previousVoc), ratings: slice.length },
     anomalies: sortInsights(anomalies, 'influence').slice(0, ANOMALY_LIMIT).map((event) => anomalyForLlm(event, label)),
-    antidrivers: decomposition.negative.slice(0, ANTIDRIVER_LIMIT).map((factor) => antidriverOf(factor, slice.length)),
-    drivers: decomposition.positive.slice(0, DRIVER_LIMIT).map(driverOf),
+    /* Пул по направлению ΔVOC: заполнен один список — LLM называет одну главную причину из него, второй — null */
+    antidrivers: ranked[0]?.impact < 0 ? ranked.slice(0, ANTIDRIVER_LIMIT).map((factor) => antidriverOf(factor, slice.length)) : [],
+    drivers: ranked[0]?.impact > 0 ? ranked.slice(0, DRIVER_LIMIT).map(driverOf) : [],
   };
 }
 

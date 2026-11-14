@@ -77,8 +77,12 @@ function bandPath(heights, scale) {
 const LAYERS = [[1.6, 0.28, 'far'], [1.25, 0.42, 'mid'], [1, 0.7, 'near']];
 const GRADIENT_STOPS = 24;
 const CORE_FROM = 0.75;
-/* Прозрачность потока по длине: проявляется слева, держится, к хвосту светлеет и истончается — гладко, без изломов */
-const KEYS = [[0, 0], [0.12, 0.8], [0.55, 0.65], [0.85, 0.6], [1, 0.3]];
+/*
+  Прозрачность потока по длине — гладко, без изломов. Над MAU и опросом данных нет: поток там только проявляется
+  (без вертикального края у левой границы и у начала оценок), в полную силу — к колонке оценок (центр ≈0,46),
+  к хвосту светлеет и истончается
+*/
+const KEYS = [[0, 0], [0.3, 0.35], [0.5, 0.8], [0.62, 0.7], [0.85, 0.6], [1, 0.3]];
 function streamOpacity(offset) {
   const index = Math.max(1, KEYS.findIndex(([at]) => at >= offset));
   const [from, a] = KEYS[index - 1];
@@ -150,7 +154,7 @@ function stepNode({ key, label, short, count, share, change }) {
   const value = count === null ? emptyValue('нет в выгрузке') : element('span', 'conversion__value', formatCount(count));
   const part = element('span', 'conversion__share', share === null ? '' : formatShare(share));
   if (share === null) part.setAttribute('aria-hidden', 'true');
-  /* Доля и дельта — одной строкой под числом: строка луча остаётся выше в карточке фиксированной высоты */
+  /* Доля и под ней дельта — столбиком под числом: в строку «1,8 % −0,6 п. п.» соседних ступеней сливались на 1280–1600 */
   const row = element('span', 'conversion__share-row');
   row.append(part, changeNode(change));
   item.append(caption, name, value, row);

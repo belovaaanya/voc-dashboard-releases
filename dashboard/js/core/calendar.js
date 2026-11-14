@@ -369,19 +369,22 @@ const laneDays = (event) => (POINT_KINDS.has(event.kind) ? [event.date] : event.
  * событий, которые захватывают хотя бы один день интервала. Событие считается в интервале один раз, даже если
  * занимает в нём несколько дней. Типы без событий в интервалах графика не попадают; порядок — `EVENT_LANES`.
  */
+/** Номер интервала графика (`{ from, to }` подряд, по возрастанию), в который попадает день; `-1` — вне графика. */
+export function bucketIndex(buckets, day) {
+  let low = 0;
+  let high = buckets.length - 1;
+  while (low <= high) {
+    const middle = (low + high) >> 1;
+    if (day < buckets[middle].from) high = middle - 1;
+    else if (day > buckets[middle].to) low = middle + 1;
+    else return middle;
+  }
+  return -1;
+}
+
 export function eventLanes(events, buckets) {
   if (!buckets.length) return [];
-  const indexOf = (day) => {
-    let low = 0;
-    let high = buckets.length - 1;
-    while (low <= high) {
-      const middle = (low + high) >> 1;
-      if (day < buckets[middle].from) high = middle - 1;
-      else if (day > buckets[middle].to) low = middle + 1;
-      else return middle;
-    }
-    return -1;
-  };
+  const indexOf = (day) => bucketIndex(buckets, day);
   return EVENT_LANES.flatMap((lane) => {
     const cells = new Map();
     for (const event of events) {
@@ -442,4 +445,31 @@ export function sortEvents(events, mode = 'chronology') {
       (left.kind === ANOMALY_EVENT ? compareAnomalies(left, right) : withinRank(left, right)));
   }
   throw new Error(`Режим сортировки не поддерживается: ${mode}`);
+}
+
+/*
+  Карточки крупных событий на графике (неделя 16–22.11, «Для аналитика»): авария, крит. снижение VOC и инцидент.
+  Размер события — доля для сравнения разных типов: у аварии — доля затронутых, у снижения — падение VOC к средней
+  окна (0,5 и больше — максимум), у инцидента — отрыв от нижней границы плана (0,25 и больше — максимум)
+*/
+const CARD_KINDS = new Set([INCIDENT_EVENT, ANOMALY_EVENT, SUSTAINED_EVENT]);
+const DROP_FULL = 0.5;
+const PLAN_GAP_FULL = 0.25;
+
+export function eventWeight(event) {
+  if (event.kind === INCIDENT_EVENT) return Math.min(1, Math.max(0, event.effect ?? 0));
+  if (event.kind === ANOMALY_EVENT) return Math.min(1, Math.abs(event.delta ?? 0) / DROP_FULL);
+  if (event.kind === SUSTAINED_EVENT) return Math.min(1, Math.max(0, event.planGap ?? 0) / PLAN_GAP_FULL);
+  return 0;
+}
+
+/**
+ * Кандидаты в карточки: крупные события, чей последний день лежит в интервалах графика, от самого крупного;
+ * при равном размере — свежее. Сколько из них встанет на график, решает раскладка (`placeCards`).
+ */
+export function majorEvents(events, buckets) {
+  return events.filter((event) => CARD_KINDS.has(event.kind))
+    .map((event) => ({ event, index: bucketIndex(buckets, event.date), weight: eventWeight(event) }))
+    .filter(({ index, weight }) => index >= 0 && weight > 0)
+    .sort((left, right) => right.weight - left.weight || right.event.date.localeCompare(left.event.date));
 }

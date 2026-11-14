@@ -13,74 +13,89 @@
   padding-inline: calc(var(--space-2) + var(--divider-width));
 }
 
-.summary-list {
+/*
+  Одна главная причина (решение пользователя 14.11): подпись направления и тип — мелко, причина — крупно,
+  вторая строка — тише. Причина не длиннее двух строк, вторая строка — одной: полный текст и числа — в подсказке
+*/
+.summary-cause {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
-  gap: var(--space-2);
-}
-
-.summary-row {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
+  justify-content: flex-end;
+  gap: var(--space-1);
   min-width: 0;
-  min-height: var(--space-8);
-  /* J-63: рамка наведения не касается иконки и текста; J-96: рамка выступает в поле карточки, иконка стоит по левому краю заголовка */
-  margin-inline: calc(-1 * (var(--space-2) + var(--divider-width)));
-  padding: var(--space-1) var(--space-2);
-}
-
-.summary-row__icon {
-  display: inline-grid;
-  flex: 0 0 auto;
-  width: var(--space-8);
-  height: var(--space-8);
-  place-items: center;
   border-radius: var(--radius-control);
-  color: var(--tone-ink, var(--tone));
-  background: color-mix(in srgb, var(--tone) var(--tone-tint), transparent);
 }
 
-/* Текст вывода — обычного веса: белый 500 читался жирным; вес 500 — только у метки в цвете */
-.summary-row__text {
-  min-width: 0;
-  color: var(--color-text-strong);
-  font: var(--type-text);
-  overflow-wrap: break-word;
-}
-
-.summary-row__factors {
-  color: var(--tone-ink, var(--tone));
-}
-
-.summary-group {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: 0;
+.summary-cause__lead {
   margin: 0;
-  list-style: none;
+  color: var(--color-text-secondary);
+  font: var(--type-caption);
+  letter-spacing: var(--tracking-airy);
 }
 
-/* Одна причина в 3–10 слов (J-07): не больше двух строк, полный текст — в подсказке. Строка LLM — так же:
-   длиннее — многоточие на второй строке, а не строка, срезанная краем карточки */
-.summary-group .summary-insight,
-.summary-insight--llm {
+.summary-cause__name {
   display: -webkit-box;
   overflow: hidden;
+  margin: 0;
+  color: var(--color-text-strong);
+  font: var(--type-page-title);
+  letter-spacing: var(--tracking-airy);
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
 
-/* Метка «Драйвер:» / «Антидрайвер:» (и «Ключевой …:» у LLM) — 500 в цвете тона */
-.summary-row__lead,
-.summary-row__prefix {
-  color: var(--tone-ink, var(--tone));
-  font: var(--type-text-strong);
+.summary-cause__detail {
+  overflow: hidden;
+  margin: 0;
+  color: var(--color-text-secondary);
+  font: var(--type-caption);
+  letter-spacing: var(--tracking-airy);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.summary-insight--llm {
-  margin: 0;
+/*
+  Карточка — то же стекло, что сегменты (J-67): свечение тона поднимается снизу, рамка тона и блик по верхней кромке;
+  рост — позитив, снижение — негатив, без изменений — нейтральный. Пока загрузка или пусто — тона нет
+*/
+.card--summary[data-conclusion-tone]:not(:has(.state)) {
+  --summary-tone: var(--color-neutral);
+  position: relative;
+  isolation: isolate;
+}
+
+.card--summary[data-conclusion-tone='positive']:not(:has(.state)) {
+  --summary-tone: var(--color-positive);
+}
+
+.card--summary[data-conclusion-tone='negative']:not(:has(.state)) {
+  --summary-tone: var(--color-negative);
+}
+
+.card--summary[data-conclusion-tone]:not(:has(.state))::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: radial-gradient(var(--plan-glow-shape), color-mix(in srgb, var(--summary-tone) var(--plan-glow-strong), transparent), transparent);
+  pointer-events: none;
+}
+
+/* То же стекло, что у карточек метрик: рамка тона ярче внизу, по верхней кромке — блик */
+.card--summary[data-conclusion-tone]:not(:has(.state))::after {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--hairline));
+  z-index: -1;
+  padding: var(--hairline);
+  border-radius: inherit;
+  background: var(--glass-sheen), radial-gradient(var(--plan-glow-rim-shape), color-mix(in srgb, var(--summary-tone) var(--plan-glow-rim-soft), transparent), transparent);
+  -webkit-mask: var(--mask-fill) content-box, var(--mask-fill);
+  -webkit-mask-composite: xor;
+  mask: var(--mask-fill) content-box exclude, var(--mask-fill);
+  pointer-events: none;
 }
 
 /* J-63: источник в шапке — подсказка, как подпись шапки `card__note`, а не текст вывода */
@@ -90,15 +105,17 @@
   white-space: nowrap;
 }
 
-.summary-list--skeleton .summary-row {
-  align-items: center;
+.summary-cause--skeleton .summary-cause__lead {
+  width: 60%;
+  height: var(--space-3);
 }
 
-.summary-list--skeleton .summary-row__icon {
-  background: var(--color-surface-sunken);
+.summary-cause--skeleton .summary-cause__name {
+  width: 85%;
+  height: var(--space-6);
 }
 
-.summary-list--skeleton .summary-row__icon > * {
-  visibility: hidden;
+.summary-cause--skeleton .summary-cause__detail {
+  width: 45%;
+  height: var(--space-3);
 }
-

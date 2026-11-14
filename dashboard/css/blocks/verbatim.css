@@ -667,6 +667,15 @@
   white-space: nowrap;
 }
 
+/*
+  Заливка центра по уровню (--pill-fill из блока): у ячейки карты центр прозрачный, и тусклая и яркая пилюли
+  в середине одинаковы — здесь центр насыщается вместе с краем, верхние значения различимы между собой
+*/
+.problem-step-pill.heatmap-cell--bad,
+.problem-step-pill.heatmap-cell--good {
+  background: var(--tone-pill), linear-gradient(color-mix(in srgb, var(--tone) var(--pill-fill, 0%), transparent), color-mix(in srgb, var(--tone) var(--pill-fill, 0%), transparent));
+}
+
 .problem-table thead .problem-table__step {
   text-align: center;
 }

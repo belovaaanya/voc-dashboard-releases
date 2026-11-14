@@ -42,18 +42,64 @@
   min-width: 0;
 }
 
-/* Тренд берёт остаток строки: линия масштабируется в него целиком по ширине, высота — по пропорции линии */
+/*
+  Тренд — остаток строки значения на её высоту (высота числа): строка и карточка (176 px) не растут. Подписи крайних точек —
+  над линией и под ней; ширина тренда — контейнер для правила узкой карточки ниже
+*/
 .metric__trend {
   display: flex;
   flex: 1 1 0;
-  justify-content: flex-end;
   min-width: 0;
   max-width: calc(var(--space-10) * 3);
+  align-self: stretch;
+  container-type: inline-size;
 }
 
-.metric__trend > svg {
+.metric__trend > .sparkline-labels {
+  flex: 1 1 auto;
   width: 100%;
-  height: auto;
+  /* В высоте числа (48 px) — подпись значения, линия ≈20 px и шаги: подпись ближе к точке, шаги вплотную к линии */
+  padding-block-start: var(--space-3);
+}
+
+.metric__trend .sparkline-labels__value {
+  --label-shift: calc(-100% - var(--space-1));
+  /* Ореол цветом поверхности: в узком тренде линия к крайней точке проходит под подписью — подпись читается поверх */
+  text-shadow: 0 0 var(--space-1) var(--color-surface), 0 0 calc(var(--space-1) / 2) var(--color-surface);
+}
+
+/* Линия берёт остаток высоты, а не высоту из пропорции viewBox; ряд шагов не сжимается */
+.metric__trend .sparkline-labels__plot {
+  flex: 1 1 0;
+  width: 100%;
+  min-height: 0;
+}
+
+.metric__trend .sparkline--fill {
+  min-height: 0;
+}
+
+.metric__trend .sparkline-labels__axis {
+  flex: none;
+  margin-block-start: 0;
+}
+
+/*
+  Ширина тренда — остаток строки за числом и дельтой (docs/blocks-metrics.md — замеры по ширинам). Подписи обеих
+  крайних точек (2 × ≈23 px и зазор) помещаются от 56 px; уже — линия и последнее значение; совсем узко — тренда нет:
+  строка и карточка не растут, ничего не вылезает
+*/
+@container (width < 56px) {
+  .metric__trend .sparkline-labels__axis,
+  .metric__trend .sparkline-labels__value--start {
+    display: none;
+  }
+}
+
+@container (width < 24px) {
+  .metric__trend > .sparkline-labels {
+    visibility: hidden;
+  }
 }
 
 .metric__lead--empty,
@@ -89,6 +135,20 @@
   height: var(--icon-size);
 }
 
+/* «?» прогноза незаконченного периода — после дельты оценок, третьим серым; прогноз — в подсказке, как у пометки выборки */
+.metric__forecast {
+  display: inline-grid;
+  place-items: center;
+  align-self: center;
+  inline-size: var(--icon-size);
+  block-size: var(--icon-size);
+  border: var(--hairline) solid currentColor;
+  border-radius: var(--radius-pill);
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+  cursor: help;
+}
+
 .metric__caption > * + .metric__meta::before {
   /* Без поддержки alt-текста строка с «/ ''» отбрасывается целиком — тогда работает первая */
   content: '·';
@@ -105,6 +165,13 @@
   gap: var(--space-2);
   /* Кегль числа считается от ширины карточки: дельта справа сверху помещается и на 1280 */
   container-type: inline-size;
+}
+
+/* Коридор плана — справа сверху, под бейджем плана в шапке: свободное место карточки уходит под него. На прежнем месте
+   коридора — пустая строка подписи (voc-channel.js): число и объём не сдвигаются */
+.metric__plan {
+  align-self: flex-end;
+  margin-block-end: auto;
 }
 
 /*
@@ -150,10 +217,10 @@
   gap: var(--space-2);
 }
 
-/* Поле числа под весь диапазон 1,00–5,00: дельты трёх карточек стоят на одном отступе (J-17) */
+/* Поле числа — по своим цифрам (решение пользователя, отменяет запас под «1,00–5,00» из J-17): остаток строки — тренду.
+   Цифры моноширинные (shell.css), поэтому число не прыгает при смене значения */
 .metric--segment .metric__pair > .metric__value {
   flex: none;
-  inline-size: calc(4ch + 4 * var(--tracking-value));
   white-space: nowrap;
 }
 
@@ -275,13 +342,13 @@
 
 /*
   ── Свечение сегмента по плану (J-67, J-89) ──────────────────────────
-  Правый верхний угол — там, где кольцо статуса, — светится: ниже плана красным, выше
-  зелёным; сильное отклонение плотнее. В плане цвета нет — нейтральная текстура. Статус и
-  его силу называет кольцо (подсказка и доступное имя). Пока в карточке служебное состояние — загрузка, пусто,
+  Стекло по статусу плана — сегменты и большая карточка канала: свечение тона поднимается снизу, рамка тона ярче
+  внизу, по верхней кромке — блик. Ниже плана красным, выше зелёным; сильное отклонение плотнее. В плане цвета
+  нет — молочное стекло с бликом. Статус и его силу называет бейдж (подсказка и доступное имя). Пока в карточке служебное состояние — загрузка, пусто,
   ошибка, — свечения нет: оно описывает число, а не его отсутствие. Свечение — слои под
   содержимым, а не фон карточки: наведение и выбор меняют фон и рамку, статус остаётся виден
 */
-.card--metric-segment[data-plan-glow]:not(:has(.state)) {
+.card--metric[data-plan-glow]:not(:has(.state)) {
   --plan-tone: var(--color-positive);
   --plan-glow: var(--plan-glow-soft);
   --plan-glow-rim: var(--plan-glow-rim-soft);
@@ -291,19 +358,19 @@
   isolation: isolate;
 }
 
-.card--metric-segment[data-plan-glow='below']:not(:has(.state)),
-.card--metric-segment[data-plan-glow='below-strong']:not(:has(.state)) {
+.card--metric[data-plan-glow='below']:not(:has(.state)),
+.card--metric[data-plan-glow='below-strong']:not(:has(.state)) {
   --plan-tone: var(--color-negative);
 }
 
-.card--metric-segment[data-plan-glow='below-strong']:not(:has(.state)),
-.card--metric-segment[data-plan-glow='above-strong']:not(:has(.state)) {
+.card--metric[data-plan-glow='below-strong']:not(:has(.state)),
+.card--metric[data-plan-glow='above-strong']:not(:has(.state)) {
   --plan-glow: var(--plan-glow-strong);
   --plan-glow-rim: var(--plan-glow-rim-strong);
 }
 
-.card--metric-segment[data-plan-glow]:not(:has(.state))::before,
-.card--metric-segment[data-plan-glow]:not(:has(.state))::after {
+.card--metric[data-plan-glow]:not(:has(.state))::before,
+.card--metric[data-plan-glow]:not(:has(.state))::after {
   content: '';
   position: absolute;
   z-index: -1;
@@ -311,16 +378,16 @@
   pointer-events: none;
 }
 
-.card--metric-segment[data-plan-glow]:not(:has(.state))::before {
+.card--metric[data-plan-glow]:not(:has(.state))::before {
   inset: 0;
   background: radial-gradient(var(--plan-shape), color-mix(in srgb, var(--plan-tone) var(--plan-glow), transparent), transparent);
 }
 
-/* Рамка тона гаснет от угла: кольцо-маска поверх обычной рамки карточки */
-.card--metric-segment[data-plan-glow]:not(:has(.state))::after {
+/* Рамка тона ярче внизу и гаснет к верху, по верхней кромке — блик стекла: кольцо-маска поверх обычной рамки */
+.card--metric[data-plan-glow]:not(:has(.state))::after {
   inset: calc(-1 * var(--hairline));
   padding: var(--hairline);
-  background: radial-gradient(var(--plan-rim-shape), color-mix(in srgb, var(--plan-tone) var(--plan-glow-rim), transparent), transparent);
+  background: var(--glass-sheen), radial-gradient(var(--plan-rim-shape), color-mix(in srgb, var(--plan-tone) var(--plan-glow-rim), transparent), transparent);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
@@ -330,7 +397,7 @@
   J-101: наведение и фокус на цветной карточке — в её тоне: свечение плотнее и шире, рамка тона;
   серый подсвет наведения остаётся фоном карточки. В плане цвета нет — наведение обычное, белое
 */
-.card--metric-segment[data-plan-glow]:not([data-plan-glow='in']):not(:has(.state)):has(.metric__toggle:hover, .metric__toggle:focus-visible) {
+.card--metric[data-plan-glow]:not([data-plan-glow='in']):not(:has(.state)):has(.metric__toggle:hover, .metric__toggle:focus-visible) {
   --plan-glow: var(--plan-glow-hover);
   --plan-glow-rim: var(--plan-glow-rim-hover);
   --plan-shape: var(--plan-glow-shape-hover);
@@ -338,13 +405,13 @@
   border-color: color-mix(in srgb, var(--plan-tone) var(--plan-glow-rim-soft), transparent);
 }
 
-/* В плане — без цвета: текстура вместо свечения, рамка карточки обычная */
-.card--metric-segment[data-plan-glow='in']:not(:has(.state))::before {
+/* В плане — без цвета: молочное стекло вместо свечения, у рамки только блик */
+.card--metric[data-plan-glow='in']:not(:has(.state))::before {
   background: var(--plan-wash-neutral);
 }
 
-.card--metric-segment[data-plan-glow='in']:not(:has(.state))::after {
-  content: none;
+.card--metric[data-plan-glow='in']:not(:has(.state))::after {
+  background: var(--glass-sheen);
 }
 
 /* ── Кликабельная карточка (P0 №7, D-31, V-26) ─────────────────────── */
@@ -506,9 +573,8 @@
 .conversion__share-row {
   grid-row: 4;
   display: flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: var(--space-2);
+  flex-direction: column;
+  align-items: center;
   min-height: 1lh;
   white-space: nowrap;
 }
@@ -543,8 +609,10 @@
 }
 
 /* Тонкие вертикальные разделители между ступенями — как в стратегии */
+/* Разделитель ступеней — у подписей и чисел, над потоком он гаснет: прямая линия поперёк потока читалась его краем */
 .conversion__step + .conversion__step {
   border-inline-start: var(--hairline) solid var(--color-border);
+  border-image: linear-gradient(180deg, var(--color-border) 0 15%, transparent 30% 55%, var(--color-border) 70%) 1;
 }
 
 .conversion__change {

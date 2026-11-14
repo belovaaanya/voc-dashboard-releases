@@ -31,6 +31,11 @@
   --tone: var(--color-text-secondary);
 }
 
+/* Третий серый текста: дельта, у которой ещё нет смысла, — оценки незаконченного месяца против целого прошлого */
+.tone--faint {
+  --tone: var(--color-text-tertiary);
+}
+
 .tone--orange {
   --tone: var(--color-orange);
 }

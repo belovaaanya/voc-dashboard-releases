@@ -249,3 +249,53 @@ export function planZoneStops(top, bottom, height, fade) {
   return [[top - half, 'above'], [top + inner, 'in-plan'], [bottom - inner, 'in-plan'], [bottom + half, 'below']]
     .map(([y, zone]) => ({ offset: offset(y), zone }));
 }
+
+/* Прямоугольники пересекаются, с зазором `gap` вокруг первого */
+const cardsOverlap = (a, b, gap) => a.x - gap < b.x + b.width && b.x < a.x + a.width + gap && a.y - gap < b.y + b.height && b.y < a.y + a.height + gap;
+
+/* Ломаная линии VOC проходит через прямоугольник с зазором: отрезки между точками, проверка шагом в 2 px */
+function lineCrosses(rect, line, gap) {
+  const box = { x: rect.x - gap, y: rect.y - gap, width: rect.width + gap * 2, height: rect.height + gap * 2 };
+  const inside = (x, y) => x >= box.x && x <= box.x + box.width && y >= box.y && y <= box.y + box.height;
+  for (let at = 1; at < line.length; at += 1) {
+    const from = line[at - 1];
+    const to = line[at];
+    if (!from || !to || from.y === null || to.y === null) continue;
+    if (Math.max(from.x, to.x) < box.x || Math.min(from.x, to.x) > box.x + box.width) continue;
+    const steps = Math.max(1, Math.ceil(Math.hypot(to.x - from.x, to.y - from.y) / 2));
+    for (let step = 0; step <= steps; step += 1) {
+      const share = step / steps;
+      if (inside(from.x + (to.x - from.x) * share, from.y + (to.y - from.y) * share)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Раскладка карточек событий (неделя 16–22.11): карточка по центру своей даты (у края — прижата внутрь), в одном из
+ * рядов `rows` (верх карточки в координатах области); с `height` ряды берутся по всей высоте области. Ряды — сначала
+ * подальше от линии VOC в этой дате. Карточка не ложится на другую карточку и на линию; не нашлось места — карточки
+ * нет (событие остаётся точкой полосы). Ставится не больше `limit` карточек в порядке `candidates` (от крупного).
+ */
+export function placeCards(candidates, { xs, line = [], width, height = 0, rows: given, card, gap = 4, limit = 5 }) {
+  const rows = given ?? [];
+  if (!given) for (let y = gap; y + card.height + gap <= height; y += card.height + gap) rows.push(y);
+  const placed = [];
+  for (const candidate of candidates) {
+    if (placed.length >= limit) break;
+    const center = xs[candidate.index];
+    if (center === undefined || center === null) continue;
+    const x = Math.min(Math.max(0, center - card.width / 2), Math.max(0, width - card.width));
+    const near = line.filter((point) => point && point.y !== null && Math.abs(point.x - center) <= card.width / 2);
+    const lineY = near.length ? near.reduce((sum, { y }) => sum + y, 0) / near.length : null;
+    const ordered = lineY === null ? rows
+      : [...rows].sort((left, right) => Math.abs(right + card.height / 2 - lineY) - Math.abs(left + card.height / 2 - lineY));
+    for (const y of ordered) {
+      const rect = { x, y, width: card.width, height: card.height };
+      if (placed.some((other) => cardsOverlap(rect, other.rect, gap)) || lineCrosses(rect, line, gap)) continue;
+      placed.push({ ...candidate, center, rect });
+      break;
+    }
+  }
+  return placed;
+}
