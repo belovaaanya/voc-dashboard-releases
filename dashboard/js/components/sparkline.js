@@ -62,6 +62,35 @@ function appendFill(svg, points) {
   for (const d of areaPaths(points, VIEWBOX.height).filter((path) => path.includes(' C '))) svg.append(svgNode('path', 'sparkline__area', { d, fill: `url(#${id})` }));
 }
 
+/*
+  `planFill` — заливка как у графика динамики (appendSeries в dynamics.js): выше коридора плана — зелёная под линией до
+  его верхнего края, ниже — красная над линией до нижнего края, внутри коридора заливки нет. Та же геометрия
+  (areaPaths от линии до края коридора, обрезка по краю), градиент гаснет к коридору
+*/
+function appendPlanFill(svg, points, scale, band) {
+  const y = (value) => VIEWBOX.height - ((value - scale.min) / (scale.max - scale.min)) * VIEWBOX.height;
+  const top = Math.max(0, Math.min(VIEWBOX.height, y(band.max)));
+  const bottom = Math.max(0, Math.min(VIEWBOX.height, y(band.min)));
+  const ys = points.filter((point) => point.y !== null).map((point) => point.y);
+  if (!ys.length) return;
+  const defs = svgNode('defs');
+  const part = (tone, edge, extreme, clip) => {
+    const id = `sparkline-plan-${tone}-${sequence += 1}`;
+    const gradient = svgNode('linearGradient', `sparkline__plan-fill sparkline__plan-fill--${tone}`, {
+      id: `${id}-fill`, gradientUnits: 'userSpaceOnUse', x1: 0, x2: 0, y1: extreme, y2: extreme === edge ? edge + 0.01 : edge,
+    });
+    gradient.append(svgNode('stop', 'sparkline__plan-stop', { offset: 0 }), svgNode('stop', 'sparkline__plan-stop sparkline__plan-stop--clear', { offset: 1 }));
+    const clipPath = svgNode('clipPath', null, { id: `${id}-clip` });
+    clipPath.append(svgNode('rect', null, { x: 0, width: VIEWBOX.width, ...clip }));
+    defs.append(gradient, clipPath);
+    return areaPaths(points, edge).filter((path) => path.includes(' C '))
+      .map((d) => svgNode('path', 'sparkline__area', { d, fill: `url(#${id}-fill)`, 'clip-path': `url(#${id}-clip)` }));
+  };
+  const above = part('positive', top, Math.min(...ys), { y: 0, height: top });
+  const below = part('negative', bottom, Math.max(...ys), { y: bottom, height: Math.max(0, VIEWBOX.height - bottom) });
+  svg.append(defs, ...above, ...below);
+}
+
 /** Шкала по умолчанию — от минимума до максимума ряда: форма важнее абсолютного уровня. */
 /*
   J-151: `wide` — линия на ширину колонки (дайджест): та же геометрия, растянута по ширине.
@@ -96,7 +125,7 @@ function appendFill(svg, points) {
   `flatBand` — коридор без размытия и скругления; заливка та же, что везде: зелёный градиент `--color-plan-band` слева направо
   (неделя 16–22.11 — коридор плана везде зелёный, раньше `flatBand` давал серую ровную заливку)
 */
-export function sparkline(values, { tone, domain, wide = false, fill = false, band: singleBand = null, bands = null, zones = true, label = null, axis = null, glow = false, crispBand = false, flatBand = false, labelBelow = null, halo = false, endRule = false, level = null }) {
+export function sparkline(values, { tone, domain, wide = false, fill = false, band: singleBand = null, bands = null, zones = true, label = null, axis = null, glow = false, crispBand = false, flatBand = false, labelBelow = null, halo = false, endRule = false, level = null, planFill = false }) {
   const sameBand = (left, right) => left && right && left.min === right.min && left.max === right.max;
   const known = bands?.filter(Boolean) ?? [];
   const stepped = known.length > 0 && !known.every((item) => sameBand(item, known[0])) ? bands : null;
@@ -128,7 +157,10 @@ export function sparkline(values, { tone, domain, wide = false, fill = false, ba
     const y = VIEWBOX.height - ((level - scale.min) / (scale.max - scale.min)) * VIEWBOX.height;
     svg.append(svgNode('line', 'sparkline__level', { x1: 0, x2: VIEWBOX.width, y1: y, y2: y }));
   }
-  if (!glow) appendFill(svg, points);
+  /* Без плана у `planFill` заливки нет: серая заливка под всей линией не повторяет смысл графика динамики */
+  if (planFill) {
+    if (band) appendPlanFill(svg, points, scale, band);
+  } else if (!glow) appendFill(svg, points);
   /* Точка без соседей — отрезок нулевой длины: её видно только кружком */
   const lines = linePaths(points).filter((path) => path.includes(' C '));
   if (band && zones) appendPlanLines(svg, lines, scale, band, glow);

@@ -69,3 +69,30 @@ export function trendDirection(values) {
   if (shown.length < 2) return null;
   return trendOf(roundDelta(shown.at(-1) - shown[0]));
 }
+
+/* Наименьший размах общей шкалы: разница 0,01 не должна выглядеть обвалом */
+export const MIN_TREND_SPAN = 0.1;
+
+/**
+ * Общая шкала мини-трендов сегментов (решение пользователя): размахи сравнимы между карточками. Диапазон — min и max
+ * значений сегментов с достаточной выборкой (D-25): 22 оценки КИБ, гуляющие на 0,3, иначе сплющили бы остальных.
+ * Если достаточных нет — по всем. Размах не меньше `MIN_TREND_SPAN`, центр сохраняется. null — значений нет.
+ * `series` — `[{ values, sufficient }]`.
+ */
+export function sharedTrendDomain(series, minSpan = MIN_TREND_SPAN) {
+  const finite = (list) => list.flatMap(({ values }) => values).filter(Number.isFinite);
+  const pool = finite(series.filter(({ sufficient }) => sufficient));
+  const values = pool.length ? pool : finite(series);
+  if (!values.length) return null;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  if (max - min >= minSpan) return { min, max };
+  const center = (min + max) / 2;
+  return { min: center - minSpan / 2, max: center + minSpan / 2 };
+}
+
+/** Значения внутри шкалы: точка мало-выборочного сегмента за её краем прижимается к краю, а не пропадает. */
+export function clampToDomain(values, domain) {
+  if (!domain) return values;
+  return values.map((value) => (value === null ? null : Math.min(domain.max, Math.max(domain.min, value))));
+}

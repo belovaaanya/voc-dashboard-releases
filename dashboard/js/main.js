@@ -37,7 +37,7 @@ import { createSelector } from './state/selection.js';
 import { holdPageHeight as holdPage, releasePageHeight as releasePage } from './ui/page-height.js';
 import { sameInputs, staleInputs, watchInputs } from './shell/inputs.js';
 import { ROLE_SLOTS } from './core/digest.js';
-import { ANALYST_PAGE, DEFAULT_PAGE, LOCAL_PERIOD_BLOCKS, onStateChange, readState, syncState, toSearch, viewOf, withFilter, writeState } from './state/url-state.js';
+import { ANALYST_PAGE, DEFAULT_PAGE, LOCAL_PERIOD_BLOCKS, onStateChange, opensTable, readState, syncState, toSearch, viewOf, withFilter, writeState } from './state/url-state.js';
 import { SHARED_PERIOD, resolveState } from './state/resolve-state.js';
 import { validateVerbatim } from './core/verbatim.js';
 
@@ -56,7 +56,8 @@ const BLOCKS = [
   { id: 'verbatim-cards', title: 'Топ проблем', host: 'problems', modifier: 'card--verbatim', heavy: true, render: renderVerbatimCards, verbatim: true },
   { id: 'insights', title: 'Календарь событий', host: 'rail-main', modifier: 'card--insights card--fill', render: renderInsights, ready: calendarReady },
   /* J-151: таблица прямой речи — на странице «Обратная связь» */
-  { id: 'verbatim-table', title: 'Обратная связь', host: 'full', modifier: 'card--verbatim-table', page: 'feedback', render: renderVerbatimTable, verbatim: true },
+  /* Неделя 16–22.11: таблица прямой речи — внизу «Для аналитика», только в этом режиме; на главной её нет (цитаты — в «Топ проблем») */
+  { id: 'verbatim-table', title: 'Прямая речь: детализация', host: 'full', modifier: 'card--verbatim-table', page: ANALYST_PAGE, render: renderVerbatimTable, verbatim: true },
   /* J-151: VOC-дайджест — месяц канала по макету */
   { id: 'digest-summary', title: 'VOC-дайджест', host: 'digest-top', modifier: 'card--digest-summary card--page-head card--bare', render: renderDigestSummary, page: 'digest' },
   { id: 'digest-segment-1', title: 'Сегмент', host: 'digest-segments', modifier: 'card--digest-segment', render: digestSegment(0), page: 'digest' },
@@ -73,7 +74,8 @@ const BLOCKS = [
   { id: 'roles-other', title: 'Другие роли', host: 'roles', modifier: 'card--roles-other card--bare', render: renderOtherRoles, page: 'roles' },
 ];
 /* J-151: страница блока; без поля — «Главная» */
-const pageOf = (spec) => spec.page ?? DEFAULT_PAGE;
+/* Блок с `page: ANALYST_PAGE` — только в режиме «Для аналитика» (вид главной); остальные — на своей странице */
+const shownOn = (spec, page) => (spec.page === ANALYST_PAGE ? page === ANALYST_PAGE : (spec.page ?? DEFAULT_PAGE) === viewOf(page));
 /* `heavy`: расчёт дольше кадра — на кадрах жеста таймлайна стоит прежнее содержимое, блок обновляется по отпусканию (docs/ui-shell.md#скорость) */
 const waitsForGesture = (spec, live) => live && spec.heavy;
 /* Оценки канала до переключателя кэшбека: дайджест показывает VOC и с поправкой, и без */
@@ -92,10 +94,8 @@ function channelRowsOf(rows, channel) {
 */
 const ANALYSIS_TITLE = 'Динамика, события и антидрайверы';
 const ANALYSIS_BLOCKS = ['dynamics', 'insights', 'antidrivers', 'verbatim-cards'];
-/* Страница «Обратная связь»: одно имя в меню, карточке и таблице; период — один, в шапке дашборда (неделя 16–22.11) */
-const VERBATIM_TITLE = 'Обратная связь';
 /* Колонки внутри карточек-групп: заголовок блока там — h3 под заголовком группы */
-const GROUPED_HOSTS = ['main', 'rail-main', 'drivers', 'problems', 'full'];
+const GROUPED_HOSTS = ['main', 'rail-main', 'drivers', 'problems'];
 
 const TEXT_BLOCKS = BLOCKS.filter((spec) => spec.verbatim);
 
@@ -164,8 +164,6 @@ function pageHosts() {
 function mountCards(hosts) {
   /* J-40: график, календарь и антидрайверы — одна карточка; её шапка несёт общий период трёх блоков */
   const analysis = groupFromSlot({ id: 'analysis', title: ANALYSIS_TITLE, modifier: 'card--group card--analysis' });
-  /* Карточка «Обратная связь» — заголовок без своего периода: таблица живёт по периоду шапки; день графика её не сужает (J-49) */
-  const verbatimGroup = groupFromSlot({ id: 'verbatim', title: VERBATIM_TITLE, modifier: 'card--group card--verbatim-group' });
 
   const blocks = new Map();
   for (const spec of BLOCKS) {
@@ -173,12 +171,9 @@ function mountCards(hosts) {
     blocks.set(spec.id, block);
     hosts[spec.host].append(block.element);
   }
-  /* Таблицу уже назвал заголовок карточки «Обратная связь» над ней: свой заголовок — только для screen reader */
-  blocks.get('verbatim-table').setTitle('Обратная связь', null, { hidden: true });
 
   const setAll = (state, detail) => {
     analysis.setHead();
-    verbatimGroup.setHead();
     for (const block of blocks.values()) {
       /* Отложенный блок мог остаться без действий (`inert`) до кадра, который ошибка отменила */
       const body = block.element.querySelector('.card__body');
@@ -189,7 +184,7 @@ function mountCards(hosts) {
   };
 
   for (const spec of BLOCKS) showPlaceholder(spec, blocks.get(spec.id));
-  return { analysis, verbatimGroup, blocks, setAll };
+  return { analysis, blocks, setAll };
 }
 
 /* Приложение без листов: пустой дашборд с кнопкой «Обновить данные»; считать и фильтровать нечего */
@@ -352,7 +347,7 @@ function paintGroupHeads({ analysis }, { analysisContext }, basePaint, live) {
 function renderBlocks(blocks, { only, mayDefer, page, live }, contextFor, context, paint) {
   const deferred = [];
   /* J-151: карточки скрытых страниц не считаются и не висят в загрузке — пусты, пока страницу не откроют */
-  for (const spec of only.filter((item) => pageOf(item) !== page)) {
+  for (const spec of only.filter((item) => !shownOn(item, page))) {
     const block = blocks.get(spec.id);
     if (block.element.querySelector('.state--loading')) {
       paint.forget(spec.id);
@@ -360,7 +355,7 @@ function renderBlocks(blocks, { only, mayDefer, page, live }, contextFor, contex
       block.setContent(document.createElement('div'));
     }
   }
-  for (const spec of only.filter((item) => pageOf(item) === page)) {
+  for (const spec of only.filter((item) => shownOn(item, page))) {
     const block = blocks.get(spec.id);
     /* Копии контекста делят с общим состояние и тексты — сверка входов не строит срез своего периода */
     if (paint.current(spec.id, context)) continue;
@@ -424,13 +419,43 @@ function paintPage(env, resolved, context, { only, withHeader, mayDefer, live })
   /* J-151: видна одна страница; блоки других страниц не считаются. «Для аналитика» показывает вид главной */
   const view = viewOf(state.page);
   for (const node of document.querySelectorAll('.page-view')) node.hidden = node.dataset.page !== view;
+  /* Колонки только режима аналитика (таблица прямой речи) на главной не видны */
+  for (const node of document.querySelectorAll('[data-mode="analyst"]')) node.hidden = state.page !== ANALYST_PAGE;
   if (withHeader) {
     paint('#nav', context, (watched) => renderNav(env, watched));
     paint('#header', context, (watched) => renderPageHeader(env, watched));
   }
   const groups = groupContexts(env, resolved, context);
   if (withHeader) paintGroupHeads(env.cards, groups, paint, live);
-  return renderBlocks(env.cards.blocks, { only, mayDefer, page: view, live }, groups.contextFor, context, paint);
+  return renderBlocks(env.cards.blocks, { only, mayDefer, page: state.page, live }, groups.contextFor, context, paint);
+}
+
+/*
+  Прокрутка к таблице по старой ссылке: блоки выше дорисовываются кадрами позже и сдвигают её вниз, поэтому прокрутка
+  повторяется, пока место таблицы не простоит секунду (не дольше 5 с: скелеты выше сначала выше готовых блоков); своя
+  прокрутка зрителя её останавливает. Отступ под липкую шапку даёт scroll-padding-top у html
+*/
+function scrollToTable(target) {
+  if (!target?.scrollIntoView) return;
+  const stopOn = ['wheel', 'touchstart', 'keydown', 'pointerdown'];
+  let last = null;
+  let still = 0;
+  let timer = null;
+  const stop = () => {
+    clearTimeout(timer);
+    for (const type of stopOn) globalThis.removeEventListener?.(type, stop);
+  };
+  const started = Date.now();
+  const step = () => {
+    target.scrollIntoView({ block: 'start' });
+    const top = Math.round(target.getBoundingClientRect().top);
+    still = top === last ? still + 1 : 0;
+    if (still >= 4 || Date.now() - started > 5000) return stop();
+    last = top;
+    timer = setTimeout(step, 250);
+  };
+  for (const type of stopOn) globalThis.addEventListener?.(type, stop, { once: true, passive: true });
+  step();
 }
 
 function startDashboard(env) {
@@ -541,7 +566,10 @@ function startDashboard(env) {
     renderSafely(readState(), { only, withHeader: false, mayDefer: false });
   }
 
+  /* Старая ссылка на страницу «Обратная связь» — «Для аналитика», прокрученная к таблице прямой речи */
+  const toTable = opensTable(globalThis.location?.search ?? '');
   renderSafely(readState());
+  if (toTable) scrollToTable(document.getElementById('full'));
   onStateChange((state) => {
     gestureFrom = null;
     /* Back посреди жеста: жест кончился без отпускания — шапки, нарисованные в нём, следующий жест рисует заново */

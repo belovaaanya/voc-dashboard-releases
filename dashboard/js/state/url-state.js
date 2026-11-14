@@ -20,13 +20,13 @@ const PARAM_FOCUS = 'focus';
   Блоки со своим периодом: параметры `<блок>-preset`, `<блок>-from`, `<блок>-to` рядом с общим периодом.
   J-40: период `dynamics` — общий для блока аналитики (график, календарь, антидрайверы); свой период
   антидрайверов снят, старые параметры `antidrivers-*` игнорируются.
-  Своего периода таблицы «Обратная связь» (был `verbatim`, J-105) нет с недели 16–22.11: на её странице один период —
-  в шапке дашборда; старые параметры `verbatim-*` игнорируются, иначе тихо перебивали бы период шапки
+  Своего периода таблицы прямой речи (был `verbatim`, J-105) нет с недели 16–22.11: она живёт по периоду шапки;
+  старые параметры `verbatim-*` игнорируются, иначе тихо перебивали бы период шапки
 */
 export const LOCAL_PERIOD_BLOCKS = ['dynamics'];
 
 /* J-151: страницы дашборда — пункты меню; «Главная» в URL не пишется */
-export const PAGES = ['voc', 'analyst', 'roles', 'digest', 'feedback'];
+export const PAGES = ['voc', 'analyst', 'roles', 'digest'];
 export const DEFAULT_PAGE = 'voc';
 /*
   «Для аналитика» — та же главная с теми же фильтрами и срезом, но блоки показывают продвинутые режимы и колонки.
@@ -36,6 +36,17 @@ export const DEFAULT_PAGE = 'voc';
 export const ANALYST_PAGE = 'analyst';
 /** Какой вид страницы показывать: у «Для аналитика» он общий с главной. */
 export const viewOf = (page) => (page === ANALYST_PAGE ? DEFAULT_PAGE : page);
+/*
+  Отдельной страницы «Обратная связь» нет с недели 16–22.11: таблица прямой речи — внизу «Для аналитика».
+  Старая ссылка `page=feedback` (или `page=verbatim`) и ссылка с прежним периодом таблицы `verbatim-*` открывают
+  «Для аналитика»; к таблице её прокручивает main.js (`opensTable`)
+*/
+const LEGACY_TABLE_PAGES = new Set(['feedback', 'verbatim']);
+/** Старая ссылка вела на таблицу прямой речи: открыть «Для аналитика» и прокрутить к таблице. */
+export function opensTable(search) {
+  const params = new URLSearchParams(search);
+  return LEGACY_TABLE_PAGES.has(params.get('page')) || [...params.keys()].some((key) => key.startsWith('verbatim-'));
+}
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 const VALID_PRESETS = new Set([...PRESETS, 'custom']);
 
@@ -81,7 +92,7 @@ export function readState(search = window.location.search) {
     ...(driver ? { driver } : {}),
     ...(params.has('days') ? { days: normalizedDays(params.get('days').split(',')) } : {}),
     /* J-151: страница и месяц дайджеста; тема «Детализации» ушла вместе с карточкой */
-    page: PAGES.includes(params.get('page')) ? params.get('page') : DEFAULT_PAGE,
+    page: PAGES.includes(params.get('page')) ? params.get('page') : opensTable(search) ? ANALYST_PAGE : DEFAULT_PAGE,
     ...(MONTH.test(params.get('month') ?? '') ? { month: params.get('month') } : {}),
     filters,
     local,

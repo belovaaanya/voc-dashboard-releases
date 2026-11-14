@@ -14,7 +14,7 @@ import { voc } from './metrics.js';
 import { calendarRange, equalDaysPeriod, previousPeriod } from './period.js';
 import { planFor } from './plan.js';
 import { roundImpact } from './round.js';
-import { MINIMUM_RATINGS } from './sufficiency.js';
+import { MINIMUM_RATINGS, sampleSufficiency } from './sufficiency.js';
 import { damageOf, negativeBase, negativeShare } from './verbatim.js';
 import { buildTimeSeries } from './timeseries.js';
 
@@ -371,6 +371,8 @@ export function buildRoles({ rows, month, reference, channel }) {
         /* J-172: прошлый месяц без оценок — дельты нет, а не «+всё» от нуля */
         countDelta: was.count ? now.count - was.count : null,
         previousCount: was.count,
+        /* Достаточность выборки месяца (D-25): линия роли с «Мало оценок» не задаёт общую шкалу плиток */
+        sufficient: sampleSufficiency(pick(current)).sufficient,
         weekly: weekBuckets.map(({ from: weekFrom, to: weekTo, ratings }) => ({ from: weekFrom, to: weekTo, ...vocPair(pick(ratings), reference) })),
         monthly: trendMonths.map((key) => ({ month: key, ...vocPair(pick(byMonth.get(key)), reference) })),
         problems: [...problemsNow].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0], 'ru')).slice(0, ROLE_PROBLEMS)

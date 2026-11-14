@@ -170,6 +170,9 @@ export function reviewText(item, label, columns = COLUMNS) {
   return [item.comment ? quoted(item.comment) : null, context.join(' · '), expertise].filter(Boolean).join('\n');
 }
 
+/* Порог подсказки — в символах: в колонке 160 px при 12 px помещается ~18 знаков */
+const LONG_CELL = 16;
+
 export function tableRow(item, label, columns = COLUMNS) {
   const row = element('tr');
   for (const column of columns) {
@@ -181,6 +184,8 @@ export function tableRow(item, label, columns = COLUMNS) {
     else if (text === NONE) cell.append(emptyValue());
     else cell.textContent = text;
     if (column.key === 'segment' && item.segment) withFullLabel(cell, label('segment', item.segment));
+    /* Ячейки в одну строку: длинное значение обрезается многоточием, полное — в подсказке; короткое — без подсказки */
+    else if (!tagged && text !== NONE && text.length > LONG_CELL) cell.title = text;
     if (column.key === 'comment' || column.key === 'expertise') {
       cell.className = `verbatim-table__text verbatim-table__text--${column.key}`;
       if (text !== NONE) cell.title = text;

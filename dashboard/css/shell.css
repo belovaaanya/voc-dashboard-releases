@@ -200,6 +200,11 @@ body::before {
   display: none;
 }
 
+/* Колонка только режима аналитика (таблица прямой речи) на главной скрыта: свой display у .column перебил бы hidden */
+[data-mode='analyst'][hidden] {
+  display: none;
+}
+
 .side-nav__list {
   display: flex;
   flex-direction: column;

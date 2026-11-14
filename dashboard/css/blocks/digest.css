@@ -649,6 +649,24 @@
   height: calc(var(--space-10) * 4);
 }
 
+/*
+  Линия внутри своих 160 px: SVG держит пропорцию viewBox, и на широкой колонке (1920 px) его высота по содержимому
+  выталкивала ось дат на шапку таблицы. Поле линии растягивается flex'ом от нуля, SVG заполняет его абсолютно —
+  ось дат всегда нижняя строка этих 160 px
+*/
+.role-card__side .sparkline-labels--fill > .sparkline-labels__plot {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.role-card__side .sparkline-labels__plot > .sparkline--fill {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
 /* J-165: VOC роли — 72 px */
 .role-card .metric__value {
   font: var(--type-value-lg);
@@ -691,7 +709,8 @@
 /* J-194: топ-3 проблем — таблица; число жалоб и дельта — столбцами вправо табличными цифрами */
 .role-card__problems {
   width: 100%;
-  margin-block-start: var(--space-4);
+  /* От оси дат до шапки таблицы — 16 px: 8 px зазора колонки и 8 px отступа */
+  margin-block-start: var(--space-2);
   border-collapse: collapse;
   color: var(--color-text-strong);
   font: var(--type-caption);

@@ -120,11 +120,17 @@ const barsAxisWidth = (bars) => Math.max(bars.spec.caption.length, bars.spec.for
 
 /*
   Полоса событий под осью дат (неделя 16–22.11, только «Для аналитика»): строка на тип, точка — в интервале графика
-  на той же оси X. Высота строки — 10, точка растёт с числом событий интервала
+  на той же оси X. Высота строки — 10. Точка трёх размеров (`level` клетки из `eventLanes`): у снижения и аварии — сила
+  события, у остальных — число событий интервала
 */
 const LANE_HEIGHT = 10;
 const LANE_GAP = 4;
-const laneRadius = (count) => (count >= 4 ? 4 : count >= 2 ? 3 : 2);
+const LANE_RADIUS = [2, 3, 4];
+const laneRadius = (level) => LANE_RADIUS[level - 1];
+const SIZE_HINT = {
+  strength: { [ANOMALY_EVENT]: 'Размер — сила: вклад в VOC канала', [INCIDENT_EVENT]: 'Размер — сила: доля затронутых × длительность' },
+  count: 'Размер — число событий',
+};
 const stripHeight = (lanes) => (lanes.length ? LANE_GAP + lanes.length * LANE_HEIGHT : 0);
 
 function frameFor({ width, height }, bars, strip = 0, cards = 0) {
@@ -191,9 +197,10 @@ function appendXAxis(svg, series, points, frame, indices) {
 
 /* Столбик объёма гаснет к оси (R-12): градиент в долях своего столбика, поэтому один на все */
 /*
-  Строка на тип в порядке `EVENT_LANES`; точка — в интервале, где есть события этого типа, крупнее при 2–3 и при
-  4+ событиях. Наведение — подсказка «дата · тип · число», клик — как клик по точке графика: события и антидрайверы
-  этого интервала. Мишень — столбец интервала во всю высоту строки
+  Строка на тип в порядке `EVENT_LANES`; точка — в интервале, где есть события этого типа, размер — сила или число
+  событий (`level`). Точки соседних интервалов соединены тонкой линией цвета строки, через пропуск — нет: линия
+  не обещает непрерывности, которой нет. Наведение — подсказка «дата · тип · число» и что значит размер, клик — как
+  клик по точке графика: события и антидрайверы этого интервала. Мишень — столбец интервала во всю высоту строки
 */
 /*
   Карточки крупных событий (неделя 16–22.11, «Для аналитика»): плашка подсказки графика на тонкой пунктирной ножке
@@ -320,10 +327,16 @@ function appendEventStrip(svg, lanes, series, points, frame, tooltip, interactio
     /* Раскатка подписана каналом, как чип календаря («Раскатка НИБ») */
     const label = lane.kind === ROLLOUT_EVENT && context.state.channel ? `${lane.label} ${context.state.channel}` : lane.label;
     strip.append(svgNode('line', 'chart-events__rail', { x1: 0, y1: y, x2: plot.width, y2: y }));
-    for (const { index, count } of lane.cells) {
+    lane.cells.forEach(({ index }, position) => {
+      const next = lane.cells[position + 1];
+      if (next?.index !== index + 1) return;
+      strip.append(svgNode('line', `chart-events__link tone--${lane.tone}`, { x1: points[index].x, y1: y, x2: points[next.index].x, y2: y }));
+    });
+    const sizeHint = lane.sizeBy === 'strength' ? SIZE_HINT.strength[lane.kind] : SIZE_HINT.count;
+    for (const { index, count, level } of lane.cells) {
       const bucket = series[index];
       const x = points[index].x;
-      const dot = svgNode('circle', `chart-events__mark tone--${lane.tone}`, { cx: x, cy: y, r: laneRadius(count) });
+      const dot = svgNode('circle', `chart-events__mark tone--${lane.tone}`, { cx: x, cy: y, r: laneRadius(level) });
       const { left, right } = columns[index];
       const hit = svgNode('rect', 'chart-events__hit', { x: left, y: row * LANE_HEIGHT, width: right - left, height: LANE_HEIGHT });
       const when = bucket.from === bucket.to ? formatDate(bucket.from) : formatInterval(bucket);
@@ -331,7 +344,7 @@ function appendEventStrip(svg, lanes, series, points, frame, tooltip, interactio
         dot.classList.add('is-hovered');
         showChartTooltip(tooltip, {
           content: [element('span', 'chart-tooltip__value', `${when} · ${label} · ${formatCount(count)}`),
-            element('span', 'chart-tooltip__hint', POINT_HINT)],
+            element('span', 'chart-tooltip__hint', sizeHint), element('span', 'chart-tooltip__hint', POINT_HINT)],
           x: plot.x + x,
           y: top + y,
         });
@@ -894,7 +907,7 @@ function renderChart(block, context, scale, plan) {
   const ready = wanted && calendarReady(context);
   if (wanted && !ready) awaitCalendar(block, context);
   const events = ready ? calendarEventsOf(context) : [];
-  const model = { ...base, lanes: ready ? eventLanes(events, base.current) : [], cards: majorEvents(events, base.current, context.slice) };
+  const model = { ...base, lanes: ready ? eventLanes(events, base.current, context.slice) : [], cards: majorEvents(events, base.current, context.slice) };
   const chart = element('div', modeOf(context) === MODE_DAMAGE ? 'chart chart--damage' : 'chart');
   chart.append(chartLegend(context, model));
   const stage = element('div', 'chart-stage');

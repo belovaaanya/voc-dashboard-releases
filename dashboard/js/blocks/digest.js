@@ -11,6 +11,7 @@ import { segmented } from '../components/segmented.js';
 import { legendItem, legendList } from '../components/legend.js';
 import { sparkline } from '../components/sparkline.js';
 import { chartDomain } from '../core/chart-geometry.js';
+import { clampToDomain, sharedTrendDomain } from '../core/segment-trend.js';
 import { colourScale } from '../core/antidrivers.js';
 import { STABILITY_PLAN, buildDigest, filledFrom, buildPlatforms, buildRoles, buildTriggers, defaultMonth, monthsOf } from '../core/digest.js';
 import { element } from '../ui/dom.js';
@@ -606,17 +607,35 @@ const roleSeries = (role) => (roleScale === 'months' ? role.monthly : role.weekl
 /* Плитки ролей — одной шкалой: линии и подпись страницы — с первой точки, где оценки есть хотя бы у одной роли */
 const roleStart = (data) => filledFrom(...data.roles.map((role) => roleSeries(role).map(({ voc }) => voc)));
 
-/* Линия роли: недели месяца или месяцы полугода с общей для плиток первой точки; план — в подписи */
+/*
+  Общая шкала Y четырёх плиток (решение пользователя, как мини-тренды сегментов на главной — sharedTrendDomain): размахи
+  ролей сравнимы. Диапазон — по ролям без «Мало оценок» (D-25), если таких нет — по всем; размах не меньше 0,10
+*/
+const roleDomain = (data) => {
+  const start = roleStart(data);
+  return sharedTrendDomain(data.roles.map((role) => ({ values: roleSeries(role).slice(start).map(({ voc }) => voc), sufficient: role.sufficient })));
+};
+
+/* Коридор плана — на общей шкале: его часть за краем шкалы срезана, коридор целиком вне шкалы не рисуется */
+function bandWithin(plan, domain) {
+  if (!plan) return null;
+  if (!domain) return { min: plan.min, max: plan.max };
+  const band = { min: Math.max(plan.min, domain.min), max: Math.min(plan.max, domain.max) };
+  return band.min < band.max ? band : null;
+}
+
+/* Линия роли: недели месяца или месяцы полугода с общей для плиток первой точки и общей шкалой; план — в подписи */
 function roleTrend(role, data) {
   const months = roleScale === 'months';
   const points = roleSeries(role).slice(roleStart(data));
   const values = points.map(({ voc }) => voc);
-  const band = data.plan ? { min: data.plan.min, max: data.plan.max } : null;
+  const domain = roleDomain(data);
+  const band = bandWithin(data.plan, domain);
   const wrap = element('div', 'digest-trend digest-trend--fill');
-  wrap.title = `VOC ${months ? 'по месяцам' : 'по неделям'}${band ? `; полоса — план ${formatVoc(band.min)}–${formatVoc(band.max)}` : ''}`;
-  /* J-194: шкала круглым шагом, как у графика динамики — коридор плана полосой, а не фоном плитки */
-  wrap.append(sparkline(values, { tone: 'neutral', wide: true, fill: true, label: vocText, band, domain: chartDomain(points, [], band),
-    axis: points.map((point) => (months ? monthShort(point.month) : dayMonth(point.from))) }));
+  wrap.title = `VOC ${months ? 'по месяцам' : 'по неделям'}${data.plan ? `; полоса — план ${formatVoc(data.plan.min)}–${formatVoc(data.plan.max)}` : ''}`;
+  /* Точки роли с малой выборкой за краем общей шкалы прижаты к краю (clampToDomain), подписи — настоящие значения */
+  wrap.append(sparkline(clampToDomain(values, domain), { tone: 'neutral', wide: true, fill: true, label: (_value, index) => vocText(values[index]), band, planFill: true,
+    ...(domain ? { domain } : {}), axis: points.map((point) => (months ? monthShort(point.month) : dayMonth(point.from))) }));
   return wrap;
 }
 

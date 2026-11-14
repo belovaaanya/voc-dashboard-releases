@@ -18,12 +18,20 @@ import { voc, vocDelta } from '../core/metrics.js';
 import { withFilter } from '../state/url-state.js';
 import { planFor } from '../core/plan.js';
 import { badgeNode, countGroupNode, setPlanGlow, statusGlow, trendTone, forecastNode, leadNode, metaRowNode, pairNode, sufficiencyNode, trendNode } from './metric-card.js';
-import { trendDirection, trendStep, trendSteps, trendValues } from '../core/segment-trend.js';
+import { sharedTrendDomain, trendDirection, trendStep, trendSteps, trendValues } from '../core/segment-trend.js';
+import { sampleSufficiency } from '../core/sufficiency.js';
 
 const SEGMENT = 'segment';
 
 /* Клик перерисовывает дашборд и пересоздаёт кнопку: фокус клавиатуры возвращается на карточку того же сегмента */
 let refocusCode = null;
+
+/* Ряд тренда сегмента по шагам и достаточность его выборки за период — для общей шкалы трёх карточек */
+function trendSeries({ state, select }, segment, steps) {
+  const filters = withFilter(state.filters, SEGMENT, [segment]);
+  const history = select({ filters, from: steps[0].from, to: steps.at(-1).to }).rows;
+  return { values: trendValues(history, steps), sufficient: sampleSufficiency(select({ filters }).rows).sufficient };
+}
 
 /** Реестр держит по строке на карточку, а сегмент карточки — её порядковый номер в данных. */
 export function vocSegment(index) {
@@ -83,12 +91,14 @@ function render(block, context, index) {
   const forecast = forecastNode(rows.length, previous?.length, context.period);
   /* Мини-тренд VOC — справа от числа и дельты: три шага периода, последний — выбранный; подписи у крайних точек */
   const steps = trendSteps(context.period);
-  const history = steps.length ? select({ filters: withFilter(state.filters, SEGMENT, [code]), from: steps[0].from, to: steps.at(-1).to }).rows : [];
-  const values = steps.length ? trendValues(history, steps) : [];
+  /* Шкала общая для всех сегментов: размахи карточек сравнимы между собой (`sharedTrendDomain`) */
+  const series = steps.length ? segments.map((segment) => (segment ? trendSeries(context, segment, steps) : null)) : [];
+  const values = series[index]?.values ?? [];
+  const domain = sharedTrendDomain(series.filter(Boolean));
   /* Пунктир уровня — нижняя граница плана: под ней сегмент «Ниже плана»; вне шкалы ряда не рисуется */
   /* Цвет тренда — направление динамики, мало оценок — серый (`trendTone`): план показывают бейдж и свечение */
   const tone = trendTone(rows, trendDirection(values));
-  const trend = steps.length ? trendNode(values, steps, trendStep(context.period), { tone, level: plan?.min ?? null }) : null;
+  const trend = steps.length ? trendNode(values, steps, trendStep(context.period), { tone, level: plan?.min ?? null, domain }) : null;
   /* Тренд — своей зоной справа под бейджем, число и объём — слева у нижнего края (metrics.css, `.metric--with-trend`) */
   if (trend) toggle.classList.add('metric--with-trend');
   /* Зона тренда — по ширине бейджа плана: невидимая копия бейджа задаёт ширину колонки (metrics.css) */

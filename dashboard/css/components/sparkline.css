@@ -222,3 +222,21 @@
 .sparkline-labels__tick--end {
   transform: translateX(-100%);
 }
+
+/* `planFill`: заливка от линии к коридору плана, как у графика динамики — зелёная выше, красная ниже, гаснет к коридору */
+.sparkline__plan-fill--positive {
+  --sparkline-plan-fill: var(--color-positive-fill);
+}
+
+.sparkline__plan-fill--negative {
+  --sparkline-plan-fill: var(--color-negative);
+}
+
+.sparkline__plan-stop {
+  stop-color: var(--sparkline-plan-fill);
+  stop-opacity: var(--chart-fill-opacity);
+}
+
+.sparkline__plan-stop--clear {
+  stop-opacity: 0;
+}

@@ -335,6 +335,13 @@
   stroke-width: var(--divider-width);
 }
 
+/* Соседние интервалы строки — тонкая линия её цвета под точками; через пропуск линии нет */
+.chart-events__link {
+  stroke: color-mix(in srgb, var(--tone) var(--tone-rim), transparent);
+  stroke-width: var(--divider-width);
+  pointer-events: none;
+}
+
 .chart-events__mark {
   fill: var(--tone);
   pointer-events: none;

@@ -27,6 +27,7 @@ import {
   formatVoc,
 } from '../core/format.js';
 import { ratingsForecast } from '../core/forecast.js';
+import { clampToDomain } from '../core/segment-trend.js';
 import { trendOf } from '../core/metrics.js';
 import { ABOVE_PLAN, BELOW_PLAN, GLOW_ABOVE_STRONG, GLOW_BELOW_STRONG, IN_PLAN, planGlow, planStatus } from '../core/plan.js';
 import { roundCount, roundDelta, roundShare } from '../core/round.js';
@@ -110,7 +111,7 @@ const TREND_STEP = { month: 'по месяцам', quarter: 'по квартал
  * три подписи в остаток строки не помещаются. В узкой карточке подписи гаснут (metrics.css). Все шаги и значения —
  * в подсказке и доступном имени. Шаг без оценок — разрыв; меньше двух точек с оценками — тренда нет.
  */
-export function trendNode(values, steps, step, { direction = null, tone = null, level = null } = {}) {
+export function trendNode(values, steps, step, { direction = null, tone = null, level = null, domain = null } = {}) {
   if (values.filter((value) => value !== null).length < 2) return null;
   const trend = element('span', 'metric__trend');
   const caption = `VOC ${TREND_STEP[step] ?? ''}: ${steps.map(({ label }, index) => `${label} ${values[index] === null ? 'нет оценок' : formatVoc(values[index])}`).join(', ')}`;
@@ -119,9 +120,11 @@ export function trendNode(values, steps, step, { direction = null, tone = null, 
   trend.setAttribute('aria-label', caption);
   const end = (index) => index === 0 || index === steps.length - 1;
   /* Цвет — `trendTone`: направление, мало оценок — серый; без `tone` — направление */
-  trend.append(sparkline(values, {
+  /* Общая шкала сегментов (`domain`): точки за её краем прижаты к краю, подписи — настоящие значения */
+  trend.append(sparkline(clampToDomain(values, domain), {
     tone: tone ?? GROWTH.good[direction] ?? 'neutral', wide: true, fill: true, halo: true, endRule: true, level,
-    label: (value, index) => (end(index) ? formatVoc(value) : null),
+    ...(domain ? { domain } : {}),
+    label: (_value, index) => (end(index) ? formatVoc(values[index]) : null),
     axis: steps.map(({ label }, index) => (end(index) ? label : '')),
   }));
   return trend;

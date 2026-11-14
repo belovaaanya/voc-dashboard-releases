@@ -359,14 +359,19 @@ function releaseEvent({ releaseDate, first, ratings, sum, dataEnd, fromHistorySt
   Порядок и цвет типов событий — один на ленту календаря и полосу событий под графиком (J-269, неделя 16–22.11):
   сначала то, что считается из оценок, потом внешние события. Цвет — тон иконки типа
 */
+/*
+  Порядок строк полосы (неделя 16–22.11): сверху то, что бьёт по VOC, — снижение, авария, инцидент; затем внешние
+  изменения — релиз и раскатка рядом; новый срез; провал оценок — про сбор, а не про VOC, — внизу.
+  `sizeBy`: у снижения и аварии точка — сила события, у остальных — число событий интервала
+*/
 export const EVENT_LANES = [
-  { kind: ANOMALY_EVENT, label: 'Крит. снижение VOC', tone: 'negative' },
-  { kind: DATA_LOSS_EVENT, label: 'Провал оценок', tone: 'data-loss' },
-  { kind: SUSTAINED_EVENT, label: 'Инцидент', tone: 'incident' },
-  { kind: NEW_SLICE_EVENT, label: 'Новый срез', tone: 'purple' },
-  { kind: INCIDENT_EVENT, label: 'Авария', tone: 'orange' },
-  { kind: RELEASE_EVENT, label: 'Релизы АБМ', tone: 'positive' },
-  { kind: ROLLOUT_EVENT, label: 'Раскатка', tone: 'neutral' },
+  { kind: ANOMALY_EVENT, label: 'Крит. снижение VOC', tone: 'negative', sizeBy: 'strength' },
+  { kind: INCIDENT_EVENT, label: 'Авария', tone: 'orange', sizeBy: 'strength' },
+  { kind: SUSTAINED_EVENT, label: 'Инцидент', tone: 'incident', sizeBy: 'count' },
+  { kind: RELEASE_EVENT, label: 'Релизы АБМ', tone: 'positive', sizeBy: 'count' },
+  { kind: ROLLOUT_EVENT, label: 'Раскатка', tone: 'neutral', sizeBy: 'count' },
+  { kind: NEW_SLICE_EVENT, label: 'Новый срез', tone: 'purple', sizeBy: 'count' },
+  { kind: DATA_LOSS_EVENT, label: 'Провал оценок', tone: 'data-loss', sizeBy: 'count' },
 ];
 
 /* Событие одного дня — релиз, раскатка, новый срез: точка в день события; у серий и аварий — каждый их день */
@@ -391,7 +396,11 @@ export function bucketIndex(buckets, day) {
   return -1;
 }
 
-export function eventLanes(events, buckets) {
+/**
+ * `rows` — оценки среза графика: по ним сила снижения (вклад в VOC канала, `eventImpact`). У строк `sizeBy: 'strength'`
+ * в клетке — `strength` (самое сильное событие интервала) и `level` 1–3; у остальных `level` — по числу событий.
+ */
+export function eventLanes(events, buckets, rows = []) {
   if (!buckets.length) return [];
   const indexOf = (day) => bucketIndex(buckets, day);
   return EVENT_LANES.flatMap((lane) => {
@@ -405,9 +414,37 @@ export function eventLanes(events, buckets) {
         cells.set(index, cell);
       }
     }
+    for (const cell of cells.values()) {
+      if (lane.sizeBy === 'strength') {
+        cell.strength = Math.max(0, ...cell.events.map((event) => eventStrength(event, rows)));
+        cell.level = strengthLevel(lane.kind, cell.strength);
+      } else cell.level = countLevel(cell.count);
+    }
     return cells.size ? [{ ...lane, cells: [...cells.values()].sort((left, right) => left.index - right.index) }] : [];
   });
 }
+
+/*
+  Сила точки полосы (неделя 16–22.11). Снижение — вклад в VOC канала (`eventImpact`: падение × доля оценок разреза),
+  меньше 30 оценок — ноль, самая мелкая точка. Авария — доля затронутых × длительность в часах; в источнике доля шагом
+  10 %: 0 (на экране «<10 %») считается как 5 %, пустая — так же; доля вне 0–100 % — ошибка источника, сила ноль.
+  Без длительности — час. Пороги делят реальные события примерно на половину мелких и десятую часть крупных
+*/
+const UNSTATED_SHARE = 0.05;
+const STRENGTH_STEPS = { [ANOMALY_EVENT]: [0.02, 0.08], [INCIDENT_EVENT]: [0.1, 0.5] };
+
+export function eventStrength(event, rows = []) {
+  if (event.kind === ANOMALY_EVENT) return eventImpact(event, rows)?.impact ?? 0;
+  if (event.kind !== INCIDENT_EVENT) return 0;
+  const { effect } = event;
+  if (Number.isFinite(effect) && (effect < 0 || effect > 1)) return 0;
+  const share = effect ? effect : UNSTATED_SHARE;
+  const hours = Number.isFinite(event.duration_seconds) && event.duration_seconds > 0 ? event.duration_seconds / 3600 : 1;
+  return share * hours;
+}
+
+const strengthLevel = (kind, strength) => 1 + STRENGTH_STEPS[kind].filter((step) => strength >= step).length;
+const countLevel = (count) => (count >= 4 ? 3 : count >= 2 ? 2 : 1);
 
 export function coversDay(event, focus) {
   return event.days.includes(focus);

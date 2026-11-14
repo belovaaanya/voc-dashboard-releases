@@ -243,7 +243,11 @@
 
 .verbatim-table th,
 .verbatim-table td {
-  padding: var(--space-2);
+  /* Поля — как у таблицы «Топ проблем»; высота строки — по содержимому: переносится только комментарий */
+  padding: var(--space-4) var(--space-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   border-bottom: var(--divider-width) solid var(--color-border);
   color: var(--color-text-secondary);
   font: var(--type-caption);
@@ -345,12 +349,14 @@
   color: var(--color-text-strong);
 }
 
-.verbatim-table__text--comment {
+.verbatim-table .verbatim-table__text--comment {
   color: var(--color-text-strong);
+  white-space: normal;
 }
 
+/* Экспертиза — в одну строку, полный текст с переносами — в подсказке ячейки: строка не растёт до высоты разбора */
 .verbatim-table__text--expertise {
-  white-space: pre-line;
+  white-space: nowrap;
 }
 
 .verbatim-table__empty {
