@@ -105,12 +105,11 @@ let dkoMetric = 'share';
 
 /*
   Пилюля тепловой карты главной: ниже Q75 таблицы — только рамка, выше — заливка тем сильнее, чем ближе к Q95.
-  Редизайн: заливкой подсвечивается только урон; доля негатива — нейтральная пилюля (рамка, без тона), `highlight` null
+  И урон, и доля негатива — по шкале своих чисел (правка 17.11 вернула раскраску доли, снятую редизайном)
 */
 function heatPill(text, highlight) {
   /* Нет значения — общий прочерк второстепенного цвета (emptyValue), а не белое тире ячейки */
   const content = text === null ? emptyValue() : element('span', 'heatmap-cell__value', text);
-  if (!highlight) return heatCell({ muted: true, className: 'digest-pill', content });
   return heatCell({ tone: 'bad', muted: highlight.muted, strength: highlight.muted ? null : highlight.strength, className: 'digest-pill', content });
 }
 
@@ -151,8 +150,11 @@ function unavailable(block, texts) {
 
 export function renderDigestSummary(block, context) {
   const digest = digestOf(context);
-  /* Заголовок страницы — «VOC-дайджест · Месяц ГГГГ» ролью --type-page-title (card--page-head); канал виден в шапке дашборда */
-  block.setTitle(digest ? `VOC-дайджест · ${monthTitle(digest.month)}` : 'VOC-дайджест');
+  /*
+    Заголовок страницы — «VOC-дайджест» ролью --type-page-title (card--page-head), как «Главная» и «VOC ролей»: месяц и канал
+    выбраны в контролах шапки прямо над ним и не повторяются (правка 17.11: повтор месяца слеплял контролы, заголовок и число)
+  */
+  block.setTitle('VOC-дайджест');
   if (!digest) return unavailable(block, DIGEST_EMPTY);
   block.setHead({ marker: planDotNode(digest.voc.voc, digest.voc.plan) });
   const content = element('div', 'digest-summary');
@@ -281,7 +283,7 @@ export function renderDigestDko(block, context) {
   })] });
   /* Подсветка — по силе показанного числа: шкала — максимум таблицы по модулю */
   const valuesOf = (category) => (damage ? category.damages : category.shares);
-  /* Шкала урона — как у тепловой карты главной (Q75 / Q95 по всем числам карточки); у доли заливки нет (редизайн) */
+  /* Шкала — как у тепловой карты главной: Q75 / Q95 по всем числам карточки показанной метрики */
   const scale = colourScale(digest.groups.flatMap(({ categories }) => categories.flatMap((category) => valuesOf(category).filter((value) => value !== null).map(Math.abs))));
   const text = (value) => (value === null ? null : damage ? formatImpact(roundImpact(value)) : percent(value));
   /* Одна шапка месяцев на всю карточку: группа — строкой-подзаголовком, категории — под ней; пустая ячейка — тихий прочерк */
@@ -289,7 +291,7 @@ export function renderDigestDko(block, context) {
     { name: `${damage ? formatImpact(roundImpact(group.damage)) : percent(group.share)} — ${group.name}`, className: 'digest-table__group', cells: [] },
     ...group.categories.map((category) => ({
       name: category.name,
-      cells: valuesOf(category).map((value) => (value === null ? emptyValue() : heatPill(text(value), damage ? scale(Math.abs(value)) : null))),
+      cells: valuesOf(category).map((value) => (value === null ? emptyValue() : heatPill(text(value), scale(Math.abs(value))))),
     })),
   ]);
   const content = element('div', 'digest-dko');

@@ -124,6 +124,33 @@
   text-shadow: 0 0 var(--space-1) var(--color-surface), 0 0 calc(var(--space-1) / 2) var(--color-surface);
 }
 
+/*
+  Подпись крайней точки, к которой линия приходит сверху, — под точкой (`labelBelow` в metric-card.trendNode): над ней
+  подпись наехала бы на линию. Место под неё — тот же запас, что сверху, а не общий `--space-5` широких линий
+*/
+.metric__trend .sparkline-labels__value--below {
+  --label-shift: var(--space-1);
+}
+
+.metric__trend .sparkline-labels--below > .sparkline-labels__plot {
+  margin-block-end: var(--space-3);
+}
+
+/* Неполная точка крупнее остальных: полое кольцо 3 px не отличить от точки */
+.metric__trend .sparkline-labels .sparkline__marker--partial {
+  width: calc(var(--sparkline-dot-sm) * 2);
+  height: calc(var(--sparkline-dot-sm) * 2);
+}
+
+/* «!» малой выборки неполного шага — у его подписи на оси, тем же значком, что у «N оценок», но кеглем оси */
+.metric__trend-warning {
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
+  margin-inline-start: calc(var(--space-1) / 2);
+  vertical-align: -0.15em;
+  color: var(--color-neutral);
+}
+
 /* Линия берёт остаток высоты, а не высоту из пропорции viewBox; ряд шагов не сжимается */
 .metric__trend .sparkline-labels__plot {
   flex: 1 1 0;
@@ -630,7 +657,7 @@
   flex: 1 1 auto;
   grid-template-rows: auto minmax(var(--space-8), 1fr) auto auto;
   /* Доли колонок — те же, что COLUMNS в blocks/conversion.js: по ним стоят центры полосы */
-  grid-template-columns: 0.45fr 0.5fr 1.2fr 1.2fr 1.2fr;
+  grid-template-columns: repeat(5, 1fr);
   align-self: stretch;
   min-width: 0;
   position: relative;
@@ -780,9 +807,15 @@
   display: none;
 }
 
+/* Строка значения — во всю колонку: от неё полоса считает свою предельную ширину */
+.conversion--pending .conversion__line {
+  justify-self: stretch;
+}
+
 .conversion__bar {
   display: block;
-  width: 3.5em;
+  /* Полоса не выходит за колонку, даже узкую */
+  width: min(3.5em, 100%);
   height: 0.6lh;
   margin-block: 0.2lh;
   border-radius: var(--radius-control);

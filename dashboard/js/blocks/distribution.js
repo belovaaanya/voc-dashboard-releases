@@ -38,12 +38,17 @@ function distributionRow({ mark, count, share }) {
 }
 
 /*
-  Карточка — и на главной, и в «Для аналитика» (решение пользователя: вторая строка главной — три равные карточки,
-  конверсия → распределение → вывод; частично отменяет J-231). Сетка шапки — та же: конверсия на две колонки только
-  пока распределение скрыто (shell.css, `.metrics-grid:has`), а оно больше не скрывается
+  Карточка — только в «Для аналитика»: «Для продакта» её место берёт широкая конверсия на две колонки (решение
+  пользователя, отменяет J-353 в части распределения на главной). Сетка шапки — та же: конверсия на две колонки,
+  пока распределение скрыто (shell.css, `.metrics-grid:has`)
 */
 export function renderDistribution(block, context) {
-  if (block.element) block.element.hidden = false;
+  if (block.element) block.element.hidden = !context.analyst;
+  /* Скрытая карточка не держит скелет загрузки: каркас ждёт, пока скелетов не останется */
+  if (!context.analyst) {
+    block.setState(EMPTY);
+    return;
+  }
   block.setHead();
   if (context.slice.length === 0) {
     block.setState(EMPTY);

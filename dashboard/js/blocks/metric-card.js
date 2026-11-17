@@ -85,11 +85,11 @@ export function valueNode(text, modifier) {
 }
 
 /** Направление берётся из знака дельты, а не задаётся отдельно (V-15). */
-export function deltaNode(value, { shape = DELTA_SHAPES.voc, growth = GROWTH.good, className, large, arrow = true } = {}) {
+export function deltaNode(value, { shape = DELTA_SHAPES.voc, growth = GROWTH.good, className, large, arrow = true, arrowOnly = false } = {}) {
   const shown = shape.round(value);
   const direction = trendOf(shown);
   if (!direction) return null;
-  return delta({ text: shape.format(shown), direction, tone: growth[direction], caption: TREND_CAPTION[direction], className, large, arrow });
+  return delta({ text: shape.format(shown), direction, tone: growth[direction], caption: TREND_CAPTION[direction], className, large, arrow, arrowOnly });
 }
 
 /**
@@ -125,27 +125,42 @@ const TREND_STEP = { month: 'по месяцам', quarter: 'по квартал
 
 /**
  * Мини-тренд VOC сегмента: три точки по шагу периода (`core/segment-trend.js`), справа от числа в строке значения.
+ * Неполная последняя точка (месяц или квартал ещё идёт) — полая, как на графике динамики; её малая выборка — «!» у шага.
  * Подписи — только у крайних точек: VOC над точкой, шаг под линией («сен … ноя»); средняя точка без подписи —
  * три подписи в остаток строки не помещаются. В узкой карточке подписи гаснут (metrics.css). Все шаги и значения —
  * в подсказке и доступном имени. Шаг без оценок — разрыв; меньше двух точек с оценками — тренда нет.
  * Редизайн пользователя: без свечения линии, пунктира плана и вертикали последней точки; точки 3 × 3 px (`dots: 'sm'`).
  */
-export function trendNode(values, steps, step, { direction = null, tone = null, domain = null } = {}) {
+export function trendNode(values, steps, step, { direction = null, tone = null, domain = null, lastSufficient = true } = {}) {
   if (values.filter((value) => value !== null).length < 2) return null;
   const trend = element('span', 'metric__trend');
-  const caption = `VOC ${TREND_STEP[step] ?? ''}: ${steps.map(({ label }, index) => `${label} ${values[index] === null ? 'нет оценок' : formatVoc(values[index])}`).join(', ')}`;
+  const last = steps.length - 1;
+  /* Неполная последняя точка (месяц ещё идёт) — словом в подсказке и доступном имени; малая выборка — тоже */
+  /* «!» — только у неполной точки: у законченного шага выборка та же, что у «N оценок» карточки, и «!» там уже стоит */
+  const thin = Boolean(steps[last]?.partial) && !lastSufficient;
+  const note = (index) => [steps[index].partial && 'неполный', index === last && thin && 'мало оценок'].filter(Boolean).join(', ');
+  const caption = `VOC ${TREND_STEP[step] ?? ''}: ${steps.map(({ label }, index) => `${label}${note(index) ? ` (${note(index)})` : ''} ${values[index] === null ? 'нет оценок' : formatVoc(values[index])}`).join(', ')}`;
   trend.title = caption;
   trend.setAttribute('role', 'img');
   trend.setAttribute('aria-label', caption);
-  const end = (index) => index === 0 || index === steps.length - 1;
+  const end = (index) => index === 0 || index === last;
+  /* Сосед крайней точки внутри линии: если он выше, линия приходит сверху — подпись под точкой, иначе наехала бы на линию */
+  const inner = (index) => values[index === 0 ? 1 : last - 1];
+  const below = (index) => end(index) && values[index] !== null && inner(index) !== null && inner(index) > values[index];
+  const plotted = clampToDomain(values, domain);
   /* Цвет — `trendTone`: статус плана, без плана — направление, мало оценок — серый; без `tone` — направление */
   /* Общая шкала сегментов (`domain`): точки за её краем прижаты к краю, подписи — настоящие значения */
-  trend.append(sparkline(clampToDomain(values, domain), {
+  const line = sparkline(plotted, {
     tone: tone ?? GROWTH.good[direction] ?? 'neutral', wide: true, fill: true, dots: 'sm',
     ...(domain ? { domain } : {}),
     label: (_value, index) => (end(index) ? formatVoc(values[index]) : null),
+    ...(values.some((_value, index) => below(index)) ? { labelBelow: below } : {}),
+    partial: steps.map(({ partial }) => Boolean(partial)),
     axis: steps.map(({ label }, index) => (end(index) ? label : '')),
-  }));
+  });
+  /* Малая выборка неполной точки — «!» у её шага на оси, тем же значком, что у «N оценок» (D-25) */
+  if (thin) line.querySelector('.sparkline-labels__tick--end')?.append(icon('alert', 'metric__trend-warning'));
+  trend.append(line);
   return trend;
 }
 
@@ -286,10 +301,18 @@ export function countDeltaNode(count, previousCount, forecast = null, { arrow = 
   return deltaNode(count - previousCount, { shape: DELTA_SHAPES.count, growth: forecast ? UNFINISHED_VOLUME : HEADER_VOLUME, className: 'metric__count-delta', arrow });
 }
 
-/** «N оценок» с дельтой — пара общего `valueDelta`: у карточки канала и сегментов одна анатомия, «+557» не уходит на строку ниже. */
-export function countGroupNode(count, previousCount, period = null) {
+/**
+ * «N оценок» с дельтой — пара общего `valueDelta`: у карточки канала и сегментов одна анатомия, «+557» не уходит на строку ниже.
+ * `warning` — пометка «!» мало оценок сразу за «N оценок», перед дельтой: значок стоит у числа, которое объясняет.
+ * `unfinishedDelta: false` — в незаконченном месяце или квартале дельты нет (карточки метрик главной, решение после
+ * созвона с дизайнером 17.11): часть месяца против целого прошлого даёт «−10 тыс. оценок», которые ничего не значат.
+ */
+export function countGroupNode(count, previousCount, period = null, { warning = null, unfinishedDelta = true } = {}) {
   const forecast = ratingsForecast(count, period, previousCount);
-  return valueDelta(countNode(count), countDeltaNode(count, previousCount, forecast), { className: 'metric__count' });
+  const change = forecast && !unfinishedDelta ? null : countDeltaNode(count, previousCount, forecast);
+  const pair = valueDelta(countNode(count), change, { className: 'metric__count' });
+  if (warning) pair.firstElementChild.after(warning);
+  return pair;
 }
 
 /*
@@ -310,7 +333,7 @@ export function forecastText(count, previousCount, period) {
 }
 
 /**
- * «?» после дельты оценок незаконченного периода: прогноз по темпу — в подсказке (J-94: как у пометки выборки).
+ * «?» незаконченного периода — у дельты VOC, которую он объясняет: прогноз по темпу — в подсказке (J-94: как у пометки выборки).
  * Внутри кнопки карточки знак не получает фокус: кнопка называет прогноз в доступном имени.
  */
 export function forecastNode(count, previousCount, period, { focusable = false } = {}) {

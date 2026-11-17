@@ -31,6 +31,12 @@
   pointer-events: none;
 }
 
+/* Неполный интервал (`partial`: месяц ещё идёт) — полая точка тона линии, как `chart-point--partial` графика динамики */
+.sparkline__marker.sparkline__marker--partial {
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 var(--divider-width) var(--tone);
+}
+
 .sparkline__area {
   stroke: none;
 }
@@ -136,13 +142,17 @@
   vector-effect: non-scaling-stroke;
 }
 
-/* Ступени коридора 0 · 30 % · 75 % · 100 % — общие стопы: прозрачный → --color-plan-band-mid → --color-plan-band */
+/* Ступени коридора 0 · 30 % · 75 % · 100 % — общие стопы: прозрачный → --color-plan-band-mid → --color-plan-band-high → --color-plan-band */
 .sparkline__band-stop {
   stop-color: var(--color-plan-band);
 }
 
 .sparkline__band-stop--mid {
   stop-color: var(--color-plan-band-mid);
+}
+
+.sparkline__band-stop--high {
+  stop-color: var(--color-plan-band-high);
 }
 
 /* Прозрачный край — цветом середины с нулевой непрозрачностью: от «transparent» (чёрного) градиент сереет у левого края */

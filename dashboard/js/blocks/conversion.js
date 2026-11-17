@@ -28,10 +28,10 @@ export const HEADROOM = 160;
 export const BEAM_HEADROOM = HEADROOM / VIEW.height;
 /*
   Доли ширины колонок ступеней — те же, что `grid-template-columns` у `.conversion` (metrics.css); по ним же стоят
-  центры полосы. У неизвестных ступеней только «—» — узкие колонки; у остальных крупное значение с изменением в строку
-  («10 459 −76 % ↘» ≈118 px, «6,1 % −0,3 п. п. ↘» ≈120 px) — на 1280 (≈460 px содержимого) колонке нужно ≈121 px
+  центры полосы. Колонки равные: у MAU и опроса теперь свои доли («100,0 %», «37,5 % ↗» ≈65–85 px), прежние узкие
+  колонки под «—» (0,45 и 0,5) сводили их вплотную. Рядом с долей только стрелка — на 1280 колонке ≈89 px хватает
 */
-const COLUMNS = [0.45, 0.5, 1.2, 1.2, 1.2];
+const COLUMNS = [1, 1, 1, 1, 1];
 /*
   Узкая карточка («Для аналитика», ≈280 px): ступени без данных (MAU и опрос — «—») не показываются, три колонки —
   `.conversion--compact` в metrics.css; иначе подписи «MAU · ОПРОС · ОЦЕНКИ» слипались, а дельты соседних ступеней
@@ -154,26 +154,32 @@ export function beamNode(steps, compact, { heights = bandHeights(steps), columns
 }
 
 /*
-  Изменение доли к прошлому периоду — в строке крупной доли, в п.п., цвет по смыслу роста. У оценок изменения нет:
-  их доля — база, всегда 100 %. Доли сравнимы и при неполном периоде — цвет по смыслу и тогда
+  Изменение доли к прошлому месяцу — рядом с крупной долей только стрелкой в цвете по смыслу роста (решение после
+  созвона с дизайнером 17.11: процент, дельта и число подряд — непонятно, куда смотреть). Сама дельта в п. п. и база —
+  в подсказке ступени (`changeHint`) и для screen reader. У оценок изменения нет: их доля — база
 */
-function changeNode(change, compact) {
-  /* В узкой карточке изменение без стрелки: направление несут знак и цвет, словом — для screen reader */
-  const arrow = !compact;
+const changeShape = (change) => (change.fine ? DELTA_SHAPES.shareFine : DELTA_SHAPES.share);
+function changeNode(change) {
   const slot = element('span', 'conversion__change');
   if (!change) {
     slot.setAttribute('aria-hidden', 'true');
     return slot;
   }
-  /* Малые доли от MAU — два знака и у изменения: иначе «0,0 п. п.» у любой ступени ниже процента */
-  const node = deltaNode(change.value, { shape: change.fine ? DELTA_SHAPES.shareFine : DELTA_SHAPES.share, growth: GROWTH[change.growth], arrow });
+  const node = deltaNode(change.value, { shape: changeShape(change), growth: GROWTH[change.growth], arrowOnly: true });
   if (node) slot.append(node);
   return slot;
 }
 
+/* Подсказка ступени: полное название и изменение доли в п. п. с базой — «к прошлому месяцу, доля от MAU» */
+function changeHint(label, change) {
+  if (!change) return label;
+  const shape = changeShape(change);
+  return `${label}\nК прошлому месяцу: ${shape.format(shape.round(change.value))}, доля от MAU`;
+}
+
 /*
-  Ступень (иерархия J-314, база — MAU): подпись капсом сверху; ниже крупно доля от MAU и в той же строке её изменение в
-  п.п.; под ними мелко серым — число. MAU — база: «100 %» без изменения, мелко — число пользователей. Доля меньше 1 % —
+  Ступень (база — MAU): подпись капсом сверху; ниже крупно доля от MAU и рядом стрелка изменения; под ними мелко
+  серым — число. Дельта в п. п. — в подсказке. MAU — база: «100 %» без изменения, мелко — число пользователей. Доля меньше 1 % —
   с двумя знаками. Не помещаясь, изменение уходит под долю, а не наезжает на соседнюю ступень. Полное название — в
   доступном имени
 */
@@ -181,7 +187,7 @@ const UNITS = { mau: ['пользователь', 'пользователя', '�
 const RATINGS = ['оценка', 'оценки', 'оценок'];
 const isFine = (share) => share !== null && share < 1;
 const shareText = (share) => (isFine(share) ? formatShareFine(share) : formatShare(share));
-function stepNode({ key, label, short, count, share, change }, compact) {
+function stepNode({ key, label, short, count, share, change }) {
   const item = element('li', `conversion__step conversion__step--${key}`);
   item.title = label;
   const caption = element('span', 'conversion__label', short);
@@ -195,7 +201,8 @@ function stepNode({ key, label, short, count, share, change }, compact) {
   } else {
     /* Два знака и у изменения, если доля или само изменение меньше процента: «0,04 п. п.» при доле 1,2 % не станет «0,0» */
     const delta = change && { ...change, fine: isFine(share) || Math.abs(change.value) < 0.1 };
-    line.append(share === null ? emptyValue() : element('span', 'conversion__value', shareText(share)), changeNode(delta, compact));
+    item.title = changeHint(label, share === null ? null : delta);
+    line.append(share === null ? emptyValue() : element('span', 'conversion__value', shareText(share)), changeNode(delta));
     small.append(formatCount(count), element('span', 'visually-hidden', ` ${plural(count, UNITS[key] ?? RATINGS)}`));
   }
   item.append(caption, name, line, small);
@@ -209,16 +216,16 @@ export function conversionNote(month, shifted = false) {
 }
 
 /*
-  Данных MAU и рассылки ещё нет: композиция узкой карточки — луч и подписи ступеней — приглушена, на месте чисел серые
-  полосы, поверх — надпись. Ни одного числа: пример легко принять за данные. Без сроков и без «in progress»
+  Данных MAU и рассылки ещё нет: композиция карточки (широкой — пять ступеней, узкой — три) — луч и подписи
+  ступеней — приглушена, на месте чисел серые полосы, поверх — надпись. Ни одного числа: пример легко принять за данные. Без сроков и без «in progress»
 */
 export const PENDING = { title: 'Данные в процессе сбора', detail: 'Подключаем MAU и рассылки опроса' };
-/* Форма луча условная — та же, что у узкой карточки с данными, но не по чьим-то числам */
-const PENDING_HEIGHTS = [0.62, 0.26, 0.14];
+/* Форма луча условная — та же, что у карточки с данными, но не по чьим-то числам: MAU и опрос шире оценок */
+const PENDING_HEIGHTS = { mau: WIDE.mau, sent: WIDE.sent, rated: 0.62, negative: 0.26, feedback: 0.14 };
 
-function pendingNode() {
-  const steps = SURVEY_STEPS.filter(({ key }) => !(key in WIDE));
-  const layout = element('div', 'conversion conversion--compact conversion--pending');
+function pendingNode(compact) {
+  const steps = compact ? SURVEY_STEPS.filter(({ key }) => !(key in WIDE)) : SURVEY_STEPS;
+  const layout = element('div', `conversion${compact ? ' conversion--compact' : ''} conversion--pending`);
   layout.style.setProperty('--beam-headroom', BEAM_HEADROOM);
   /* Каркас декоративный: скринридер читает только надпись */
   const list = element('ol', 'conversion__steps');
@@ -235,7 +242,7 @@ function pendingNode() {
   note.setAttribute('role', 'status');
   note.title = PENDING.detail;
   note.append(element('span', 'visually-hidden', `. ${PENDING.detail}`));
-  layout.append(beamNode(steps, true, { heights: PENDING_HEIGHTS, id: 'conversion-pending-beam' }), list, note);
+  layout.append(beamNode(steps, compact, { heights: steps.map(({ key }) => PENDING_HEIGHTS[key]), id: 'conversion-pending-beam' }), list, note);
   return layout;
 }
 
@@ -283,7 +290,7 @@ export function renderConversion(block, context) {
   block.element?.classList.toggle('card--conversion-pending', pending);
   if (pending) {
     block.setHead();
-    block.setContent(pendingNode());
+    block.setContent(pendingNode(compact));
     return;
   }
   const chosen = conversionMonth(period, rows);
@@ -308,7 +315,7 @@ export function renderConversion(block, context) {
   layout.style.setProperty('--beam-headroom', BEAM_HEADROOM);
   const list = element('ol', 'conversion__steps');
   list.setAttribute('role', 'list');
-  list.append(...shown.map((step) => stepNode(step, narrow)));
+  list.append(...shown.map((step) => stepNode(step)));
   layout.append(beamNode(shown, narrow), list);
   block.setContent(layout);
 }

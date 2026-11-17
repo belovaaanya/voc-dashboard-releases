@@ -1,8 +1,9 @@
 /**
  * Мини-тренд VOC сегмента (просьба пользователя): три точки по шагу выбранного периода, последняя — выбранный.
  * Целый месяц — три месяца, целый квартал — три квартала, иначе — три недели (пн–вс), последняя содержит конец
- * периода. Незаконченный месяц или квартал (пресет, `complete: false`) — три полных месяца (квартала) до него: неделя
- * текущего месяца на малой выборке скачет и сбивает с толку (правка пользователя). Подписи коротко: «сен · окт · ноя», «Q2 · Q3 · Q4», недели — датой понедельника «03.11».
+ * периода. Незаконченный месяц или квартал (пресет, `complete: false`) — последняя точка он сам, неполный (`partial`):
+ * в ноябре «сен … ноя», а не недели и не три полных до него (решение после созвона с дизайнером 17.11).
+ * Подписи коротко: «сен · окт · ноя», «Q2 · Q3 · Q4», недели — датой понедельника «03.11».
  * Методика — `docs/blocks-metrics.md`.
  */
 
@@ -20,7 +21,7 @@ function monthBounds(year, month) {
   return { from: isoDate(new Date(Date.UTC(year, month, 1))), to: isoDate(new Date(Date.UTC(year, month + 1, 0))) };
 }
 
-/* Пресеты календарного блока, который ещё идёт: тренд берёт полные блоки до него */
+/* Пресеты календарного блока, который ещё идёт: его точка тренда — неполная */
 const RUNNING = ['month', 'quarter'];
 const running = (period) => period?.complete === false && RUNNING.includes(period.preset);
 
@@ -36,22 +37,25 @@ export function trendStep(period) {
   return 'week';
 }
 
-/** Шаги тренда по времени слева направо: `{ from, to, label }`, последний — выбранный период или неделя его конца. */
+/**
+ * Шаги тренда по времени слева направо: `{ from, to, label }`, последний — выбранный период или неделя его конца.
+ * У незаконченного месяца или квартала последний шаг — до конца периода (`to` — дата выгрузки) с `partial: true`.
+ */
 export function trendSteps(period, count = TREND_POINTS) {
   const step = trendStep(period);
   if (!step) return [];
   const steps = [];
   if (step === 'month' || step === 'quarter') {
     const size = step === 'month' ? 1 : 3;
-    /* Незаконченный блок — последний шаг тренда предыдущий, полный */
-    const shift = running(period) ? size : 0;
     const start = parseIso(period.from);
     for (let index = count - 1; index >= 0; index -= 1) {
-      const first = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() - index * size - shift, 1));
+      const first = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() - index * size, 1));
       const bounds = { from: isoDate(first), to: monthBounds(first.getUTCFullYear(), first.getUTCMonth() + size - 1).to };
       const label = step === 'month' ? MONTHS[first.getUTCMonth()] : `Q${Math.floor(first.getUTCMonth() / 3) + 1}`;
       steps.push({ ...bounds, label });
     }
+    /* Незаконченный блок — последняя точка он сам, по дату выгрузки, помечена неполной */
+    if (running(period)) steps[steps.length - 1] = { ...steps.at(-1), to: period.to, partial: true };
     return steps;
   }
   const end = parseIso(period.to);

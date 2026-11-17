@@ -1440,8 +1440,13 @@ b {
 }
 
 /* Выбранный фильтр — чип: значение и крестик в одной плашке; форма, а не только цвет, отличает его (R-34, D-26) */
+/* Поле от чипа до рамки панели — --space-1 со всех сторон (J-05): чип растянут на дорожку панели, его рамка входит
+   в высоту, а не добавляется к ней — при любом округлении 0,5 px на экране. Чип и панель — pill, при равном поле
+   скругления концентричны. Чип короче --filter-min-width — содержимое по центру: поля у кода и у крестика равны */
 .filters__item--chip {
+  align-self: stretch;
   align-items: center;
+  justify-content: center;
   border: var(--hairline) solid var(--color-border-strong);
   border-radius: var(--radius-pill);
   background: var(--control-raised);
@@ -1449,7 +1454,15 @@ b {
 }
 
 .filters__item--chip .filters__control {
+  align-self: stretch;
+  min-height: 0;
   padding-inline-end: var(--space-1);
+}
+
+/* Круг крестика концентричен концу чипа: зазор справа равен зазору сверху и снизу. Тогда штрих «×» стоит от края
+   на --space-3, как код слева: 2,5 + 6 (поле цели 24) + 3,4 (поле штриха в сетке иконки) ≈ 12 */
+.filters__item--chip .filters__clear {
+  margin-inline-end: calc((var(--header-control-height) - 2 * var(--space-1) - 2 * var(--divider-width) - 2 * var(--hairline) - var(--tab-height)) / 2);
 }
 
 .filters__item--chip:hover {

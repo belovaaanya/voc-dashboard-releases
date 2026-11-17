@@ -95,10 +95,13 @@ export function renderVocChannel(block, context) {
   */
   const count = slice.length;
   const previousCount = previousSlice?.length;
-  /* «?» незаконченного периода — рядом с дельтой VOC, «!» мало оценок — сразу после «N оценок» (редизайн) */
+  /*
+    «?» незаконченного периода — у дельты VOC, «!» мало оценок — сразу за «N оценок», перед дельтой оценок; в незаконченном
+    периоде дельты оценок нет: часть месяца против целого прошлого ничего не значит (решение после созвона 17.11)
+  */
   const forecast = forecastNode(count, previousCount, period, { focusable: true });
-  const caption = metaRowNode(countGroupNode(count, previousCount, period), sufficiencyNode(slice, { focusable: true }))
-    ?? emptyCaption();
+  const warning = sufficiencyNode(slice, { focusable: true });
+  const caption = metaRowNode(countGroupNode(count, previousCount, period, { warning, unfinishedDelta: false })) ?? emptyCaption();
   const layout = element('div', 'metric metric--big');
   appendAll(layout, planCaptionNode(plan, { corner: true }), pairNode(formatVoc(value), leadNode(vocDelta(slice, previousSlice), { large: true, strong: true }), 'metric__value--big', { hint: forecast }), emptyCaption(), caption);
   block.setContent(layout);

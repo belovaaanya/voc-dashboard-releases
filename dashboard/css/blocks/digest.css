@@ -79,34 +79,63 @@
   Итог: число и оценки — по своему содержимому, линия полугода — остаток между ними с равными отступами 32 с обеих
   сторон; поле линии вмещает крайние точки и подписи, ничего не выходит за колонку
 */
+/*
+  Итог — на сетке колонок страницы (.digest): VOC над сегментами, линия полугода ровно над «ДКО: антидрайверы», оценки над
+  триггерами (правка 17.11: линия уходила за край карточки ДКО). Итог стоит в карточке с полем, поэтому сетка выходит на
+  поле и рамку карточки, а крайние колонки возвращают поле внутрь — числа стоят на линии содержимого карточек под ними
+*/
 .digest-summary {
+  --summary-inset: calc(var(--card-padding) + var(--card-border-width));
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: var(--space-8);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: var(--gap-section);
   align-items: end;
+  margin-inline: calc(-1 * var(--summary-inset));
 }
 
-.digest-summary > .digest-trend {
-  padding-inline: var(--space-2);
+.digest-summary > .digest-summary__voc {
+  padding-inline-start: var(--summary-inset);
+}
+
+/* Оценки — на линии содержимого карточки триггеров под ними: от конца линии полугода их отделяет поле, а не 8 px */
+.digest-summary > .digest-summary__count {
+  padding-inline: var(--summary-inset);
 }
 
 @media (max-width: 900px) {
   .digest-summary {
     grid-template-columns: minmax(0, 1fr);
+    margin-inline: 0;
+  }
+
+  .digest-summary > .digest-summary__voc,
+  .digest-summary > .digest-summary__count {
+    padding-inline: 0;
   }
 }
 
 /* J-176: число оценок и столбики месяцев рядом; столбики — по высоте числа */
 .digest-summary__count {
   display: flex;
-  align-items: flex-end;
-  justify-content: flex-end;
-  gap: var(--space-6);
+  /*
+    Узкая колонка (1280: «+151» наезжал на столбики) — столбики уходят строкой над числом, а число остаётся в строке с VOC
+    и подписью линии. wrap-reverse меняет края поперечной оси: flex-start здесь — низ строки
+  */
+  flex-wrap: wrap-reverse;
+  align-items: flex-start;
+  gap: var(--space-4) var(--space-6);
   min-width: 0;
+}
+
+/* Число с дельтой не сжимается под столбики; оно у левого края колонки (линия содержимого карточки триггеров) */
+.digest-summary__count > .metric {
+  flex: none;
 }
 
 .digest-bars--count {
   flex: none;
+  /* Столбики — у правого края колонки и в одной строке с числом, и строкой над ним */
+  margin-inline-start: auto;
 }
 
 .digest-bars--count .digest-bars__item {
@@ -133,8 +162,11 @@
   (под числом и база) слипаются в одну
 */
 .digest-summary__wrap {
-  /* Заголовок страницы → крупное число — уровень секции, а не 12 между заголовком и телом карточки */
-  margin-top: var(--space-4);
+  /*
+    Заголовок страницы → крупное число — шире, чем контролы → заголовок (--gap-page-head, 24): итог без карточки, и при
+    равных зазорах контролы, заголовок и число читались одним массивом (правка 17.11)
+  */
+  margin-top: var(--space-8);
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
@@ -400,6 +432,12 @@
   min-height: var(--space-8);
   padding-inline: var(--space-3);
   white-space: nowrap;
+}
+
+/* Ниже Q75 — без рамки и подложки, просто число, как на ежемесячном слайде (правка 17.11): заливка только у сильных */
+.digest-pill.heatmap-cell--muted {
+  border-color: transparent;
+  background: none;
 }
 
 .digest-table {
@@ -867,6 +905,8 @@
 .role-card__side {
   --sparkline-dot: calc(var(--space-1) * 0.75);
   --sparkline-band-filter: none;
+  /* Коридор плитки скруглён по макету тёмной темы (Figma 5415:21) — токен --radius-band-tile */
+  --sparkline-band-radius: var(--radius-band-tile);
   /*
     Один зелёный (правка пользователя): заливка «выше плана» — цветом коридора, от его плотности к нулю, а не своим
     #00CC88; над пиком — 32 px вместо 20: подпись самой высокой точки не прижимается к верху плитки и названию роли

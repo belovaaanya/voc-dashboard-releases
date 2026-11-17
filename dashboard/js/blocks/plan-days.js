@@ -87,8 +87,8 @@ export function renderPlanDays(block, context) {
   /* Пометку заглушки ставит сама конверсия; дни плана её снимают, иначе их «Нет плана» осталось бы без прочерка */
   if (!conversion) block.element?.classList.remove('card--conversion-pending');
   if (conversion) {
-    /* Карточка узкая (≈280 px) и на главной, и у аналитика: компактная конверсия; ширину воронки решат, когда придёт MAU */
-    renderConversion(block, { ...context, compact: true });
+    /* «Для продакта» карточка на две колонки — пять ступеней, как в макете; у аналитика узкая (≈280 px) — три ступени */
+    renderConversion(block, { ...context, compact: Boolean(context.analyst) });
     return;
   }
   block.setTitle?.(PLAN_DAYS_TITLE);

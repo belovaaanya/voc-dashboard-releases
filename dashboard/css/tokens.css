@@ -151,12 +151,16 @@
     --color-plan-band — насыщенный конец полосы (стоп SVG-градиента), --plan-band-gradient — тот же градиент для CSS-фона
   */
   /*
-    J-?: один коридор везде — по редизайну (Figma, плитки ролей): прозрачный → #C3F3CD к 30 % → #57D270 с 75 %.
-    В тёмной теме пара слабее (α 0,05 / 0,14), в светлой — α 0,2 / 0,2. Блоки (роли, мини-линии) ссылаются на эти токены
+    Один коридор везде; стопы 0 · 30 % · 75 % · 100 %: прозрачный → --color-plan-band-mid → --color-plan-band-high →
+    --color-plan-band. По макетам плитки роли: в каждой теме один цвет, прозрачность растёт линейно, стопы 30 % и 75 %
+    лежат на этой прямой. Тёмная (Figma 5415:21): #2DDA93, α 0 → 0,133. Светлая (Figma 5416:24): #7FF3AF, градиент
+    макета шире полосы — видимая часть от α ≈ 0,05 до 0,3; стопы 30 / 75 / 100 % взяты с неё, левый край прозрачный.
+    Блоки (роли, мини-линии) ссылаются на эти токены
   */
-  --color-plan-band-mid: rgba(195, 243, 205, 0.05);
-  --color-plan-band: rgba(87, 210, 112, 0.14);
-  --plan-band-gradient: linear-gradient(90deg, transparent, var(--color-plan-band-mid) 30%, var(--color-plan-band) 75%);
+  --color-plan-band-mid: rgba(45, 218, 147, 0.04);
+  --color-plan-band-high: rgba(45, 218, 147, 0.1);
+  --color-plan-band: rgba(45, 218, 147, 0.133);
+  --plan-band-gradient: linear-gradient(90deg, transparent, var(--color-plan-band-mid) 30%, var(--color-plan-band-high) 75%, var(--color-plan-band));
 
   /* Шкала отступов: только кратное 4 (V-02) */
   --space-1: 4px;
@@ -606,6 +610,8 @@
   --radius-plan-band: 6px;
   --radius-plan-band-line: 4px;
   --radius-plan-band-key: 2px;
+  /* Коридор в плитке роли — 10 по макетам обеих тем (Figma 5415:21, 5416:24) */
+  --radius-band-tile: 10px;
   --radius-pill: 999px;
   /* J-167: портрет роли уходит в прозрачность к левому нижнему углу, как на макете заказчика */
   --portrait-fade: linear-gradient(to top right, transparent 8%, #000 62%);
@@ -785,9 +791,10 @@
   --icon-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6.2 5 8.6 9.5 3.6' fill='none' stroke='%23FFFFFF' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 
   --color-heat-neutral: #EEF0F3;
-  /* Коридор плана — пара светлой темы (J-?, Figma) */
-  --color-plan-band-mid: rgba(195, 243, 205, 0.2);
-  --color-plan-band: rgba(87, 210, 112, 0.2);
+  /* Коридор плана светлой темы — по макету плитки роли (Figma 5416:24): #7FF3AF, α 0,12 / 0,24 / 0,3 на 30 / 75 / 100 % */
+  --color-plan-band-mid: rgba(127, 243, 175, 0.12);
+  --color-plan-band-high: rgba(127, 243, 175, 0.24);
+  --color-plan-band: rgba(127, 243, 175, 0.3);
 
   /*
     J-?: подложка карточки — по редизайну 1 в 1 (Figma 5362:778, плитка роли): рамка 1 px белая, заливка — радиальный

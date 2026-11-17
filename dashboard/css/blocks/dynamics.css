@@ -71,12 +71,19 @@
   stop-color: var(--color-plan-band);
 }
 
+/* Прозрачный край — цветом середины с нулевой непрозрачностью, как у мини-линий: SVG смешивает стопы без
+   предумножения, и от «transparent» (чёрного) полоса серела у левого края — в светлой теме заметно */
 .chart-plan-band-stop--clear {
-  stop-color: transparent;
+  stop-color: var(--color-plan-band-mid);
+  stop-opacity: 0;
 }
 
 .chart-plan-band-stop--mid {
   stop-color: var(--color-plan-band-mid);
+}
+
+.chart-plan-band-stop--high {
+  stop-color: var(--color-plan-band-high);
 }
 
 .chart-bars {

@@ -6,7 +6,8 @@ import { element, svgNode } from '../ui/dom.js';
 const VIEWBOX = { width: 91, height: 28 };
 const DOT_RADIUS = 1.5;
 /*
-  Скругление коридора плана — токен --radius-plan-band-line в пикселях экрана (неделя 16–22.11, везде скруглённый).
+  Скругление коридора плана — токен --radius-plan-band-line в пикселях экрана (неделя 16–22.11, везде скруглённый);
+  блок может дать свой радиус через --sparkline-band-radius (плитки ролей).
   Растянутая линия масштабируется по осям по-разному: rx и ry в единицах viewBox пересчитываются по реальному размеру,
   иначе угол вытягивался бы в эллипс. До замера — запасное значение
 */
@@ -22,7 +23,9 @@ function roundBands(svg) {
     const width = svg.clientWidth;
     const height = svg.clientHeight;
     if (!width || !height) return;
-    const token = parseFloat(globalThis.getComputedStyle?.(svg).getPropertyValue('--radius-plan-band-line'));
+    const style = globalThis.getComputedStyle?.(svg);
+    const own = parseFloat(style?.getPropertyValue('--sparkline-band-radius'));
+    const token = Number.isFinite(own) ? own : parseFloat(style?.getPropertyValue('--radius-plan-band-line'));
     const radius = Number.isFinite(token) ? token : BAND_RADIUS_FALLBACK;
     for (const rect of rects()) {
       const rectWidth = Number(rect.getAttribute('width'));
@@ -67,12 +70,12 @@ function appendFill(svg, points) {
   его верхнего края, ниже — красная над линией до нижнего края, внутри коридора заливки нет. Та же геометрия
   (areaPaths от линии до края коридора, обрезка по краю), градиент гаснет к коридору
 */
-/* Ступени коридора плана — общие: прозрачный край, --color-plan-band-mid к 30 %, --color-plan-band с 75 % до края */
+/* Ступени коридора плана — общие: прозрачный край, --color-plan-band-mid к 30 %, --color-plan-band-high к 75 %, --color-plan-band у края */
 function bandStops() {
   return [
     svgNode('stop', 'sparkline__band-stop sparkline__band-stop--clear', { offset: 0 }),
     svgNode('stop', 'sparkline__band-stop sparkline__band-stop--mid', { offset: 0.3 }),
-    svgNode('stop', 'sparkline__band-stop', { offset: 0.75 }),
+    svgNode('stop', 'sparkline__band-stop sparkline__band-stop--high', { offset: 0.75 }),
     svgNode('stop', 'sparkline__band-stop', { offset: 1 }),
   ];
 }
@@ -136,7 +139,8 @@ function appendPlanFill(svg, points, scale, band) {
   `flatBand` — коридор без размытия и скругления; заливка та же, что везде: зелёный градиент `--color-plan-band` слева направо
   (неделя 16–22.11 — коридор плана везде зелёный, раньше `flatBand` давал серую ровную заливку)
 */
-export function sparkline(values, { tone, domain, wide = false, fill = false, band: singleBand = null, bands = null, zones = true, label = null, axis = null, glow = false, crispBand = false, flatBand = false, labelBelow = null, halo = false, endRule = false, level = null, planFill = false, dots = null }) {
+/* `partial` — по точкам: неполный интервал (месяц ещё идёт) — полая точка, как `chart-point--partial` графика динамики */
+export function sparkline(values, { tone, domain, wide = false, fill = false, band: singleBand = null, bands = null, zones = true, label = null, axis = null, glow = false, crispBand = false, flatBand = false, labelBelow = null, halo = false, endRule = false, level = null, planFill = false, dots = null, partial = null }) {
   const sameBand = (left, right) => left && right && left.min === right.min && left.max === right.max;
   const known = bands?.filter(Boolean) ?? [];
   const stepped = known.length > 0 && !known.every((item) => sameBand(item, known[0])) ? bands : null;
@@ -206,7 +210,7 @@ export function sparkline(values, { tone, domain, wide = false, fill = false, ba
   if (endRule && last) plot.append(at(element('span', `sparkline__rule tone--${tone}`), last.x, last.y));
   points.forEach(({ x, y }, index) => {
     if (y === null) return;
-    plot.append(at(element('span', `sparkline__marker${planTone(values[index], index) || ` tone--${tone}`}`), x, y));
+    plot.append(at(element('span', `sparkline__marker${partial?.[index] ? ' sparkline__marker--partial' : ''}${planTone(values[index], index) || ` tone--${tone}`}`), x, y));
     const text = label?.(values[index], index);
     if (text === null || text === undefined) return;
     const edge = index === 0 && points.length > 1 ? ' sparkline-labels__value--start' : index === points.length - 1 && points.length > 1 ? ' sparkline-labels__value--end' : '';

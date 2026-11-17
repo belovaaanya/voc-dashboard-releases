@@ -3,8 +3,8 @@
   по клику (P0 №7, D-31).
 
   Композиция (J-65, J-94): заголовок и бейдж плана в шапке; внизу число,
-  дельта VOC справа сверху от него, под ним объём с дельтой объёма и иконка
-  пометки выборки. Мини-тренд VOC справа — только «Для аналитика» (J-?).
+  дельта VOC справа сверху от него и «?» незаконченного периода, под ним объём,
+  пометка выборки «!» и дельта объёма (в незаконченном периоде её нет). Мини-тренд VOC справа — только «Для аналитика» (J-?).
   Геометрия наша (V-01…V-03).
 
   Карточка считает свой срез **без** фильтра по сегменту (D-43): иначе после
@@ -27,11 +27,20 @@ const SEGMENT = 'segment';
 /* Клик перерисовывает дашборд и пересоздаёт кнопку: фокус клавиатуры возвращается на карточку того же сегмента */
 let refocusCode = null;
 
-/* Ряд тренда сегмента по шагам и достаточность его выборки за период — для общей шкалы трёх карточек */
+/*
+  Ряд тренда сегмента по шагам и достаточность его выборки за период — для общей шкалы трёх карточек;
+  `lastSufficient` — выборка последнего шага (неполный месяц на малой выборке помечается «!»)
+*/
 function trendSeries({ state, select }, segment, steps) {
   const filters = withFilter(state.filters, SEGMENT, [segment]);
   const history = select({ filters, from: steps[0].from, to: steps.at(-1).to }).rows;
-  return { values: trendValues(history, steps), sufficient: sampleSufficiency(select({ filters }).rows).sufficient };
+  const { from, to } = steps.at(-1);
+  const last = history.filter(({ appeal_date: date }) => date >= from && date <= to);
+  return {
+    values: trendValues(history, steps),
+    sufficient: sampleSufficiency(select({ filters }).rows).sufficient,
+    lastSufficient: last.length === 0 || sampleSufficiency(last).sufficient,
+  };
 }
 
 /** Реестр держит по строке на карточку, а сегмент карточки — её порядковый номер в данных. */
@@ -89,9 +98,9 @@ function render(block, context, index) {
     });
   });
 
-  /* J-94: пометка — иконка в строке объёма, отдельной строки нет: содержимое стоит у нижнего края, числа на общей линии (B-08) */
+  /* J-94: пометка «!» — сразу за «N оценок», перед дельтой оценок: значок у числа, которое объясняет (B-08: строка одна) */
   const warning = sufficiencyNode(rows);
-  /* Незаконченный месяц или квартал: «?» после дельты оценок, прогноз по темпу — в подсказке */
+  /* Незаконченный месяц или квартал: «?» у дельты VOC — её он объясняет; прогноз по темпу — в подсказке */
   const forecast = forecastNode(rows.length, previous?.length, context.period);
   /* Мини-тренд VOC — справа от числа и дельты: три шага периода, последний — выбранный; подписи у крайних точек.
      Только «Для аналитика»: «Для продакта» — число, дельта и «N оценок» без тренда, расположение — по макету аналитика (J-?) */
@@ -102,7 +111,7 @@ function render(block, context, index) {
   const domain = sharedTrendDomain(series.filter(Boolean));
   /* Цвет тренда — статус плана карточки (ниже — красный, выше — зелёный, в плане — серый), без плана — направление */
   const tone = trendTone(rows, { status: planStatus(voc(rows), plan), direction: trendDirection(values) });
-  const trend = steps.length ? trendNode(values, steps, trendStep(context.period), { tone, domain }) : null;
+  const trend = steps.length ? trendNode(values, steps, trendStep(context.period), { tone, domain, lastSufficient: series[index]?.lastSufficient ?? true }) : null;
   /* Тренд — своей зоной справа под бейджем, число и объём — слева у нижнего края (metrics.css, `.metric--with-trend`) */
   if (trend) toggle.classList.add('metric--with-trend');
   /* Зона тренда — по ширине бейджа плана: невидимая копия бейджа задаёт ширину колонки (metrics.css) */
@@ -113,7 +122,7 @@ function render(block, context, index) {
     sizer.append(sizerBadge);
     trend.append(sizer);
   }
-  appendAll(toggle, pairNode(formatVoc(voc(rows)), leadNode(delta, { strong: true }), undefined, { hint: forecast }), metaRowNode(countGroupNode(rows.length, previous?.length, context.period), warning), trend);
+  appendAll(toggle, pairNode(formatVoc(voc(rows)), leadNode(delta, { strong: true }), undefined, { hint: forecast }), metaRowNode(countGroupNode(rows.length, previous?.length, context.period, { warning, unfinishedDelta: false })), trend);
   /* aria-label кнопки заменяет её текст: прогноз и пометку выборки screen reader иначе не услышит */
   if (forecast) toggle.setAttribute('aria-label', `${toggle.getAttribute('aria-label')}. Период не закончен: ${forecast.dataset.forecast.toLowerCase()}`);
   if (warning) toggle.setAttribute('aria-label', `${toggle.getAttribute('aria-label')}. Мало оценок: ${warning.dataset.threshold.toLowerCase()}`);

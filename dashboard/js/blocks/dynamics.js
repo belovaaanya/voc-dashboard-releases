@@ -471,11 +471,12 @@ function appendSeries(group, defs, points, plan, domain, ids, plot) {
   const bottom = yPosition(plan.min, domain, plot);
   /* Коридор плана — зелёный градиент слева направо, как везде (неделя 16–22.11): цвет стопов — токен --color-plan-band */
   const band = svgNode('linearGradient', 'chart-plan-band-gradient', { id: ids.planBand, gradientUnits: 'userSpaceOnUse', x1: 0, x2: plot.width, y1: 0, y2: 0 });
-  /* J-?: стопы коридора 0 · 30 % · 75 % — общие с мини-линиями и легендой (--color-plan-band-mid, --color-plan-band) */
+  /* Стопы коридора 0 · 30 % · 75 % · 100 % — общие с мини-линиями и легендой (--color-plan-band-mid, -high, --color-plan-band) */
   band.append(
     svgNode('stop', 'chart-plan-band-stop chart-plan-band-stop--clear', { offset: 0 }),
     svgNode('stop', 'chart-plan-band-stop chart-plan-band-stop--mid', { offset: 0.3 }),
-    svgNode('stop', 'chart-plan-band-stop', { offset: 0.75 }),
+    svgNode('stop', 'chart-plan-band-stop chart-plan-band-stop--high', { offset: 0.75 }),
+    svgNode('stop', 'chart-plan-band-stop', { offset: 1 }),
   );
   defs.append(band);
   const radius = Math.min(bandRadius(group), (bottom - top) / 2);

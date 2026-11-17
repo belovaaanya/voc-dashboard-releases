@@ -305,16 +305,22 @@ export function markSpread(rows) {
 */
 export const ROLE_ORDER = ['Предприниматель', 'Альфа-Босс', 'Бухгалтер', 'Фин.эксперт'];
 export const ROLE_SLOTS = ROLE_ORDER.length;
+/*
+  ЛПР — отдельная роль выгрузки (`LPR`), не Альфа-Босс: в фильтре «Роли» и таблицах она есть, на странице ролей её нет
+  ни плиткой, ни в строке других ролей (J-415)
+*/
+export const ROLES_PAGE_HIDDEN = ['ЛПР'];
 const ROLE_PROBLEMS = 3;
 
 /*
   Оценки месяца у ролей вне четырёх плиток (J-197 их не показывает): всего и первые OTHER_ROLES_SHOWN по числу оценок —
-  тихой строкой внизу страницы, чтобы эти оценки не пропадали из виду. Оценки без роли сюда не входят
+  тихой строкой внизу страницы, чтобы эти оценки не пропадали из виду. Оценки без роли и скрытых ролей сюда не входят
 */
 const OTHER_ROLES_SHOWN = 3;
+const NOT_OTHER_ROLES = [...ROLE_ORDER, ...ROLES_PAGE_HIDDEN];
 function otherRoles(rows) {
   const counts = new Map();
-  for (const { role } of rows) if (role && !ROLE_ORDER.includes(role)) counts.set(role, (counts.get(role) ?? 0) + 1);
+  for (const { role } of rows) if (role && !NOT_OTHER_ROLES.includes(role)) counts.set(role, (counts.get(role) ?? 0) + 1);
   const top = [...counts].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0], 'ru'))
     .map(([role, count]) => ({ role, count }));
   return { total: top.reduce((sum, { count }) => sum + count, 0), roles: top.length, top: top.slice(0, OTHER_ROLES_SHOWN) };
