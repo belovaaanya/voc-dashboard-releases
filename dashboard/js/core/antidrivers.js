@@ -310,6 +310,16 @@ export function colourScale(values) {
   };
 }
 
+/**
+ * Зелёная плана — линейно по всему диапазону от верхней границы коридора до 5,00: без отсечки по квантилям,
+ * иначе при большинстве ячеек у 5,00 шкала снова схлопывается в одну насыщенность. Отклонение у самой границы —
+ * бледная, 5,00 — самая насыщенная.
+ */
+function planGreenScale(anchor) {
+  /* Доля округлена: 0,2 / 0,2 в двоичной арифметике не всегда ровно 1, и 5,00 недотягивало бы до насыщения */
+  return magnitude => ({ strength: Math.min(1, Math.max(0, Math.round((magnitude / anchor) * 1e6) / 1e6)), muted: false });
+}
+
 /** План: квантили ограничены расстоянием до насыщенных VOC 4,00 / 4,85. */
 function planColourScale(values, anchor) {
   const sorted = values.filter(value => value > 0).sort((a, b) => a - b);
@@ -324,10 +334,16 @@ function planColourScale(values, anchor) {
   };
 }
 
+/*
+  Anchor — расстояние до насыщения: красная — от нижней границы коридора до 4,00, зелёная — от верхней границы
+  до 5,00. Порог 4,85 у зелёной насыщал карту уже при +0,05 над коридором: 4,82, 4,88 и 5,00 выглядели одинаково
+*/
+const PLAN_FLOOR = 4;
+const PLAN_CEILING = 5;
 function planAnchor(plans, negative) {
   const distances = plans.flatMap(plan => {
     if (!Number.isFinite(plan?.min) || !Number.isFinite(plan?.max)) return [];
-    return [Math.max(0.01, negative ? roundVoc(plan.min) - 4 : 4.85 - roundVoc(plan.max))];
+    return [Math.max(0.01, negative ? roundVoc(plan.min) - PLAN_FLOOR : PLAN_CEILING - roundVoc(plan.max))];
   });
   // Один anchor на знак: одинаковое показанное отклонение имеет одинаковый цвет во всех колонках.
   return distances.length ? Math.min(...distances) : 1;
@@ -362,7 +378,7 @@ export function highlightHeatmap(heatmap, mode, columnPlans = [], calibration = 
     ? planColourScale(values.map(value => -value), planAnchor(plans, true))
     : colourScale(values.map(value => -value));
   const positive = mode === HIGHLIGHT_PLAN
-    ? planColourScale(values, planAnchor(plans, false))
+    ? planGreenScale(planAnchor(plans, false))
     : colourScale(values);
   return measured.map(row => row.map(value => {
     if (value === null) return { tone: null, strength: 0, muted: false, value: null };

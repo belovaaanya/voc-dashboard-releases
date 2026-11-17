@@ -1,7 +1,8 @@
 /**
  * Мини-тренд VOC сегмента (просьба пользователя): три точки по шагу выбранного периода, последняя — выбранный.
  * Целый месяц — три месяца, целый квартал — три квартала, иначе — три недели (пн–вс), последняя содержит конец
- * периода. Подписи коротко: «сен · окт · ноя», «Q2 · Q3 · Q4», недели — датой понедельника «03.11».
+ * периода. Незаконченный месяц или квартал (пресет, `complete: false`) — три полных месяца (квартала) до него: неделя
+ * текущего месяца на малой выборке скачет и сбивает с толку (правка пользователя). Подписи коротко: «сен · окт · ноя», «Q2 · Q3 · Q4», недели — датой понедельника «03.11».
  * Методика — `docs/blocks-metrics.md`.
  */
 
@@ -19,9 +20,14 @@ function monthBounds(year, month) {
   return { from: isoDate(new Date(Date.UTC(year, month, 1))), to: isoDate(new Date(Date.UTC(year, month + 1, 0))) };
 }
 
-/** Шаг периода: `month` — целый месяц, `quarter` — целый квартал, иначе `week`. */
+/* Пресеты календарного блока, который ещё идёт: тренд берёт полные блоки до него */
+const RUNNING = ['month', 'quarter'];
+const running = (period) => period?.complete === false && RUNNING.includes(period.preset);
+
+/** Шаг периода: `month` — целый или незаконченный месяц, `quarter` — то же для квартала, иначе `week`. */
 export function trendStep(period) {
   if (!period?.from || !period?.to) return null;
+  if (running(period)) return period.preset;
   const start = parseIso(period.from);
   const year = start.getUTCFullYear();
   const month = start.getUTCMonth();
@@ -37,9 +43,11 @@ export function trendSteps(period, count = TREND_POINTS) {
   const steps = [];
   if (step === 'month' || step === 'quarter') {
     const size = step === 'month' ? 1 : 3;
+    /* Незаконченный блок — последний шаг тренда предыдущий, полный */
+    const shift = running(period) ? size : 0;
     const start = parseIso(period.from);
     for (let index = count - 1; index >= 0; index -= 1) {
-      const first = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() - index * size, 1));
+      const first = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() - index * size - shift, 1));
       const bounds = { from: isoDate(first), to: monthBounds(first.getUTCFullYear(), first.getUTCMonth() + size - 1).to };
       const label = step === 'month' ? MONTHS[first.getUTCMonth()] : `Q${Math.floor(first.getUTCMonth() / 3) + 1}`;
       steps.push({ ...bounds, label });

@@ -693,7 +693,9 @@ function roleHint(role, data, hasPrevious) {
         : `${formatCount(feedback.count)} с ОС — ${formatShare(feedback.share)} от оценок 1–3`],
     ...FEEDBACK_HINT,
   ];
-  const hint = element('span', 'metric__forecast', '?');
+  /* Общий знак «?» карточек — иконка `help` того же стиля, что «!» пометки выборки */
+  const hint = element('span', 'metric__forecast');
+  hint.append(icon('help', 'metric__forecast-icon'));
   hint.setAttribute('role', 'img');
   hint.setAttribute('aria-label', phrases.map((phrase) => phrase.join(' ')).join('. '));
   hint.setAttribute('tabindex', '0');
@@ -728,10 +730,8 @@ export const digestRole = (index) => (block, context) => {
   /* J-163, J-165: VOC — крупным числом 72 px с дельтой справа; оценки — мелкой строкой под ним */
   const vocFigure = element('div', 'metric');
   const hasPrevious = role.countDelta !== null;
-  /* Дельта VOC и «?» — одной группой у числа: «?» рядом с дельтой, как просил пользователь */
-  const deltaGroup = element('span', 'role-card__lead-delta');
-  deltaGroup.append(roleLead(role.delta, hasPrevious, { strong: true }), roleHint(role, data, hasPrevious));
-  vocFigure.append(pairNode(vocText(role.voc), deltaGroup),
+  /* Дельта VOC и «?» — общей группой пары числа (`pairNode({ hint })`), как у карточек сегментов */
+  vocFigure.append(pairNode(vocText(role.voc), roleLead(role.delta, hasPrevious, { strong: true }), undefined, { hint: roleHint(role, data, hasPrevious) }),
     /* Оценки с дельтой — общей парой карточек метрик (J-280); без прошлого месяца — прочерк (J-172) */
     roleMetaRow(role, data, hasPrevious),
     ...(role.raw !== null && roundVoc(role.raw) !== roundVoc(role.voc) ? [metaRowNode(element('span', 'metric__meta', `${vocText(role.raw)} без поправки`))] : []));

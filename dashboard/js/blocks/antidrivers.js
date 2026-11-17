@@ -145,7 +145,7 @@ export function sameStartCuts(labels) {
   Видимое число знаков — по доле показанной ширины; меряется после подгонки ширины колонки
 */
 function cutSameStarts(view) {
-  const labels = [...(view.querySelectorAll?.('.heatmap__row-label, .heatmap__freq-label') ?? [])];
+  const labels = [...(view.querySelectorAll?.('.heatmap__row-label') ?? [])];
   const shown = labels.map((label) => label.firstChild).filter((node) => node?.title !== undefined);
   for (const node of shown) node.textContent = node.title;
   const measured = shown.map((node) => {
@@ -384,6 +384,8 @@ function togglePick(context, pick, node) {
   пользователь отметила 4,56 (сила 58 %) горячей, а 4,64 (32 %) — мягкой
 */
 const HOT_LEVEL = 0.5;
+/* Белое число на зелёной — только у верхней ступени: шкала зелёной линейна до 5,00, середина остаётся с тёмным числом */
+const GOOD_TOP_LEVEL = 0.9;
 
 function heatmapCell(context, heatmap, row, column, cell, highlight, tooltip, view) {
   const label = rowLabel(context, row.key);
@@ -397,7 +399,8 @@ function heatmapCell(context, heatmap, row, column, cell, highlight, tooltip, vi
     Горячая ячейка (от HOT_LEVEL силы) — в светлой теме насыщенная заливка от центра и белое число (antidriver.css),
     одинаково для красной и зелёной; отдельной подсветки выбранного дня нет
   */
-  const hot = (highlight.tone === 'bad' || highlight.tone === 'good') && !highlight.muted && highlight.strength >= HOT_LEVEL
+  const level = highlight.tone === 'good' ? GOOD_TOP_LEVEL : HOT_LEVEL;
+  const hot = (highlight.tone === 'bad' || highlight.tone === 'good') && !highlight.muted && highlight.strength >= level
     ? 'antidriver-cell--hot' : null;
   const node = heatCell({ clickable: true, tone, muted: highlight.muted, strength: highlight.tone ? highlight.strength : null, className: hot, content: value });
   const pick = pickOf(row.key, column);
@@ -524,7 +527,18 @@ function heatmapHead(columns, scale) {
   corner.append(element('span', 'visually-hidden', isVersionCut() ? 'Версия' : 'Элемент'));
   headRow.append(corner);
   for (const column of columns) headRow.append(element('th', 'heatmap__date', columnLabel(column, scale)));
-  head.append(headRow);
+  headRow.append(element('th', 'heatmap__freq-gap'));
+  for (const column of columns) headRow.append(element('th', 'heatmap__freq-date', columnLabel(column, scale)));
+  /* Над частотностью — заголовок группы «Упоминаний»; над VOC группа не подписана, как в макете */
+  const groupRow = element('tr', 'heatmap__groups');
+  const groupCorner = element('th', 'heatmap__row-title');
+  const vocGroup = element('th', 'heatmap__group');
+  vocGroup.colSpan = columns.length;
+  const freqGroup = element('th', 'heatmap__group heatmap__freq-group', 'Упоминаний');
+  freqGroup.colSpan = columns.length;
+  freqGroup.setAttribute('scope', 'colgroup');
+  groupRow.append(groupCorner, vocGroup, element('th', 'heatmap__freq-gap'), freqGroup);
+  head.append(groupRow, headRow);
   return head;
 }
 
@@ -560,39 +574,22 @@ function heatmapRow(context, heatmap, row, highlights, { tooltip, view, tagged }
     td.append(heatmapCell(context, heatmap, row, heatmap.columns[index], cell, highlights[index], tooltip, view));
     tr.append(td);
   });
+  tr.append(...frequencyCells(row));
   return tr;
 }
 
 /*
-  Частотность — второй таблицей сразу под картой VOC, с теми же колонками шага: оценки с упоминанием строки в каждом
-  интервале. Простым текстом, без пилюли и заливки; в той же прокрутке и с той же липкой колонкой названий, поэтому
-  колонки совпадают при любой прокрутке
+  Частотность — справа от колонок VOC в тех же строках: после линии — те же интервалы шага, в ячейке оценки с
+  упоминанием строки. Простым текстом, без пилюли и заливки; названия строк — один раз, в липкой колонке слева
 */
-function frequencyBody(context, heatmap, tagged) {
-  const body = element('tbody', 'heatmap__freq-body');
-  const head = element('tr', 'heatmap__freq-head');
-  const title = element('th', 'heatmap__row-title heatmap__freq-title', 'Упоминаний');
-  title.setAttribute('scope', 'rowgroup');
-  head.append(title);
-  body.append(head);
-  for (const row of heatmap.rows) {
-    const tr = element('tr');
-    const name = element('th', 'heatmap__row-title');
-    name.setAttribute('scope', 'row');
-    if (isVersionCut()) {
-      const { os, version } = splitVersionKey(row.key);
-      name.append(withOverflowTitle(element('span', 'heatmap__freq-label', version)));
-      if (tagged && os) name.append(element('span', 'heatmap__freq-os', OS_TAGS[os] ?? os));
-    } else name.append(withOverflowTitle(element('span', 'heatmap__freq-label', rowLabel(context, row.key))));
-    tr.append(name);
-    for (const cell of row.cells) {
-      const td = element('td', 'heatmap__freq', cell.mentions ? formatCount(cell.mentions) : null);
-      if (!cell.mentions) td.append(emptyValue());
-      tr.append(td);
-    }
-    body.append(tr);
+function frequencyCells(row) {
+  const cells = [element('td', 'heatmap__freq-gap')];
+  for (const cell of row.cells) {
+    const td = element('td', 'heatmap__freq', cell.mentions ? formatCount(cell.mentions) : null);
+    if (!cell.mentions) td.append(emptyValue());
+    cells.push(td);
   }
-  return body;
+  return cells;
 }
 
 function heatmapBody(context, { heatmap, calibration }, columnPlans, overlay) {
@@ -648,11 +645,7 @@ function heatmapView(context, shown, rerender, cutTabs, lead) {
   /* Подсказка — вне прокрутки карты: иначе у верхней строки её срезал бы край области прокрутки */
   const tooltip = chartTooltip({ centered: true });
   const table = element('table', 'heatmap');
-  table.append(
-    heatmapHead(columns, shown.scale),
-    heatmapBody(context, shown, columnPlans, { tooltip, view, tagged: shown.tagged }),
-    frequencyBody(context, shown.heatmap, shown.tagged),
-  );
+  table.append(heatmapHead(columns, shown.scale), heatmapBody(context, shown, columnPlans, { tooltip, view, tagged: shown.tagged }));
   const scroll = heatmapScroll(table, tooltip);
   const frame = element('div', 'heatmap-frame');
   const resizer = titleResizer(view, frame);

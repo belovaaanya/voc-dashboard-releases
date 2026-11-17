@@ -95,9 +95,11 @@ export function renderVocChannel(block, context) {
   */
   const count = slice.length;
   const previousCount = previousSlice?.length;
-  const caption = metaRowNode(countGroupNode(count, previousCount, period), forecastNode(count, previousCount, period, { focusable: true }), sufficiencyNode(slice, { focusable: true }))
+  /* «?» незаконченного периода — рядом с дельтой VOC, «!» мало оценок — сразу после «N оценок» (редизайн) */
+  const forecast = forecastNode(count, previousCount, period, { focusable: true });
+  const caption = metaRowNode(countGroupNode(count, previousCount, period), sufficiencyNode(slice, { focusable: true }))
     ?? emptyCaption();
   const layout = element('div', 'metric metric--big');
-  appendAll(layout, planCaptionNode(plan, { corner: true }), pairNode(formatVoc(value), leadNode(vocDelta(slice, previousSlice), { large: true, strong: true }), 'metric__value--big'), emptyCaption(), caption);
+  appendAll(layout, planCaptionNode(plan, { corner: true }), pairNode(formatVoc(value), leadNode(vocDelta(slice, previousSlice), { large: true, strong: true }), 'metric__value--big', { hint: forecast }), emptyCaption(), caption);
   block.setContent(layout);
 }

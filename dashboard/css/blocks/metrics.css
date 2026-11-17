@@ -61,6 +61,14 @@
   Тогда дельта — под числом, тренд — во всю ширину бейджа, как до редизайна. Порог — число с дельтой 14 px (≈164 px), зазор
   и тренд с обеими подписями (56 px); с запасом под «−0,12»
 */
+/* С «?» незаконченного периода рядом с дельтой пара шире на ≈20 px: порог выше, иначе тренд на 1440 сжимался до нуля */
+@container (width < 252px) {
+  .metric--with-trend:has(.metric__lead-row) > .metric__pair {
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+}
+
 @container (width < 232px) {
   .metric--with-trend > .metric__pair {
     flex-direction: column;
@@ -88,6 +96,8 @@
   justify-self: end;
   inline-size: fit-content;
   max-inline-size: 100%;
+  /* Без плана бейджа (и его копии) нет — тренд не уже двух `--space-10`, но не шире остатка строки */
+  min-inline-size: min(calc(var(--space-10) * 2), 100%);
 }
 
 /* Копия бейджа нулевой высоты: задаёт только ширину колонки, не видна и не озвучивается; стоит первой в колонке */
@@ -169,20 +179,36 @@
   white-space: nowrap;
 }
 
-/* J-94: пометка выборки — серая иконка в строке объёма; слова и порог — в подсказке, цвет смысла не несёт (D-25, D-26) */
-.metric__warning {
+/*
+  J-94: пометка выборки «!» — серая иконка сразу после «N оценок»; слова и порог — в подсказке, цвет смысла не несёт
+  (D-25, D-26). «?» незаконченного периода — рядом с дельтой VOC, иконкой того же стиля: размер, круг и штрих общие
+  (редизайн); прогноз — в подсказке
+*/
+.metric__warning,
+.metric__forecast {
   display: inline-flex;
   align-self: center;
   color: var(--color-neutral);
 }
 
-.metric__warning-icon {
+.metric__forecast {
+  cursor: help;
+}
+
+.metric__warning-icon,
+.metric__forecast-icon {
   width: var(--icon-size);
   height: var(--icon-size);
 }
 
-/* «?» прогноза незаконченного периода — после дельты оценок, третьим серым; прогноз — в подсказке, как у пометки выборки; тот же знак у пояснения «С ОС» плитки роли (metric__hint) */
-.metric__forecast,
+/* Дельта VOC и «?» — одна группа справа от числа: знак по центру строки дельты */
+.metric__lead-row {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* Тот же знак текстом в круге — у пояснения «С ОС» плитки роли и в дайджесте (metric__hint) */
 .metric__hint {
   display: inline-grid;
   place-items: center;
@@ -458,7 +484,8 @@
 .card--metric-segment[data-plan-glow]:not(:has(.state))::after {
   inset: calc(-1 * var(--card-border-width, var(--hairline)));
   padding: var(--card-border-width, var(--hairline));
-  background: radial-gradient(var(--plan-rim-shape), color-mix(in srgb, var(--plan-tone) var(--plan-glow-rim), transparent), transparent);
+  /* Кромка статуса по макету 5362:3956 — ровная по всему контуру, а не гаснущая от угла: карточка не сливается с соседями */
+  background: color-mix(in srgb, var(--plan-tone) var(--plan-glow-rim), transparent);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
@@ -473,7 +500,18 @@
   --plan-glow-rim: var(--plan-glow-rim-hover);
   --plan-shape: var(--plan-glow-shape-hover);
   --plan-rim-shape: var(--plan-glow-shape-hover);
-  border-color: color-mix(in srgb, var(--plan-tone) var(--plan-glow-rim-soft), transparent);
+}
+
+/*
+  Рамка наведения — в тоне статуса плана в обеих темах (редизайн): «Ниже плана» — красная, «Выше» — зелёная, и при
+  «Мало оценок», когда свечения нет. «В плане» — обычная рамка наведения
+*/
+.card--metric-segment[data-plan-status='below']:not(:has(.state)):has(.metric__toggle:hover, .metric__toggle:focus-visible) {
+  border-color: color-mix(in srgb, var(--color-negative) var(--plan-glow-rim-soft), transparent);
+}
+
+.card--metric-segment[data-plan-status='above']:not(:has(.state)):has(.metric__toggle:hover, .metric__toggle:focus-visible) {
+  border-color: color-mix(in srgb, var(--color-positive) var(--plan-glow-rim-soft), transparent);
 }
 
 /* В плане — без цвета: текстура вместо свечения, рамка карточки обычная */

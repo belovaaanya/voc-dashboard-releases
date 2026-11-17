@@ -148,8 +148,8 @@ function renderPeriod(period, manifestPeriod, onPeriodChange) {
 }
 
 /*
-  J-115: «С кэшбеком» сужает все расчёты, как фильтр (J-21, J-103) — переключатель в конце строки фильтров. В кнопке
-  настроек (J-230) его не находили: вернулся в строку, на виду
+  J-115: «С кэшбеком» сужает все расчёты, как фильтр (J-21, J-103) — переключатель отдельным элементом сразу после пилюли
+  фильтров (редизайн). В кнопке настроек (J-230) его не находили: вернулся на виду
 */
 function cashbackSwitch(state, onChange) {
   const item = element('label', 'filters__item filters__switch');
@@ -205,13 +205,13 @@ function moreFiltersButton(hidden) {
 }
 
 /* J-174: `keys` — какие фильтры показать; страница ролей показывает только ОС (у АБМ) и без кэшбека (J-168).
-   `more` — редкие фильтры за кнопкой; `onCashbackChange` — переключатель «С кэшбеком» в конце строки */
-function renderFilters(dimensions, state, label, onFilterChange, reference, onFiltersReset, { keys = HEADER_DIMENSIONS, more = MORE_DIMENSIONS, cashback = true, onCashbackChange } = {}) {
+   `more` — редкие фильтры за кнопкой. «С кэшбеком» — не в пилюле фильтров, а отдельным элементом после неё (редизайн) */
+function renderFilters(dimensions, state, label, onFilterChange, reference, onFiltersReset, { keys = HEADER_DIMENSIONS, more = MORE_DIMENSIONS } = {}) {
   const bar = element('div', 'filters');
   bar.setAttribute('role', 'group');
   bar.setAttribute('aria-label', 'Фильтры среза');
   const controls = keys.map((key) => dimensions.find((candidate) => candidate.key === key)).filter(Boolean);
-  if (!controls.length && !cashback) return null;
+  if (!controls.length) return null;
   const folded = [];
   controls.forEach((dimension, index) => {
     const nodes = [...(index ? [renderDivider()] : []), filterControl(dimension, state, label, onFilterChange, reference)];
@@ -220,7 +220,6 @@ function renderFilters(dimensions, state, label, onFilterChange, reference, onFi
     bar.append(...nodes);
   });
   if (folded.length) bar.append(renderDivider(), moreFiltersButton(folded));
-  if (cashback) bar.append(...(controls.length ? [renderDivider()] : []), cashbackSwitch(state, onCashbackChange));
   const shown = keys.filter((key) => dimensions.some((candidate) => candidate.key === key));
   if (shown.some((key) => state.filters?.[key]?.length)) bar.append(resetFilters(onFiltersReset));
   return bar;
@@ -275,6 +274,7 @@ export function renderHeader(host, context) {
     slim = false,
     month = null,
     pageTitle = null,
+    metaHost = null,
   } = context;
 
   let shell = shells.get(host);
@@ -298,11 +298,13 @@ export function renderHeader(host, context) {
   if (month) {
     /* срез дайджест не сужает — фильтров нет */
   } else if (!slim) {
-    const filters = renderFilters(dimensions, state, label, onFilterChange, reference, onFiltersReset, { onCashbackChange });
+    const filters = renderFilters(dimensions, state, label, onFilterChange, reference, onFiltersReset);
     if (filters) barBefore.push(filters);
+    /* Редизайн (макет 5362:3817): «С кэшбеком» — отдельным элементом после пилюли фильтров, без точки-разделителя */
+    barBefore.push(cashbackSwitch(state, onCashbackChange));
   } else {
     /* J-174: на странице ролей из фильтров — сегмент и ОС (ОС — лишь у АБМ); за кнопку их не прячем */
-    const osFilter = renderFilters(dimensions, state, label, onFilterChange, reference, onFiltersReset, { keys: ['segment', 'os'], more: [], cashback: false });
+    const osFilter = renderFilters(dimensions, state, label, onFilterChange, reference, onFiltersReset, { keys: ['segment', 'os'], more: [] });
     if (osFilter) barBefore.push(osFilter);
   }
   const barAfter = [];
@@ -328,9 +330,18 @@ export function renderHeader(host, context) {
   if (comparedTo && !slim && !month) {
     meta.append(element('span', 'shell-head__compared', bindShortWords(`Изменения в карточках метрик — к ${formatDayRange(comparedTo.from, comparedTo.to)}`)));
   }
+  /*
+    J-?: видимая строка заголовка уходит вверх вместе со страницей — её рисует слот `metaHost` после закреплённой шапки;
+    закреплены только фильтры. Строка только со скрытым h1 (роли, дайджест) остаётся в шапке и места не занимает
+  */
+  const visibleMeta = Boolean(meta.querySelector('.shell-head__title, .shell-head__compared'));
   if (meta.childNodes.length) {
-    if (!meta.querySelector('.shell-head__title, .shell-head__compared')) meta.classList.add('shell-head__meta--hidden');
-    headAfter.push(meta);
+    if (!visibleMeta) meta.classList.add('shell-head__meta--hidden');
+    if (!(visibleMeta && metaHost)) headAfter.push(meta);
+  }
+  if (metaHost) {
+    metaHost.replaceChildren(...(visibleMeta ? [meta] : []));
+    metaHost.hidden = !visibleMeta;
   }
 
   /* Перерисовка шапки не выбрасывает фокус клавиатуры в начало страницы: он остаётся на фильтре, который менялся */

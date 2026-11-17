@@ -153,7 +153,8 @@
 
 /* J-157: подписи значений над точками широкой линии; сверху — место под подпись самой высокой точки */
 .sparkline-labels {
-  padding-block-start: var(--space-5);
+  /* Блок может дать больше места под подпись пика: --sparkline-label-room (плитки ролей) */
+  padding-block-start: var(--sparkline-label-room, var(--space-5));
   min-width: 0;
 }
 
@@ -239,8 +240,17 @@
 }
 
 /* `planFill`: заливка от линии к коридору плана, как у графика динамики — зелёная выше, красная ниже, гаснет к коридору */
+/*
+  Блок может дать заливке «выше плана» цвет коридора: --sparkline-plan-fill-positive: var(--sparkline-corridor) и её
+  непрозрачность (плитки ролей); --sparkline-corridor — конец коридора (на :root: блок выше линии видит его в теме)
+*/
+:root {
+  --sparkline-corridor: var(--color-plan-band);
+}
+
 .sparkline__plan-fill--positive {
-  --sparkline-plan-fill: var(--color-positive-fill);
+  --sparkline-plan-fill: var(--sparkline-plan-fill-positive, var(--color-positive-fill));
+  --sparkline-plan-opacity: var(--sparkline-plan-fill-positive-opacity, var(--chart-fill-opacity));
 }
 
 .sparkline__plan-fill--negative {
@@ -249,7 +259,7 @@
 
 .sparkline__plan-stop {
   stop-color: var(--sparkline-plan-fill);
-  stop-opacity: var(--chart-fill-opacity);
+  stop-opacity: var(--sparkline-plan-opacity, var(--chart-fill-opacity));
 }
 
 .sparkline__plan-stop--clear {

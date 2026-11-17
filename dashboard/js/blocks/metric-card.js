@@ -105,9 +105,19 @@ export function leadNode(value, { shape = DELTA_SHAPES.voc, growth = GROWTH.good
   return empty;
 }
 
-/** Число и дельта карточки — общий `valueDelta`; `wrap` — не помещаясь, дельта уходит под число (J-65). */
-export function pairNode(valueText, lead, modifier, { wrap = false } = {}) {
-  return valueDelta(valueNode(valueText, modifier), lead, { className: 'metric__pair', wrap });
+/**
+ * Число и дельта карточки — общий `valueDelta`; `wrap` — не помещаясь, дельта уходит под число (J-65).
+ * `hint` — «?» незаконченного периода рядом с дельтой VOC (редизайн): дельта и знак — одна группа справа от числа.
+ */
+export function pairNode(valueText, lead, modifier, { wrap = false, hint = null } = {}) {
+  let change = lead;
+  if (hint && lead) {
+    /* Без сравнения слот дельты пуст и невидим: «?» встаёт к числу, а не за пустым местом */
+    const empty = lead.classList?.contains('metric__lead--empty');
+    change = element('span', 'metric__lead-row');
+    change.append(...(empty ? [hint] : [lead, hint]));
+  }
+  return valueDelta(valueNode(valueText, modifier), change, { className: 'metric__pair', wrap });
 }
 
 /* Шаг мини-тренда словом — для подсказки и доступного имени */
@@ -128,7 +138,7 @@ export function trendNode(values, steps, step, { direction = null, tone = null, 
   trend.setAttribute('role', 'img');
   trend.setAttribute('aria-label', caption);
   const end = (index) => index === 0 || index === steps.length - 1;
-  /* Цвет — `trendTone`: направление, мало оценок — серый; без `tone` — направление */
+  /* Цвет — `trendTone`: статус плана, без плана — направление, мало оценок — серый; без `tone` — направление */
   /* Общая шкала сегментов (`domain`): точки за её краем прижаты к краю, подписи — настоящие значения */
   trend.append(sparkline(clampToDomain(values, domain), {
     tone: tone ?? GROWTH.good[direction] ?? 'neutral', wide: true, fill: true, dots: 'sm',
@@ -191,29 +201,38 @@ export function hoverThrough(layer, target) {
 }
 
 /**
- * Цвет мини-тренда сегмента (решение пользователя): только направление динамики — вверх зелёный, вниз красный,
- * меньше 0,01 — серый; план показывают бейдж и свечение. Мало оценок — серый, как и карточка без свечения.
- * Линия, заливка и вертикаль последней точки — одного тона.
+ * Цвет мини-тренда — статус плана карточки (правка пользователя, отменяет «только направление»): ниже плана — красный,
+ * выше — зелёный; в плане и без плана — направление динамики (растёт — зелёный, падает — красный, меньше 0,01 — серый). Мало оценок (D-25) — серый, как карточка без свечения.
+ * Линия, заливка и точки — одного тона.
  */
-export function trendTone(ratings, direction) {
+export function trendTone(ratings, { status = null, direction = null } = {}) {
   if (!sampleSufficiency(ratings).sufficient) return 'neutral';
+  if (status === BELOW_PLAN) return 'negative';
+  if (status === ABOVE_PLAN) return 'positive';
+  /* «В плане» и без плана — направление динамики: растёт — зелёный, падает — красный (уточнение пользователя) */
   return GROWTH.good[direction] ?? 'neutral';
 }
 
 /**
  * Уровень свечения по плану (`plan.planGlow`) — только при достаточной выборке (D-25): 12 оценок КИБ не светятся так же,
- * как 4 207 СБ. Бейдж плана и пометка «Мало оценок» остаются; карточка — нейтральная, без статуса.
+ * как 4 207 СБ. Бейдж плана, пометка «Мало оценок» и рамка наведения в тоне статуса (`data-plan-status`) остаются.
  */
 export function statusGlow(value, plan, ratings) {
   return sampleSufficiency(ratings).sufficient ? planGlow(value, plan) : null;
 }
 
-/** Стекло по статусу плана (J-67) — атрибут карточки, стили в metrics.css; без плана или данных атрибута нет (D-04). */
-export function setPlanGlow(block, glow) {
+/**
+ * Стекло по статусу плана (J-67) — атрибут карточки, стили в metrics.css; без плана или данных атрибута нет (D-04).
+ * `status` — статус плана (`data-plan-status`) отдельно от свечения: при «Мало оценок» свечения нет, а рамка наведения
+ * всё равно в тоне статуса — красная у «Ниже плана», зелёная у «Выше».
+ */
+export function setPlanGlow(block, glow, status = null) {
   const card = block.element;
   if (!card?.dataset) return;
   if (glow) card.dataset.planGlow = glow;
   else delete card.dataset.planGlow;
+  if (status) card.dataset.planStatus = status;
+  else delete card.dataset.planStatus;
 }
 
 /*
@@ -297,7 +316,9 @@ export function forecastText(count, previousCount, period) {
 export function forecastNode(count, previousCount, period, { focusable = false } = {}) {
   const lines = forecastLines(count, previousCount, period);
   if (!lines) return null;
-  const hint = element('span', 'metric__forecast', '?');
+  /* Иконка того же стиля, что «!» пометки выборки (круг и штрих `alert`), а не знак текстом в рамке */
+  const hint = element('span', 'metric__forecast');
+  hint.append(icon('help', 'metric__forecast-icon'));
   hint.dataset.forecast = lines.join(' ');
   hint.setAttribute('role', 'img');
   hint.setAttribute('aria-label', 'Период не закончен');

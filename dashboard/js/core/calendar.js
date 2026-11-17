@@ -59,6 +59,8 @@ export function eventType(event) {
   }
   if (event.calendar) {
     const color = { above: 'mint', in: 'yellow', below: RED }[event.planStatus] ?? ORANGE;
+    /* Правка к 1.4.20: серия дней канала ниже плана — одна строка с числом дней */
+    if (event.rule === 'plan' && event.streak > 1) return { label: `Снижение VOC ниже плана · ${event.streak}\u00a0дн`, color };
     return { label: event.planStatus === 'below' ? 'Снижение VOC ниже плана' : 'Снижение VOC', color };
   }
   if (event.metric === VOC_METRIC) {
@@ -367,7 +369,7 @@ function releaseEvent({ releaseDate, first, ratings, sum, dataEnd, fromHistorySt
 */
 export const EVENT_LANES = [
   { kind: ANOMALY_EVENT, label: 'Крит. снижение VOC', tone: 'negative', sizeBy: 'strength',
-    hint: 'VOC разреза за день резко ниже его обычного уровня — стоит проверить, что случилось в этот день' },
+    hint: 'VOC канала за день ниже плана или VOC разреза резко ниже его обычного уровня — стоит проверить, что случилось в этот день' },
   { kind: INCIDENT_EVENT, label: 'Авария', tone: 'orange', sizeBy: 'strength',
     hint: 'Сбой сервиса из листа аварий — в эти дни он мог тянуть VOC вниз' },
   { kind: SUSTAINED_EVENT, label: 'Инцидент', tone: 'incident', sizeBy: 'count',

@@ -39,7 +39,8 @@
 /*
   Бейдж плана с силой (`badge(..., { strength })`) — тот же приём, что у плиток тепловой карты (heat-cell.css): тон
   светится от края, радиус свечения — по `--badge-strength` (та же формула, что у `--heat-strength`), край — полным тоном, текст — цветом текста. «В плане» — слабый
-  зелёный, «Выше плана» — сильнее, «Ниже плана» — тот же приём красным: разница — насыщенностью одного вида
+  зелёный, «Выше плана» — сильнее, «Ниже плана» — тот же приём красным: разница — насыщенностью одного вида.
+  В светлой теме форма плашки фиксирована по макету (`--badge-heat-rx/ry`): сила — только в подсказке и доступном имени
 */
 .badge--heat {
   --pill-rx: calc(267% - 1.89 * var(--badge-strength, 0%));
@@ -141,7 +142,7 @@
 }
 
 /*
-  Дельта VOC карточек метрик (редизайн пользователя): цвета макета — в светлой теме светлее ink (`--color-delta-*`), поэтому
+  Дельта VOC карточек метрик (редизайн пользователя): зелёный макета — в светлой теме светлее ink (`--color-delta-positive`; красный — общий ink, #F15D8F), поэтому
   текст не меньше 14 px SemiBold — решение пользователя, исключение из AA описано в test/theme.test.js. Роль
   `--type-delta-strong`: в светлой SemiBold, в тёмной (цвета — тона темы, AA проходит) — акцент темы, тоньше (правка 17.11)
 */
@@ -152,10 +153,6 @@
 
 .delta--strong.tone--positive {
   --tone-ink: var(--color-delta-positive);
-}
-
-.delta--strong.tone--negative {
-  --tone-ink: var(--color-delta-negative);
 }
 
 .delta--lg .delta__arrow {
@@ -265,7 +262,7 @@
    После .badge: та же специфичность, иначе его `--pill-edge` побеждает */
 .badge.badge--heat {
   --pill-edge: var(--badge-heat-edge);
-  background: radial-gradient(ellipse var(--pill-rx) var(--pill-ry) at 50% 50%,
+  background: radial-gradient(ellipse var(--badge-heat-rx) var(--badge-heat-ry) at var(--badge-heat-at),
     color-mix(in srgb, var(--tone) var(--badge-heat-center), transparent),
     color-mix(in srgb, var(--tone) var(--badge-heat-mid), transparent) 50%,
     color-mix(in srgb, var(--tone) var(--badge-heat-edge), transparent));

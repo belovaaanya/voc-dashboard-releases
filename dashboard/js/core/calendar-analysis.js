@@ -3,7 +3,7 @@ import {
   ANOMALY_TRACKS, BELOW, VOC_METRIC, MIN_EVENT_RATINGS,
   detectAnomalies, distinctAnomalies, isWorkingDay, measureEvents, sampledSeries, workingDays,
 } from './anomalies.js';
-import { earliestDate, latestDate } from './dates.js';
+import { earliestDate, latestDate, shiftDay } from './dates.js';
 import { ignoredCauseKey } from './analytical-causes.js';
 import { breakdown, UNLABELLED } from './breakdown.js';
 import { ANOMALY_EVENT, SUSTAINED_EVENT, collapseSeries, sortEvents } from './calendar.js';
@@ -13,6 +13,16 @@ import { createLabels } from './labels.js';
 import { planFor, BELOW_PLAN } from './plan.js';
 
 const VOC_TRACKS = ANOMALY_TRACKS.filter(({ metric }) => metric === VOC_METRIC);
+/*
+  Правка пользователя к 1.4.20: у канала «Снижение ниже плана» — по коридору плана (`detectPlanDrops`), а не статистикой
+  окна: VOC канала сравнивают с планом. Сегменты не отмечаются — план ведётся на канал, и сегмент с обычно более низким
+  VOC был бы «ниже плана» постоянно. Сегменты, триггеры, продукты и ОС — статистическое «Крит. снижение»
+*/
+export const PLAN_DROP_DIMENSIONS = ['channel'];
+const STATISTICAL_TRACKS = VOC_TRACKS.filter(({ dimension }) => !PLAN_DROP_DIMENSIONS.includes(dimension));
+/* День канала ниже нижней границы коридора минимум на 0,05 при 30 оценках и больше */
+export const PLAN_DROP_GAP = 0.05;
+export const PLAN_DROP_MIN_RATINGS = CRITICAL_DROP_MIN_WINDOW_RATINGS;
 export const INCIDENT_MIN_DAYS = 3;
 export const INCIDENT_PLAN_GAP = 0.05;
 export const INCIDENT_TOP_TRIGGERS = 15;
@@ -29,7 +39,7 @@ export function calendarAnomalies({ rows, reference, period, channel, filters = 
   const historyPeriod = { from: earliestDate(rows), to: period.to };
   const detect = (includeWeekends) => measureEvents({
     anomalies: distinctAnomalies(detectAnomalies({
-      rows, reference, period: historyPeriod, channel, filters, dataEnd, tracks: VOC_TRACKS, includeWeekends, verdictsOf: dropVerdicts,
+      rows, reference, period: historyPeriod, channel, filters, dataEnd, tracks: STATISTICAL_TRACKS, includeWeekends, verdictsOf: dropVerdicts,
     })).filter(({ date, direction }) => direction === BELOW && isWorkingDay(date) !== includeWeekends),
     rows, period, reference, minimumRatings,
   }).map((anomaly) => ({ ...describeAnomaly(anomaly), calendar: true, windowKind: includeWeekends ? 'calendar' : 'working' }));
@@ -43,6 +53,59 @@ export function calendarAnomalies({ rows, reference, period, channel, filters = 
 }
 
 /**
+ * «Снижение ниже плана» (правка к 1.4.20): день, где у канала не меньше 30 оценок и VOC ниже нижней границы коридора
+ * плана канала минимум на 0,05 (точные значения, без округления — как у «Крит. снижения», D-21). Дни подряд — одна
+ * серия, как у инцидентов: день без оценок или не оценённый (меньше 30 оценок, нет плана) серию не рвёт, день в плане
+ * или выше — рвёт. Серия видна, если её последний день в периоде; началась раньше — `startsBeforePeriod`. Событие — тип
+ * «Крит. снижение VOC» с тегом «Снижение VOC ниже плана · N дн»; VOC серии — минимальный дневной. Сегменты по плану
+ * не проверяются (решение пользователя).
+ */
+export function detectPlanDrops({ rows, reference, period, channel, dataEnd = latestDate(rows) }) {
+  if (!rows.length || !channel) return [];
+  const end = dataEnd && dataEnd < period.to ? dataEnd : period.to;
+  const byDay = new Map();
+  for (const row of rows) {
+    if (row.appeal_date > end) continue;
+    if (!byDay.has(row.appeal_date)) byDay.set(row.appeal_date, []);
+    byDay.get(row.appeal_date).push(row);
+  }
+  const events = [];
+  let run = [];
+  const flush = () => {
+    if (run.length && run.at(-1).date >= period.from) events.push(planDropSeries(run, channel, period));
+    run = [];
+  };
+  for (const date of [...byDay.keys()].sort()) {
+    const plan = planFor(reference?.plan, { channel, from: date, to: date });
+    const [group] = breakdown(byDay.get(date), (row) => [row.channel]).filter(({ key }) => key !== UNLABELLED);
+    if (!plan || !group || group.mentions < PLAN_DROP_MIN_RATINGS || group.voc === null) continue;
+    const gap = plan.min - group.voc;
+    if (gap >= PLAN_DROP_GAP - 1e-9) run.push({ date, group, plan, gap });
+    else flush();
+  }
+  flush();
+  return sortEvents(events);
+}
+
+function planDropSeries(run, channel, period) {
+  const first = run[0].date;
+  const last = run.at(-1);
+  const lowest = run.reduce((low, day) => (day.group.voc < low.group.voc ? day : low));
+  const ratings = run.reduce((sum, { group }) => sum + group.mentions, 0);
+  /* Дни серии — подряд от первого до последнего: точки полосы соединены линией и через день без оценок */
+  const days = [];
+  for (let date = first; date <= last.date; date = shiftDay(date, 1)) days.push(date);
+  return {
+    kind: ANOMALY_EVENT, rule: 'plan', calendar: true, channel, metric: VOC_METRIC, dimension: 'channel', key: lowest.group.key,
+    direction: BELOW, date: last.date, from: first, days, streak: run.length, startsBeforePeriod: first < period.from,
+    value: lowest.group.voc, dayVoc: lowest.group.voc, ratings, plan: lowest.plan, planStatus: BELOW_PLAN,
+    planGap: lowest.gap, delta: -lowest.gap, belowPlanDays: run.length, tone: NEGATIVE, severity: CRITICAL,
+    seriesRatings: ratings, seriesDays: run.map(({ date }) => date),
+    seriesByDay: run.map(({ date, group, gap }) => ({ date, ratings: group.mentions, voc: group.voc, gap })),
+  };
+}
+
+/**
  * Оценил ли календарь хоть один разрез хоть в один день периода: окно своё у каждого разреза, поэтому
  * весь срез за него не отвечает. Будни и выходные — каждый в своём окне, как в `calendarAnomalies`.
  * `day` сужает проверку до дня, а конец истории остаётся от периода: тот же кэш, что у календаря.
@@ -51,7 +114,7 @@ export function hasEvaluatedSlice({ rows, reference, period, day = null, dataEnd
   if (!rows.length) return false;
   const end = dataEnd < period.to ? dataEnd : period.to;
   return [false, true].some((includeWeekends) => {
-    const { days, series } = sampledSeries({ rows, reference, end, tracks: VOC_TRACKS, includeWeekends });
+    const { days, series } = sampledSeries({ rows, reference, end, tracks: STATISTICAL_TRACKS, includeWeekends });
     const inPeriod = days.flatMap((date, index) => (date >= period.from && (day === null || date === day) && isWorkingDay(date) !== includeWeekends ? [index] : []));
     return series.some((samples) => inPeriod.some((index) => hasDropWindow(samples, index)));
   });

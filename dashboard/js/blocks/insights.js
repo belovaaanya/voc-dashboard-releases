@@ -6,7 +6,7 @@ import {
   isWorkingDay,
 } from '../core/anomalies.js';
 import { DATA_LOSS_ALPHA, DATA_LOSS_MIN_ACTIVE_DAYS, DATA_LOSS_MIN_DAILY, DATA_LOSS_MIN_PERIOD_RATINGS, DATA_LOSS_RATIO, DATA_LOSS_VOLUME_DAYS, DATA_LOSS_WINDOW } from '../core/data-loss.js';
-import { INCIDENT_MIN_DAYS, INCIDENT_MIN_DAY_RATINGS, INCIDENT_MIN_RATINGS, INCIDENT_PLAN_GAP, INCIDENT_TOP_TRIGGERS } from '../core/calendar-analysis.js';
+import { INCIDENT_MIN_DAYS, INCIDENT_MIN_DAY_RATINGS, INCIDENT_MIN_RATINGS, INCIDENT_PLAN_GAP, INCIDENT_TOP_TRIGGERS, PLAN_DROP_GAP, PLAN_DROP_MIN_RATINGS } from '../core/calendar-analysis.js';
 import { latestDate } from '../core/dates.js';
 import { selectionDays } from '../state/chart-selection.js';
 import { EMPTY } from '../shell/block.js';
@@ -127,7 +127,8 @@ const RATED = ['день с оценками', 'дня с оценками', 'д
 const times = (count) => `${formatCount(count)}\u00a0${plural(count, ['раз', 'раза', 'раз'])}`;
 export const KIND_RULES = {
   [ANOMALY_EVENT]: [
-    ['Что', 'VOC разреза за день: канал, сегмент, триггер, продукт, ОС'],
+    ['Канал', `день ниже нижней границы плана канала на ≥\u00a0${formatNumber(PLAN_DROP_GAP, 2)} при ≥\u00a0${formatRatings(PLAN_DROP_MIN_RATINGS)} за день — тег «Снижение VOC ниже плана»; дни подряд — одна серия «· N дн»`],
+    ['Что', 'VOC сегмента, триггера, продукта или ОС за день'],
     ['Сравнение', `средняя всех оценок за ${days(ANOMALY_WINDOW_DAYS, WORKING)} до дня (пн–пт, праздники не выделяются); выходной — за ${days(ANOMALY_WINDOW_DAYS, CALENDAR)}`],
     ['Отсечка', `ниже на ≥\u00a0${formatNumber(CRITICAL_DROP_MIN, 1)} и p\u00a0<\u00a0${percent(CRITICAL_DROP_ALPHA)}; у дня до ${formatRatings(CRITICAL_DROP_EXACT_RATINGS)} — значимо и без его самой низкой оценки`],
     ['Мин. объём', `в окне ≥\u00a0${formatRatings(CRITICAL_DROP_MIN_WINDOW_RATINGS)} и ≥\u00a0${days(ANOMALY_MIN_WINDOW_VALUES, RATED)}; разрез ≥\u00a0${formatRatings(MIN_EVENT_RATINGS)} за период`],
@@ -190,7 +191,7 @@ export function insightText(insight, { label, state }) {
 
   const notes = [];
   /* Серия ниже плана уже названа тегом: вторая строка число дней не повторяет */
-  const seriesInTag = !insight.calendar && insight.severity === CRITICAL && (insight.belowPlanDays ?? 1) === insight.streak;
+  const seriesInTag = insight.rule === 'plan' || (!insight.calendar && insight.severity === CRITICAL && (insight.belowPlanDays ?? 1) === insight.streak);
   if (insight.streak > 1 && !seriesInTag) notes.push(`${workingDaysCaption(insight.streak)} подряд`);
   if (insight.startsBeforePeriod) notes.push('началась до периода');
   if (insight.planStatus && insight.severity !== CRITICAL) notes.push(PLAN_CAPTION[insight.planStatus]);
@@ -206,7 +207,10 @@ export function insightText(insight, { label, state }) {
   const compared = delta === null
     ? 'предыдущего рабочего дня с оценками нет'
     : `${delta} к ${formatDate(insight.previousDay)}`;
-  const window = `${isVoc ? 'VOC' : 'число'} ${anomalyDelta} к среднему за ${windowDays}`;
+  /* Правка к 1.4.20: у канала — правило плана: самый низкий день серии к нижней границе коридора, окна нет */
+  const window = insight.rule === 'plan'
+    ? `VOC ${anomalyDelta} к нижней границе плана ${formatVoc(roundVoc(insight.plan.min))}`
+    : `${isVoc ? 'VOC' : 'число'} ${anomalyDelta} к среднему за ${windowDays}`;
   const date = formatDayRange(insight.from ?? insight.date, insight.date);
 
   return {

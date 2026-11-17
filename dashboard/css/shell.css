@@ -911,6 +911,11 @@ b {
   letter-spacing: var(--tracking-caption);
 }
 
+/* J-?: слот строки заголовка вне закреплённой шапки: скрытый не занимает места и не добавляет зазор колонки */
+.page-meta[hidden] {
+  display: none;
+}
+
 /* Строка только со скрытым h1 места не занимает */
 .shell-head__meta--hidden {
   display: contents;

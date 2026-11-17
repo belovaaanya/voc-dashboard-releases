@@ -1,7 +1,7 @@
 /* События среза для «Календаря событий», «Главного вывода» и LLM: расчёт ядром поверх контекста и кэш (J-178) */
 import { MIN_EVENT_RATINGS, detectAnomalies, distinctAnomalies, measureEvents } from '../core/anomalies.js';
 import { earliestDate, latestDate } from '../core/dates.js';
-import { calendarAnomalies, detectIncidents } from '../core/calendar-analysis.js';
+import { calendarAnomalies, detectIncidents, detectPlanDrops } from '../core/calendar-analysis.js';
 import { channelEvents, detectNewSlices, detectReleases } from '../core/calendar.js';
 import { detectDataLoss } from '../core/data-loss.js';
 import { selectionDays } from './chart-selection.js';
@@ -80,7 +80,7 @@ export function calendarEventsOf(context) {
     const history = rows.length ? historyOf(context) : [];
     /* Релизы сверяют версии по всем оценкам канала: сбор оценок по версии от фильтров шапки не зависит (J-191) */
     const params = { rows: history, allRows: rows, reference, period, channel: state.channel, filters: state.filters, dataEnd: latestDate(rows), minimumRatings };
-    return { reference, events: [...calendarAnomalies(params), ...channelEvents(reference, params), ...detectReleases(params),
+    return { reference, events: [...calendarAnomalies(params), ...detectPlanDrops(params), ...channelEvents(reference, params), ...detectReleases(params),
       ...detectDataLoss(params), ...detectIncidents(params), ...detectNewSlices(params)] };
   }, sameReference(reference)).events;
 }

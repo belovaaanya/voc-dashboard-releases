@@ -512,13 +512,21 @@
   min-width: var(--space-2);
   border-radius: var(--radius-pill);
   /* Полоса гаснет к основанию и насыщена на кончике: глаз идёт к значению, а не к нулю */
-  background: linear-gradient(to right, transparent, currentColor);
+  background: linear-gradient(to right, var(--bar-base, transparent), var(--bar-tip, currentColor));
 }
 
-/*
-  Редизайн: заливкой подсвечиваются только средний VOC и урон. Полоса триггера — размер вклада, не урон и не средний
-  VOC, поэтому нейтральная (цвет дорожки); направление — в подзаголовке группы и в числе вклада, мелкое число — ink тона
-*/
+/* Вклад — изменение VOC: «Подняли» — зелёные, «Снизили» — красные (правка пользователя 17.11; нейтральны только частоты и доли) */
+.digest-hbars__row--up {
+  --bar-base: var(--contribution-up-base);
+  --bar-tip: var(--contribution-up-tip);
+}
+
+.digest-hbars__row--down {
+  --bar-base: var(--contribution-down-base);
+  --bar-tip: var(--contribution-down-tip);
+}
+
+/* Число вклада — мелкое, поэтому ink тона; полоса — тоном направления (выше) */
 .digest-hbars__row--up .digest-hbars__impact {
   color: var(--color-positive-ink);
 }
@@ -613,15 +621,20 @@
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  /* Как зазор строк карточки под шапкой: портрет с margin-block: auto встаёт ровно посередине между названием и VOC */
+  /* Портрет — с отступом сверху (линия таблицы), число — у нижнего края: space-between прижимает его вниз */
   gap: var(--space-3);
   min-width: 0;
 }
 
-/* Портрет — по левому краю колонки, как в макете; по высоте — посередине между названием роли и VOC */
+/*
+  Портрет — по левому краю колонки, как в макете; низ портрета — на линии верха таблицы проблем в правой колонке, у всех
+  плиток одинаково, и у роли без оценок тоже (правка пользователя). Отступ сверху — от шагов, которыми собрана правая
+  колонка: линия 160 px, зазор колонки и отступ таблицы (по 8) минус строка шапки (24), зазор строк карточки (12) и сам
+  портрет (120) — 20 px
+*/
 .role-card__lead > .role-card__avatar {
   align-self: flex-start;
-  margin-block: auto;
+  margin-block: calc(var(--space-10) * 4 + var(--space-2) * 2 - var(--space-6) - var(--space-3) - var(--space-10) * 3) 0;
 }
 
 /* Разделитель колонок — посередине зазора, как календарь событий и лента отзывов на VOC ЦК (J-175) */
@@ -683,14 +696,10 @@
   white-space: nowrap;
 }
 
-/* Дельта VOC — общая крупная дельта карточек (`delta--strong`, `--type-delta-strong`: в тёмной акцент, в светлой SemiBold) */
-
-/* Дельта VOC и «?» — одной строкой у верхнего края числа */
-.role-card__lead-delta {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-}
+/*
+  Дельта VOC — общая крупная дельта карточек (`delta--strong`, `--type-delta-strong`: в тёмной акцент, в светлой
+  SemiBold), «?» рядом с ней — общий знак `pairNode({ hint })`, как у карточек сегментов: размер и место в обеих темах одни
+*/
 
 /* Портрет роли — круг 120 px в левой колонке плитки над VOC (раньше 40 px в шапке, J-169); без портрета — тихая заглушка с иконкой */
 .role-card__avatar {
@@ -771,10 +780,6 @@
   justify-content: flex-start;
 }
 
-/* Пустая роль — портрет сразу под названием, надпись под ним: место не зависит от высоты соседней плитки */
-.role-card__lead--empty > .role-card__avatar {
-  margin-block: 0;
-}
 
 @media (max-width: 1100px) {
   .page-view[data-page='roles'] > .column {
@@ -862,4 +867,11 @@
 .role-card__side {
   --sparkline-dot: calc(var(--space-1) * 0.75);
   --sparkline-band-filter: none;
+  /*
+    Один зелёный (правка пользователя): заливка «выше плана» — цветом коридора, от его плотности к нулю, а не своим
+    #00CC88; над пиком — 32 px вместо 20: подпись самой высокой точки не прижимается к верху плитки и названию роли
+  */
+  --sparkline-plan-fill-positive: var(--sparkline-corridor);
+  --sparkline-plan-fill-positive-opacity: 1;
+  --sparkline-label-room: var(--space-8);
 }

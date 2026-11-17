@@ -16,7 +16,7 @@ import { appendAll, element } from '../ui/dom.js';
 import { formatVoc } from '../core/format.js';
 import { voc, vocDelta } from '../core/metrics.js';
 import { withFilter } from '../state/url-state.js';
-import { planFor } from '../core/plan.js';
+import { planFor, planStatus } from '../core/plan.js';
 import { badgeNode, hoverThrough, countGroupNode, setPlanGlow, statusGlow, trendTone, forecastNode, leadNode, metaRowNode, pairNode, sufficiencyNode, trendNode } from './metric-card.js';
 import { sharedTrendDomain, trendDirection, trendStep, trendSteps, trendValues } from '../core/segment-trend.js';
 import { sampleSufficiency } from '../core/sufficiency.js';
@@ -63,7 +63,7 @@ function render(block, context, index) {
   /* Статус плана — бейджем словами справа в шапке, как у карточки канала (было — точка) */
   const planBadge = badgeNode(voc(rows), plan);
   block.setHead({ note: planBadge });
-  setPlanGlow(block, statusGlow(voc(rows), plan, rows));
+  setPlanGlow(block, statusGlow(voc(rows), plan, rows), planStatus(voc(rows), plan));
 
   /* Выбрана — когда фильтр равен ровно этому сегменту: при двух выбранных ни одна карточка не «нажата» */
   const chosen = state.filters?.[SEGMENT] ?? [];
@@ -98,8 +98,8 @@ function render(block, context, index) {
   const series = steps.length ? segments.map((segment) => (segment ? trendSeries(context, segment, steps) : null)) : [];
   const values = series[index]?.values ?? [];
   const domain = sharedTrendDomain(series.filter(Boolean));
-  /* Цвет тренда — направление динамики, мало оценок — серый (`trendTone`): план показывают бейдж и свечение */
-  const tone = trendTone(rows, trendDirection(values));
+  /* Цвет тренда — статус плана карточки (ниже — красный, выше — зелёный, в плане — серый), без плана — направление */
+  const tone = trendTone(rows, { status: planStatus(voc(rows), plan), direction: trendDirection(values) });
   const trend = steps.length ? trendNode(values, steps, trendStep(context.period), { tone, domain }) : null;
   /* Тренд — своей зоной справа под бейджем, число и объём — слева у нижнего края (metrics.css, `.metric--with-trend`) */
   if (trend) toggle.classList.add('metric--with-trend');
@@ -111,7 +111,7 @@ function render(block, context, index) {
     sizer.append(sizerBadge);
     trend.append(sizer);
   }
-  appendAll(toggle, pairNode(formatVoc(voc(rows)), leadNode(delta, { strong: true })), metaRowNode(countGroupNode(rows.length, previous?.length, context.period), forecast, warning), trend);
+  appendAll(toggle, pairNode(formatVoc(voc(rows)), leadNode(delta, { strong: true }), undefined, { hint: forecast }), metaRowNode(countGroupNode(rows.length, previous?.length, context.period), warning), trend);
   /* aria-label кнопки заменяет её текст: прогноз и пометку выборки screen reader иначе не услышит */
   if (forecast) toggle.setAttribute('aria-label', `${toggle.getAttribute('aria-label')}. Период не закончен: ${forecast.dataset.forecast.toLowerCase()}`);
   if (warning) toggle.setAttribute('aria-label', `${toggle.getAttribute('aria-label')}. Мало оценок: ${warning.dataset.threshold.toLowerCase()}`);

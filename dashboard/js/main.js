@@ -172,7 +172,7 @@ function groupFromSlot(spec) {
 }
 
 
-const HOST_IDS = ['header', 'metrics', 'main', 'rail-main', 'drivers', 'problems', 'full',
+const HOST_IDS = ['header', 'page-meta', 'metrics', 'main', 'rail-main', 'drivers', 'problems', 'full',
   'digest-top', 'digest-segments', 'digest-dko', 'digest-side', 'roles'];
 
 function pageHosts() {
@@ -277,6 +277,8 @@ function renderPageHeader(env, context) {
   const { hosts, source, channels, label, reference } = env;
   const { state, setState, period, dimensions } = context;
   renderHeader(hosts.header, {
+    /* J-?: строка заголовка страницы — вне закреплённой шапки, прокручивается со страницей */
+    metaHost: hosts['page-meta'],
     /* J-168: на странице ролей фильтры, кэшбек и база дельт не действуют — в шапке только канал и период */
     slim: state.page === 'roles',
     /* Заголовок страницы — имя пункта меню; на экране — у вида главной, у остальных его называет первая карточка */

@@ -90,8 +90,7 @@
   Подпись строки — в одну строку с многоточием, полная — в подсказке (R-47). Названия с одинаковым видимым началом
   режутся посередине (cutSameStarts в antidrivers.js): видны начало и конец, строки различимы без наведения
 */
-.heatmap__row-label,
-.heatmap__freq-label {
+.heatmap__row-label {
   display: block;
   max-width: calc(var(--heatmap-row-title-width) - var(--heatmap-fade));
   overflow: hidden;
@@ -129,7 +128,8 @@
   opacity: 1;
 }
 
-.heatmap__date {
+.heatmap__date,
+.heatmap__freq-date {
   min-width: var(--heatmap-cell-width);
   color: var(--color-text-tertiary);
   font: var(--type-axis);
@@ -246,8 +246,7 @@
 }
 
 /* Платформа версии — тихой меткой справа, колонкой напротив номеров: одинаковые номера iOS и Android различимы */
-.heatmap__os,
-.heatmap__freq-os {
+.heatmap__os {
   flex: none;
   margin-inline-start: auto;
   padding: 0 var(--space-1);
@@ -293,7 +292,7 @@
   (порог горячей, 50 %) и выше; к краю — прозрачный. Отдельной подсветки выбранного дня нет
 */
 :root[data-theme='light'] .antidriver-heatmap .heatmap-cell--good:not(.heatmap-cell--muted) {
-  --good-core: color-mix(in srgb, var(--heatmap-good-hot) clamp(0%, calc((var(--heat-strength, 0%) - 25%) * 4), 100%), var(--heatmap-good-soft));
+  --good-core: color-mix(in srgb, var(--heatmap-good-hot) var(--heat-strength, 0%), var(--heatmap-good-soft));
   --cell-rim: var(--good-core);
   background: radial-gradient(var(--heatmap-good-shape), var(--good-core), color-mix(in srgb, var(--good-core) var(--heatmap-good-mid), transparent) var(--heatmap-good-mid-stop), transparent);
 }
@@ -320,18 +319,30 @@
 }
 
 /*
-  Частотность — вторая таблица под картой VOC (frequencyBody): оценки с упоминанием строки в каждом интервале,
-  простым текстом без пилюли, фона и заливки, по центру колонки шага. Заголовок «Упоминаний» отделён от карты отступом
+  Частотность — справа от колонок VOC в тех же строках (frequencyCells): после линии — те же интервалы, простым
+  текстом без пилюли, фона и заливки. Над группой — заголовок «Упоминаний»; линия — правая граница узкой колонки-зазора
 */
-.heatmap .heatmap__freq-head th {
-  padding-block: var(--space-4) var(--space-1);
+.heatmap .heatmap__freq-gap {
+  width: var(--space-4);
+  min-width: var(--space-4);
+  border-inline-end: var(--hairline) solid var(--color-border-strong);
+}
+
+.heatmap .heatmap__group {
+  padding-block-end: var(--space-1);
   color: var(--color-text-tertiary);
   font: var(--type-axis);
   letter-spacing: var(--tracking-axis);
+  text-align: start;
+}
+
+.heatmap .heatmap__freq-group,
+.heatmap .heatmap__freq-date,
+.heatmap .heatmap__freq {
+  padding-inline-start: var(--space-3);
 }
 
 .heatmap .heatmap__freq {
-  height: var(--space-6);
   color: var(--color-text-list);
   font: var(--type-caption);
   letter-spacing: var(--tracking-caption);

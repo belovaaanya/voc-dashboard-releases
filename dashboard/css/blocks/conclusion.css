@@ -103,6 +103,23 @@
   pointer-events: none;
 }
 
+/*
+  Обводка 1 px по макету: в макете слой свечения лежит и на рамке — у нижнего края она цвета свечения и гаснет к верху.
+  Кольцо-маска толщиной рамки поверх неё тем же градиентом (как кольцо тона у сегментов)
+*/
+.card--summary[data-conclusion-tone]:not(:has(.state))::after {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--card-border-width, var(--hairline)));
+  padding: var(--card-border-width, var(--hairline));
+  border-radius: inherit;
+  background: radial-gradient(var(--summary-glow-shape), var(--summary-core), var(--summary-mid) 22%, var(--summary-soft) 44%, transparent);
+  -webkit-mask: linear-gradient(currentColor 0 0) content-box, linear-gradient(currentColor 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(currentColor 0 0) content-box exclude, linear-gradient(currentColor 0 0);
+  pointer-events: none;
+}
+
 /* J-63: источник в шапке — подсказка, как подпись шапки `card__note`, а не текст вывода */
 .summary-source {
   color: var(--color-text-tertiary);
