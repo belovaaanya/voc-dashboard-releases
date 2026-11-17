@@ -11,16 +11,12 @@
 
 .tone--positive {
   --tone: var(--color-positive);
-  /*
-    Исключение J-70 — решение пользователя по макету «VOC ролей»: блок может задать свой текст тона
-    (`--positive-ink` / `--negative-ink`) только для текста не мельче 14 px SemiBold — дельта VOC у числа плитки роли
-  */
-  --tone-ink: var(--positive-ink, var(--color-positive-ink));
+  --tone-ink: var(--color-positive-ink);
 }
 
 .tone--negative {
   --tone: var(--color-negative);
-  --tone-ink: var(--negative-ink, var(--color-negative-ink));
+  --tone-ink: var(--color-negative-ink);
 }
 
 .tone--neutral {
@@ -146,12 +142,12 @@
 
 /*
   Дельта VOC карточек метрик (редизайн пользователя): цвета макета — в светлой теме светлее ink (`--color-delta-*`), поэтому
-  текст не меньше 14 px SemiBold (общая роль `--type-text-bold`, `--weight-strong`) — решение пользователя, исключение из AA
-  описано в test/theme.test.js
+  текст не меньше 14 px SemiBold — решение пользователя, исключение из AA описано в test/theme.test.js. Роль
+  `--type-delta-strong`: в светлой SemiBold, в тёмной (цвета — тона темы, AA проходит) — акцент темы, тоньше (правка 17.11)
 */
 .delta--strong {
-  font: var(--type-text-bold);
-  letter-spacing: var(--tracking-text-bold);
+  font: var(--type-delta-strong);
+  letter-spacing: var(--tracking-delta-strong);
 }
 
 .delta--strong.tone--positive {

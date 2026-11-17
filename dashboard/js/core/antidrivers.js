@@ -116,19 +116,6 @@ export function frequentElements(ratings, project, label, dimension = 'trigger')
 }
 
 /**
- * Частотность строк карты за период: упоминания — те же, по которым идёт порядок (`frequentElements`),
- * доля — от всех оценок среза, в процентах. Пишется в строки карты (`row.frequency`).
- */
-export function withFrequency(heatmap, ranked, total) {
-  const mentions = new Map(ranked.map(({ key, mentions: count }) => [key, count]));
-  for (const row of heatmap.rows) {
-    const count = mentions.get(row.key) ?? 0;
-    row.frequency = { mentions: count, share: total ? (count / total) * 100 : null };
-  }
-  return heatmap;
-}
-
-/**
   J-149 → один список: строки версий нескольких ОС — одной картой по частотности, как у одной ОС
   (больше оценок — выше, при равенстве — по ключу). Ячейки каждая ОС считает сама: урон и влияние —
   внутри своей платформы, номера версий iOS и Android независимы

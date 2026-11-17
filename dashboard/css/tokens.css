@@ -106,6 +106,9 @@
   --funnel-stream: #8C9BC8;
   --funnel-core: #F4F6FB;
   --funnel-beam: #FFFFFF;
+  /* Серый луч воронки по макету «Конверсии опроса» (Figma 5366:8608): светлая середина к серому краю; в тёмной — те же ступени светлым по тёмному */
+  --funnel-gray-mid: rgba(255, 255, 255, 0.07);
+  --funnel-gray-edge: rgba(255, 255, 255, 0.2);
   /* Палитра календаря J-20: мятный, жёлтый и оранжевый тегов и точек ленты */
   --calendar-mint: #85E294;
   --calendar-yellow: #DBED99;
@@ -146,9 +149,6 @@
   --color-plan-band-mid: rgba(195, 243, 205, 0.05);
   --color-plan-band: rgba(87, 210, 112, 0.14);
   --plan-band-gradient: linear-gradient(90deg, transparent, var(--color-plan-band-mid) 30%, var(--color-plan-band) 75%);
-  /* Дельта VOC у числа плитки роли: в тёмной — текст тона, как везде */
-  --role-delta-positive: var(--color-positive-ink);
-  --role-delta-negative: var(--color-negative-ink);
 
   /* Шкала отступов: только кратное 4 (V-02) */
   --space-1: 4px;
@@ -203,19 +203,27 @@
 
   /* Неделя 16–22.11, по обратной связи «числа жирнее»: все роли значений — одно начертание Regular 400 (было Light 300;
      value и value-lg перевела «Шапка», #171) — уже подключённое начертание Styrene A, без новых */
-  --type-display: 400 96px/1 var(--font-numbers);
+  /*
+    J-?: роли Styrene тоже по правилу «тёмная тема на шаг тоньше»: заголовок блока 300 / 400, заголовок страницы
+    400 / 500, причина вывода 300 / 400, крупные числа 300 / 400 (тёмная / светлая; числа — решение пользователя 17.11)
+  */
+  --weight-numbers: 300;
+  --weight-title: 300;
+  --weight-page-title: 400;
+  --weight-cause: 300;
+  --type-display: var(--weight-numbers) 96px/1 var(--font-numbers);
   /* Крупное значение карточки канала: до 96 px, пока справа помещается дельта (68 px с зазором); 100cqi — ширина карточки, «4,90» с запасом — 2,03 кегля */
-  --type-display-fit: 400 clamp(56px, calc((100cqi - 68px) / 2.03), 96px)/1 var(--font-numbers);
-  --type-value: 400 48px/1 var(--font-numbers);
+  --type-display-fit: var(--weight-numbers) clamp(56px, calc((100cqi - 68px) / 2.03), 96px)/1 var(--font-numbers);
+  --type-value: var(--weight-numbers) 48px/1 var(--font-numbers);
   /* J-165: VOC карточки роли — между значением карточки (48) и итогом дайджеста (96) */
-  --type-value-lg: 400 72px/1 var(--font-numbers);
-  --type-value-sm: 400 28px/1.1 var(--font-numbers);
-  --type-title: 300 14px/1.4 var(--font-headings);
+  --type-value-lg: var(--weight-numbers) 72px/1 var(--font-numbers);
+  --type-value-sm: var(--weight-numbers) 28px/1.1 var(--font-numbers);
+  --type-title: var(--weight-title) 14px/1.4 var(--font-headings);
   /* J-168: заголовок страницы в карточке-шапке (VOC ролей) — крупнее заголовка блока */
   /* J-?: по редизайну — Medium 500, 24/31,2 (Figma 5362:768) */
-  --type-page-title: 500 24px/1.3 var(--font-headings);
+  --type-page-title: var(--weight-page-title) 24px/1.3 var(--font-headings);
   /* Причина главного вывода: обычная причина («Отправка рублевого платежа юридическому лицу») — в две строки на 1440 (≈235 px текста; в 18 px — три строки, в 24 px — четыре) */
-  --type-cause: 400 16px/1.3 var(--font-headings);
+  --type-cause: var(--weight-cause) 16px/1.3 var(--font-headings);
   /*
     J-?: начертания Manrope — по ролям, а не по блокам: текст, акцент, логотип. Светлый текст на тёмном читается
     жирнее, поэтому тёмная тема на шаг тоньше светлой: текст 300 / 400, акцент 400 / 500; логотип 700 в обеих.
@@ -236,6 +244,8 @@
   --type-caption-strong: var(--weight-accent) 12px/1.4 var(--font-sans);
   --type-text-bold: var(--weight-strong) 14px/1.4 var(--font-sans);
   --type-caption-bold: var(--weight-strong) 12px/1.4 var(--font-sans);
+  /* Дельта VOC у крупного числа (правка пользователя 17.11): в тёмной — акцент темы, тоньше; в светлой — SemiBold (ниже) */
+  --type-delta-strong: var(--weight-accent) 14px/1.4 var(--font-sans);
   --type-quote: italic var(--weight-accent) 12px/1.4 var(--font-sans);
   --type-axis: var(--weight-text) 11px/1.2 var(--font-sans);
   /* Значения «Конверсии опроса» — текстом: луч несёт форму, числа не спорят с ним (200 из набора убран) */
@@ -244,6 +254,11 @@
   --type-caption-inverse: var(--weight-accent-inverse) 12px/1.4 var(--font-sans);
   /* Число горячей пилюли «Топ проблем»: в тёмной теме — акцент роли, в светлой — strong (макет 5366:8325) */
   --type-pill-hot: var(--weight-accent) 12px/1.4 var(--font-sans);
+  /*
+    Название проблемы в таблице плитки «VOC ролей»: в тёмной — текст (правка пользователя к 1.4.20: акцент читался
+    жирно), в светлой — акцент, Medium макета; светлую пользователь просил не трогать
+  */
+  --type-role-problem: var(--weight-text) 12px/1.4 var(--font-sans);
 
   /*
     Трекинг — у каждой роли свой, в em, по кеглю (docs/visual-style.md, «Трекинг»): чем крупнее, тем плотнее,
@@ -267,6 +282,7 @@
   --tracking-text: 0.005em;
   --tracking-text-strong: 0.005em;
   --tracking-text-bold: 0.005em;
+  --tracking-delta-strong: 0.005em;
   /* 12 px без разрядки читается сжатым */
   --tracking-caption: 0.02em;
   --tracking-caption-strong: 0.02em;
@@ -275,6 +291,7 @@
   --tracking-caption-inverse: 0.02em;
   --tracking-quote: 0.02em;
   --tracking-pill-hot: 0.02em;
+  --tracking-role-problem: 0.02em;
   --tracking-axis: 0.03em;
   /* Подпись только из цифр и дат в тесном месте (концы линии сегмента) — без разрядки: у цифр свой шаг */
   --tracking-numeric: 0em;
@@ -440,15 +457,8 @@
   --heat-zone-tone-2: 67%;
   --heat-zone-tone-3: 100%;
   --heat-zone-muted-opacity: 0.45;
-  /*
-    J-348: плитки-сводки над «Топ проблем» — нейтральный приглушённый тон столбиков и воронки; в кольце эмоций негатив —
-    приглушённым тоном негатива, нейтрально и позитив — оттенками поверхности
-  */
+  /* J-348: плитки-сводки над «Топ проблем» — нейтральный приглушённый тон столбиков и воронки (кольцо эмоций — токены --plan-days-*) */
   --tile-fill: var(--color-border-strong);
-  --tile-tone-negative-share: 55%;
-  --tile-tone-negative: color-mix(in srgb, var(--color-negative) var(--tile-tone-negative-share), var(--color-border-strong));
-  --tile-tone-neutral: var(--color-border-strong);
-  --tile-tone-positive: var(--color-text-tertiary);
   /*
     Горячая пилюля шага «Топ проблем» — ступени, поправленные в макете светлой темы (5366:8325) руками, по силе:
     5 — мягкая: светлое ядро 60 %, тёмное число; 4 — светлое ядро, середина ядро+тон 55 %, белое число; 3–1 — тон в
@@ -519,7 +529,10 @@
   --heatmap-bad-shape: ellipse 58% 120% at 50% 50%;
   --heatmap-hot-shape: ellipse 73% 152% at 50% 50%;
   --heatmap-good-hot: #45CE65;
-  --heatmap-good-hot-fill: radial-gradient(ellipse 84% 92% at 50% 50%, #45CE65, #6DD77C 22%, #95DF93 44%, rgba(153, 241, 152, 0));
+  --heatmap-good-soft: #95DF93;
+  --heatmap-good-shape: ellipse 84% 92% at 50% 50%;
+  --heatmap-good-mid: 70%;
+  --heatmap-good-mid-stop: 44%;
   /* Рамка карточки прямой речи тише общей кромки тона: пять карточек подряд не сливаются в красную полосу */
   --verbatim-rim: 28%;
   /* J-73: основа плитки «Топ проблем» под заливкой тона; в светлой теме — белая, без серой подложки */
@@ -573,7 +586,8 @@
 
   /* График VOC — замеры Figma node 3204:2865 */
   /* Неделя 16–22.11: область графика выше на 18 % (168 → 198), блок растёт на 30 */
-  --chart-plot-height: 252px;
+  /* Правка пользователя к 1.4.20: ещё выше — 288 (область 198 → 234) */
+  --chart-plot-height: 288px;
   --chart-tooltip-max: 220px;
   /*
     Неделя 16–22.11 (макет пользователя): точка графика — 3×3 px, общий токен графиков страницы (динамика, мини-тренды
@@ -606,12 +620,10 @@
     в смеси с тоном получается мятный и розовый
   */
   --chart-line-neutral: var(--color-neutral);
-  --heatmap-row-title-width: 160px;
+  --heatmap-row-title-width: 200px;
   /* J-68: стык подписей с плитками и правый край — затуханием; пределы ширины колонки — в antidrivers.js */
   --heatmap-fade: 24px;
   --heatmap-cell-width: 80px;
-  /* Колонка «Упоминаний» справа от карты: «12 345 · 100,0 %» подписью — без переноса */
-  --heatmap-freq-width: 112px;
   /* J-71: пустая плитка heatmap (интервал без оценок) */
   --heat-cell-empty: var(--color-surface-sunken);
   /* Липкие подписи строк — тон левой части градиента карточки (J-15): плоский --color-surface читался бы полосой */
@@ -660,11 +672,18 @@
   /* J-?: тёмный текст на светлом не утолщается — начертания на шаг плотнее тёмной темы */
   --weight-text: 400;
   --weight-accent: 500;
+  --weight-numbers: 400;
+  --weight-title: 400;
+  --weight-page-title: 500;
+  --weight-cause: 400;
+  /* Цвета дельт макета светлее ink — только с 14 px SemiBold (исключение из AA, test/theme.test.js) */
+  --type-delta-strong: var(--weight-strong) 14px/1.4 var(--font-sans);
   --weight-accent-inverse: 400;
   --color-scheme: light;
   /* Горячая пилюля шага «Топ проблем» — только в светлой теме, по её макету */
   --pill-hot-on: 1;
   --type-pill-hot: var(--weight-strong) 12px/1.4 var(--font-sans);
+  --type-role-problem: var(--weight-accent) 12px/1.4 var(--font-sans);
 
   --workspace-fill: rgba(245, 246, 249, 0.97);
   --workspace-solid: #F3F4F6;
@@ -713,6 +732,8 @@
      с мягким ореолом потока; чёрного нет */
   --funnel-core: #8A85EC;
   --funnel-beam: #5F59D6;
+  --funnel-gray-mid: #E6E6E9;
+  --funnel-gray-edge: #B7B7B8;
   /* J-69, J-71: в светлой теме мятный и жёлтый плотнее, текст мятного и оранжевого — темнее; аварию сдвигает к янтарному */
   --calendar-mint: #2FBF71;
   --calendar-mint-ink: #00704B;
@@ -810,10 +831,4 @@
   --color-delta-negative: #F15D8F;
   --chart-grid: rgba(22, 23, 26, 0.08);
   --chart-line-neutral: #A9ADB6;
-  /*
-    Дельта VOC у числа плитки роли — цвета макета, решение пользователя (исключение J-70: контраст 2,0 и 3,1 на белом);
-    только для текста 14 px SemiBold (--type-text-bold). Дельты таблицы проблем (12 px) — ink темы
-  */
-  --role-delta-positive: #45CE65;
-  --role-delta-negative: #F15D8F;
 }

@@ -618,9 +618,9 @@
   min-width: 0;
 }
 
-/* Портрет — по центру левой колонки: по горизонтали и по высоте в промежутке между названием роли и VOC */
+/* Портрет — по левому краю колонки, как в макете; по высоте — посередине между названием роли и VOC */
 .role-card__lead > .role-card__avatar {
-  align-self: center;
+  align-self: flex-start;
   margin-block: auto;
 }
 
@@ -676,23 +676,20 @@
   min-height: 0;
 }
 
-/* J-165: VOC роли — 72 px */
+/* J-165: VOC роли — 72 px; в тёмной теме Light — общим --weight-numbers (правка пользователя к 1.4.20) */
 .role-card .metric__value {
   font: var(--type-value-lg);
   letter-spacing: var(--tracking-value-lg);
   white-space: nowrap;
 }
 
-/* Макет светлой темы: дельта VOC у числа 72 px — полужирным 14 px, а не подписью 12 px: пара с крупным числом не теряется */
-.role-card .metric__pair > .metric__lead {
-  font: var(--type-text-bold);
-  letter-spacing: var(--tracking-text-bold);
-}
+/* Дельта VOC — общая крупная дельта карточек (`delta--strong`, `--type-delta-strong`: в тёмной акцент, в светлой SemiBold) */
 
-/* Дельта VOC у числа — цвета макета (исключение J-70, решение пользователя): только эта пара, текст 14 px SemiBold */
-.role-card .metric__pair {
-  --positive-ink: var(--role-delta-positive);
-  --negative-ink: var(--role-delta-negative);
+/* Дельта VOC и «?» — одной строкой у верхнего края числа */
+.role-card__lead-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
 }
 
 /* Портрет роли — круг 120 px в левой колонке плитки над VOC (раньше 40 px в шапке, J-169); без портрета — тихая заглушка с иконкой */
@@ -761,9 +758,13 @@
 
 .role-card__problem-name {
   overflow-wrap: anywhere;
-  /* Макет светлой темы «VOC ролей»: название проблемы — акцентом строки, числа «Жалоб» — обычным */
-  font: var(--type-caption-strong);
-  letter-spacing: var(--tracking-caption-strong);
+  /*
+    Название проблемы — акцентом строки в светлой (макет), текстом в тёмной (на шаг тоньше); цвет — как названия
+    антидрайверов (`--color-text-list`: в тёмной второй уровень, а не чисто белый); числа «Жалоб» — обычным
+  */
+  color: var(--color-text-list);
+  font: var(--type-role-problem);
+  letter-spacing: var(--tracking-role-problem);
 }
 
 .role-card__lead--empty {
@@ -853,12 +854,6 @@
 }
 
 
-/* Одна строка под VOC роли: «· N с ОС» со знаком подсказки — одним элементом строки, переносится целиком */
-.role-card__feedback > .metric__hint,
-.role-card__feedback > .metric__warning {
-  margin-inline-start: var(--space-2);
-  vertical-align: middle;
-}
 
 /*
   Мини-линия плитки роли по макету пользователя (неделя 16–22.11): без свечения — коридор без размытия, точки 3×3.

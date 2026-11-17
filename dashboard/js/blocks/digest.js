@@ -20,8 +20,8 @@ import { icon } from '../ui/icons.js';
 import { MONTHS, formatBucket, formatCount, formatInterval, formatImpact, formatRatings, formatShare, formatVoc, plural } from '../core/format.js';
 import { roundDelta, roundImpact, roundVoc } from '../core/round.js';
 import { MOBILE_CHANNEL } from '../core/dimensions.js';
-import { MINIMUM_RATINGS, sampleSufficiency } from '../core/sufficiency.js';
-import { DELTA_SHAPES, GROWTH, countDeltaNode, countGroupNode, countNode, forecastLines, forecastNode, leadNode, metaRowNode, planCaptionNode, pairNode, planDotNode, valueNode } from './metric-card.js';
+import { MINIMUM_RATINGS } from '../core/sufficiency.js';
+import { DELTA_SHAPES, GROWTH, countDeltaNode, countGroupNode, countNode, forecastLines, forecastNode, sufficiencyNode, leadNode, metaRowNode, planCaptionNode, pairNode, planDotNode, valueNode } from './metric-card.js';
 import { ratingsForecast } from '../core/forecast.js';
 import { valueDelta } from '../components/value-delta.js';
 import { hoverTooltip } from '../components/hover-tooltip.js';
@@ -663,36 +663,42 @@ const FEEDBACK_HINT = [
 ];
 
 /*
-  Строка под числом — одна (решение пользователя: две строки и три значка — нагромождение): «N оценок ±N · N с ОС» и
-  один знак в конце. Всё, что раньше было отдельными значками, — в его подсказке: прогноз незаконченного месяца, малая
-  выборка (D-25), что такое «с ОС» и доля от 1–3. При малой выборке знак — иконка предупреждения вместо «?»: пометка
-  видна без наведения, значков по-прежнему один. «· N с ОС» со знаком переносится целиком
+  Строка под числом — одна: «N оценок ⚠ ±N · N с ОС» (решение пользователя: две строки и три значка — нагромождение).
+  Значки — те же, что у карточек сегментов: пометка малой выборки (D-25) — сразу после «N оценок»; «?» — у дельты VOC
+  (`roleHint`). «· N с ОС» переносится целиком
 */
 function roleMetaRow(role, data, hasPrevious) {
   const { feedback } = role;
-  const sample = sampleSufficiency(role.ratings);
-  const few = sample.n > 0 && !sample.sufficient;
+  const warning = sufficiencyNode(role.ratings, { focusable: true });
+  const count = hasPrevious ? countGroupNode(role.count, role.previousCount, data.period) : null;
+  /* Пометка — сразу за «N оценок», перед дельтой: внутри пары числа и дельты оценок */
+  if (warning && count) count.firstElementChild.after(warning);
+  const withFeedback = element('span', 'metric__meta role-card__feedback');
+  if (feedback.count === null) withFeedback.append(emptyValue('признак не вычислен'), ' с ОС');
+  else withFeedback.append(`${formatCount(feedback.count)} с ОС`);
+  return metaRowNode(...(count ? [count] : [countNode(role.count), warning, roleLead(null, false)]), withFeedback);
+}
+
+/*
+  «?» у дельты VOC — общий знак подсказки карточек сегментов (`metric__forecast`): прогноз незаконченного месяца,
+  «N с ОС — X % от оценок 1–3» и что входит в «с ОС». Фразы — строками не шире подсказки, доступное имя читает их целиком
+*/
+function roleHint(role, data, hasPrevious) {
+  const { feedback } = role;
   const forecast = hasPrevious ? forecastLines(role.count, role.previousCount, data.period) : null;
   const phrases = [
-    ...(few ? [['Мало оценок'], [`Меньше ${formatRatings(sample.minimumRatings)} за период`]] : []),
     ...(forecast ? [['Период не закончен'], forecast] : []),
     [feedback.count === null ? 'С ОС — признак не вычислен'
       : feedback.share === null ? `${formatCount(feedback.count)} с ОС — оценок 1–3 нет`
         : `${formatCount(feedback.count)} с ОС — ${formatShare(feedback.share)} от оценок 1–3`],
     ...FEEDBACK_HINT,
   ];
-  const lines = phrases.flat();
-  const mark = few ? element('span', 'metric__warning') : element('span', 'metric__hint', '?');
-  if (few) mark.append(icon('alert', 'metric__warning-icon'));
-  mark.setAttribute('role', 'img');
-  mark.setAttribute('aria-label', phrases.map((phrase) => phrase.join(' ')).join('. '));
-  mark.setAttribute('tabindex', '0');
-  hoverTooltip(mark, lines);
-  const withFeedback = element('span', 'metric__meta role-card__feedback');
-  if (feedback.count === null) withFeedback.append(emptyValue('признак не вычислен'), ' с ОС');
-  else withFeedback.append(`${formatCount(feedback.count)} с ОС`);
-  withFeedback.append(mark);
-  return metaRowNode(...(hasPrevious ? [countGroupNode(role.count, role.previousCount, data.period)] : [countNode(role.count), roleLead(null, false)]), withFeedback);
+  const hint = element('span', 'metric__forecast', '?');
+  hint.setAttribute('role', 'img');
+  hint.setAttribute('aria-label', phrases.map((phrase) => phrase.join(' ')).join('. '));
+  hint.setAttribute('tabindex', '0');
+  hoverTooltip(hint, phrases.flat());
+  return hint;
 }
 
 /*
@@ -722,7 +728,10 @@ export const digestRole = (index) => (block, context) => {
   /* J-163, J-165: VOC — крупным числом 72 px с дельтой справа; оценки — мелкой строкой под ним */
   const vocFigure = element('div', 'metric');
   const hasPrevious = role.countDelta !== null;
-  vocFigure.append(pairNode(vocText(role.voc), roleLead(role.delta, hasPrevious)),
+  /* Дельта VOC и «?» — одной группой у числа: «?» рядом с дельтой, как просил пользователь */
+  const deltaGroup = element('span', 'role-card__lead-delta');
+  deltaGroup.append(roleLead(role.delta, hasPrevious, { strong: true }), roleHint(role, data, hasPrevious));
+  vocFigure.append(pairNode(vocText(role.voc), deltaGroup),
     /* Оценки с дельтой — общей парой карточек метрик (J-280); без прошлого месяца — прочерк (J-172) */
     roleMetaRow(role, data, hasPrevious),
     ...(role.raw !== null && roundVoc(role.raw) !== roundVoc(role.voc) ? [metaRowNode(element('span', 'metric__meta', `${vocText(role.raw)} без поправки`))] : []));

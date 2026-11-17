@@ -26,33 +26,55 @@ const CSS_STOP = (name, at) => `var(--plan-days-${name}) ${at}%`;
   У SVG-обводки нет градиента вдоль окружности, поэтому кольцо — конический градиент
   с маской. Границы дуг — резкие: начало следующей стоит в той же точке, что конец прошлой
 */
-export function ringSectors(days) {
+function ringArcs(parts) {
+  const shown = parts.filter(({ value }) => value > 0);
+  const total = shown.reduce((sum, { value }) => sum + value, 0);
   let passed = 0;
-  return PARTS.filter(({ status }) => days[status] > 0).map(({ status }) => {
+  return shown.map(({ status, value }, index) => {
     const from = passed;
-    passed = status === PARTS.findLast((part) => days[part.status] > 0).status ? 100 : passed + (days[status] * 100) / days.total;
+    passed = index === shown.length - 1 ? 100 : passed + (value * 100) / total;
     return { status, from, to: passed };
   });
 }
 
-function ringNode(days) {
+export function ringSectors(days) {
+  return ringArcs(PARTS.map(({ status }) => ({ status, value: days[status] })));
+}
+
+function ringNode(parts) {
   const ring = element('div', 'plan-days__ring');
   ring.setAttribute('aria-hidden', 'true');
-  ring.style.setProperty('--plan-days-arcs', ringSectors(days)
+  ring.style.setProperty('--plan-days-arcs', ringArcs(parts)
     .flatMap(({ status, from, to }) => [CSS_STOP(`${status}-start`, from), CSS_STOP(`${status}-end`, to)])
     .join(', '));
   return ring;
 }
 
-function legendNode(days) {
-  const legend = element('ul', 'plan-days__legend');
-  for (const { status, caption, tone } of PARTS) {
-    const item = element('li', 'plan-days__item');
+function legendNode(parts, row) {
+  const legend = element(row ? 'div' : 'ul', 'plan-days__legend');
+  for (const part of parts) {
     /* J-198: точка → подпись → число: числа одной колонкой справа, вровень по правому краю */
-    item.append(legendMarker(tone, 'dot', { large: true }), element('span', 'plan-days__caption', caption), element('span', 'plan-days__count', formatCount(days[status])));
+    const cells = [legendMarker(part.tone, 'dot', { large: true }), element('span', 'plan-days__caption', part.caption), element('span', 'plan-days__count', part.count)];
+    const item = row ? row(part) : element('li');
+    item.classList.add('plan-days__item');
+    item.append(...cells);
     legend.append(item);
   }
   return legend;
+}
+
+/*
+  Кольцо с легендой «Дней относительно плана» — общий вид для долей из трёх частей (плитка «Эмоции» над «Топ проблем»):
+  `parts` — { status: 'below' | 'above' | 'in' (цвета дуги --plan-days-*), caption, tone (точка легенды), value, count }.
+  `row(part)` — свой элемент строки (кнопка выбора); без него строки — пункты списка
+*/
+export function ringLegend(parts, { row } = {}) {
+  const layout = element('div', 'plan-days');
+  /* Ячейка кольца: её ширину задаёт сетка — остаток после легенды, не больше токена */
+  const slot = element('div', 'plan-days__ring-slot');
+  slot.append(ringNode(parts));
+  layout.append(legendNode(parts, row), slot);
+  return layout;
 }
 
 /*
@@ -81,10 +103,5 @@ export function renderPlanDays(block, context) {
     block.setState(EMPTY, 'Нет плана на этот период.');
     return;
   }
-  const layout = element('div', 'plan-days');
-  /* Ячейка кольца: её ширину задаёт сетка — остаток после легенды, не больше токена */
-  const slot = element('div', 'plan-days__ring-slot');
-  slot.append(ringNode(days));
-  layout.append(legendNode(days), slot);
-  block.setContent(layout);
+  block.setContent(ringLegend(PARTS.map((part) => ({ ...part, value: days[part.status], count: formatCount(days[part.status]) }))));
 }

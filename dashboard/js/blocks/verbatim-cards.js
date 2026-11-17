@@ -24,8 +24,8 @@ import { earliestDate } from '../core/dates.js';
 import { holdPageHeight, releasePageHeight } from '../ui/page-height.js';
 import { CLASSIFICATION_HINTS, FEW_COMPLAINTS, HEAT_MIN_NEGATIVE, INTENSITY_HINTS, INTENSITY_LABELS, emotionsNoteFor, heatZones, inHeatZone, NEGATIVE_EMOTIONS, SHARP_INTENSITY, NO_CATEGORY_GROUP, NO_DOMAIN, PEAK_RULE, POSITIVE_GROUP, buildProblemCards, damageOf, negativeShare, emotionTone, heatOf } from '../core/verbatim.js';
 import { hotStep } from '../core/heat-scale.js';
-import { callStats } from '../core/call-stats.js';
-import { svgNode } from '../ui/dom.js';
+import { callFunnel, callStats } from '../core/call-stats.js';
+import { ringLegend } from './plan-days.js';
 
 let selectedCut = 'domainProblem';
 /*
@@ -400,9 +400,17 @@ function bucketCell(bucket, positive, gap, heatLevelOf, metric) {
   const withCount = metric !== 'count';
   const cell = element('td', `problem-table__count problem-table__step${withCount ? ' problem-table__step--with-count' : ''}${main === null ? ' problem-table__none' : ''}`);
   /*
-    Цветом на дашборде заливаются только средний VOC и урон: в «Частотности» и «Доле» пилюля нейтральная — рамка и
-    обычное число, без тона, свечения и горячих ступеней; в «Уроне» — заливка по силе
+    Цветом на дашборде заливаются только средний VOC и урон: в «Частотности» и «Доле» — просто число, без пилюли,
+    фона и рамки (как вторая таблица частотности у антидрайверов); в «Уроне» — пилюля с заливкой по силе
   */
+  if (metric !== 'damage') {
+    const shown = element('span', 'problem-table__step-main');
+    if (main === null) shown.append(emptyValue());
+    else shown.append(main);
+    cell.append(shown);
+    if (withCount) cell.append(element('small', 'problem-table__step-sub', bucket.count ? complaints(bucket.count) : 'нет жалоб'));
+    return cell;
+  }
   const level = value === null || metric !== 'damage' ? null : heatLevelOf(value);
   const strength = level === null ? null : HEAT_FLOOR + (1 - HEAT_FLOOR) * level;
   const pill = heatCell({ tone: level === null ? null : (positive ? 'good' : 'bad'), strength, className: 'problem-step-pill' });
@@ -861,8 +869,11 @@ const samePick = (left, right) => Boolean(left && right && left.zone === right.z
 function summaryTile(name, title, hint) {
   const node = element('section', `problem-tile problem-tile--${name}`);
   node.setAttribute('aria-label', title);
-  const head = element('p', 'problem-tile__title', title);
-  head.title = hint;
+  /* Шапка — как у карточек шапки страницы: заголовок ролью --type-title в строке --space-6 */
+  const head = element('div', 'problem-tile__head');
+  const heading = element('h3', 'problem-tile__title', title);
+  heading.title = hint;
+  head.append(heading);
   node.append(head);
   return node;
 }
@@ -870,11 +881,6 @@ const tileEmpty = (node, text) => {
   node.append(statusPanel('problem-tile__empty', { title: text, look: 'quiet' }));
   return node;
 };
-function tileValue(node, value, caption) {
-  const line = element('p', 'problem-tile__value');
-  line.append(element('strong', null, value), element('span', 'problem-tile__caption', caption));
-  node.append(line);
-}
 
 function pickButton(block, context, state, pick, className, label) {
   const button = element('button', className);
@@ -892,43 +898,56 @@ function pickButton(block, context, state, pick, className, label) {
   return button;
 }
 
-/* «Накал»: доля накалённых (выраженный и острый) среди размеченных комментариев жалоб и столбики накала негативного тона словами — «Нет / Слабый / Выраженный / Острый» */
+/*
+  «Накал»: строки накала негативного тона словами — «Нет / Слабый / Выраженный / Острый» — подпись, полоса по числу
+  жалоб, число (как воронка «Обзвона»); строка — кнопка выбора. Внизу — доля накалённых (выраженный и острый)
+*/
 function heatTile(block, context, state, rows) {
-  const node = summaryTile('heat', 'Накал', `Доля накалённых: выраженный и острый. ${HEAT_RULE}. Столбики — жалобы с негативным тоном по накалу: ${INTENSITY_LABELS.map((label) => label.toLowerCase()).join(', ')}; нажатие сужает топ и ленту`);
+  const node = summaryTile('heat', 'Накал', `Жалобы с негативным тоном по накалу: ${INTENSITY_LABELS.map((label) => label.toLowerCase()).join(', ')}; нажатие сужает топ и ленту. Доля накалённых: выраженный и острый. ${HEAT_RULE}`);
   const heat = heatOf(rows);
   const { zones } = heatZones(rows);
   if (!heat) return tileEmpty(node, 'Эмоции не размечены');
-  tileValue(node, heat.share === null ? `${formatCount(heat.sharp)} из ${formatCount(heat.labelled)}` : formatShare(heat.share), 'накалённых');
-  const bars = element('div', 'problem-tile__bars');
+  const bars = element('div', 'problem-tile__funnel');
   const max = Math.max(1, ...zones.map(({ count }) => count));
   for (const { zone, count } of zones) {
-    const button = pickButton(block, context, state, { zone }, 'problem-tile__bar', `${INTENSITY_LABELS[zone]} накал (${INTENSITY_HINTS[zone]}): ${complaints(count)}`);
+    const button = pickButton(block, context, state, { zone }, 'problem-tile__step problem-tile__bar', `${INTENSITY_LABELS[zone]} накал (${INTENSITY_HINTS[zone]}): ${complaints(count)}`);
     button.disabled = !count;
     button.style.setProperty('--bar-level', String(Math.round((count / max) * 100) / 100));
-    button.append(element('span', 'problem-tile__bar-fill'), element('span', 'problem-tile__bar-label', INTENSITY_LABELS[zone]));
+    button.append(element('span', 'problem-tile__step-label problem-tile__bar-label', INTENSITY_LABELS[zone]), element('span', 'problem-tile__step-bar'), element('span', 'problem-tile__step-value', formatCount(count)));
     bars.append(button);
   }
   node.append(bars);
+  const share = heat.share === null ? `${formatCount(heat.sharp)} из ${formatCount(heat.labelled)}` : formatShare(heat.share);
+  node.append(element('p', 'problem-tile__top problem-tile__value', `Накалённых: ${share}`));
   return node;
 }
 
-/* «Обзвон»: мини-воронка «1–3 → попытки → успешные»; счёт — core/call-stats.js, подробно — карточка «Статистика обзвона» */
+/*
+  «Обзвон»: воронка по убыванию от базы — оценки 1–3 = 100 %, попытки и успешные — доли от неё; у успешных в скобках
+  второстепенно — доля от попыток. Ступени и доли от предыдущей — `callFunnel` из core/call-stats.js (как в «Статистике
+  обзвона»), своего счёта нет: успешные от 1–3 — частное двух его ступеней. Подробно — карточка «Статистика обзвона»
+*/
+const FUNNEL_LABELS = { negative: 'Оценки 1–3', attempts: 'Попытки', success: 'Успешные' };
 function callTile(context, rows) {
-  const node = summaryTile('calls', 'Обзвон', 'Сниженные оценки 1–3, попытки звонка (экспертиза УИУКО) и успешные звонки за период. Поля «звонок» в выгрузке нет — попытка определяется по экспертизе');
+  const node = summaryTile('calls', 'Обзвон', 'Сниженные оценки 1–3 — база 100 %; попытки звонка (экспертиза УИУКО) и успешные звонки — доли от неё. Поля «звонок» в выгрузке нет — попытка определяется по экспертизе');
   const { total } = callStats(rows, context.verbatim.data, context.period, context.periodControl?.manifestPeriod ?? context.period);
   if (!total.attempts) return tileEmpty(node, 'Нет данных обзвона');
-  tileValue(node, formatShare(total.successShare), 'успешных от попыток');
   const funnel = element('div', 'problem-tile__funnel');
-  const steps = [
-    ['1–3', total.negative, formatCount(total.negative)],
-    ['Попытки', total.attempts, formatShare(total.attemptShare)],
-    ['Успешные', total.success, formatShare(total.successShare)],
+  const steps = Object.fromEntries(callFunnel(total).steps.map((step) => [step.key, step]));
+  const base = steps.negative;
+  const shown = [
+    { ...base, fromBase: 100 },
+    { ...steps.attempts, fromBase: steps.attempts.step.share },
+    { ...steps.success, fromBase: base.share ? (steps.success.share * 100) / base.share : null, note: steps.success.step },
   ];
-  for (const [label, count, text] of steps) {
-    const step = element('div', 'problem-tile__step');
-    step.style.setProperty('--bar-level', String(total.negative ? Math.round((count / total.negative) * 100) / 100 : 0));
-    step.append(element('span', 'problem-tile__step-label', label), element('span', 'problem-tile__step-bar'), element('span', 'problem-tile__step-value', text));
-    funnel.append(step);
+  for (const step of shown) {
+    const row = element('div', 'problem-tile__step');
+    row.title = `${FUNNEL_LABELS[step.key]}: ${formatCount(step.count)}`;
+    row.style.setProperty('--bar-level', String(Math.round(step.fromBase ?? 0) / 100));
+    const value = element('span', 'problem-tile__step-value', formatShare(step.fromBase));
+    if (step.note) value.append(' ', element('span', 'problem-tile__step-note', `(${formatShare(step.note.share)} от ${step.note.of})`));
+    row.append(element('span', 'problem-tile__step-label', FUNNEL_LABELS[step.key]), element('span', 'problem-tile__step-bar'), value);
+    funnel.append(row);
   }
   node.append(funnel);
   const more = element('button', 'problem-tile__details', 'Подробно');
@@ -939,10 +958,13 @@ function callTile(context, rows) {
   return node;
 }
 
-/* «Эмоции»: кольцо по тону размеченных комментариев таблицы; в центре — доля негатива, строкой — три частые негативные эмоции */
-const DONUT_RADIUS = 26;
+/*
+  «Эмоции»: тон размеченных комментариев таблицы — компонент «Дней относительно плана» (ringLegend): слева точки с
+  долями, справа градиентное кольцо. Строка легенды — кнопка выбора тона; ниже — три частые негативные эмоции
+*/
+const TONE_RING = { negative: { status: 'below', tone: 'negative' }, neutral: { status: 'in', tone: 'plan-in' }, positive: { status: 'above', tone: 'positive' } };
 function emotionTile(block, context, state, rows) {
-  const node = summaryTile('emotions', 'Эмоции', 'Тон размеченных комментариев таблицы: негатив, нейтрально, позитив. Сегмент или подпись сужают топ и ленту. Точные эмоции — в блоке «Эмоции» ниже: они размечены с меньшей уверенностью');
+  const node = summaryTile('emotions', 'Эмоции', 'Тон размеченных комментариев таблицы: негатив, нейтрально, позитив. Строка легенды сужает топ и ленту. Точные эмоции — в блоке «Эмоции» ниже: они размечены с меньшей уверенностью');
   const counts = Object.fromEntries(TONE_ORDER.map((tone) => [tone, 0]));
   const emotions = new Map();
   for (const row of rows) {
@@ -953,31 +975,14 @@ function emotionTile(block, context, state, rows) {
   }
   const total = TONE_ORDER.reduce((sum, tone) => sum + counts[tone], 0);
   if (!total) return tileEmpty(node, 'Эмоции не размечены');
-  const body = element('div', 'problem-tile__donut-row');
-  const svg = svgNode('svg', 'problem-tile__donut', { viewBox: '0 0 64 64', 'aria-hidden': 'true' });
-  const length = 2 * Math.PI * DONUT_RADIUS;
-  let offset = 0;
-  for (const tone of TONE_ORDER) {
-    const part = (counts[tone] / total) * length;
-    if (!part) continue;
-    svg.append(svgNode('circle', `problem-tile__arc problem-tile__arc--${tone}`, {
-      cx: 32, cy: 32, r: DONUT_RADIUS, 'stroke-dasharray': `${part} ${length - part}`, 'stroke-dashoffset': -offset,
-    }));
-    offset += part;
-  }
-  const center = element('span', 'problem-tile__donut-center', formatShare((counts.negative / total) * 100));
-  const donut = element('div', 'problem-tile__donut-box');
-  donut.append(svg, center);
-  const legend = element('div', 'problem-tile__legend');
-  for (const tone of TONE_ORDER) {
-    if (!counts[tone]) continue;
-    const share = formatShare((counts[tone] / total) * 100);
-    const button = pickButton(block, context, state, { tone }, `problem-tile__tone problem-tile__tone--${tone}`, `${TONE_NAMES[tone]}: ${comments(counts[tone])}, ${share}`);
-    button.append(element('span', 'problem-tile__tone-dot'), element('span', null, TONE_NAMES[tone]), element('span', 'problem-tile__tone-share', share));
-    legend.append(button);
-  }
-  body.append(donut, legend);
-  node.append(body);
+  const parts = TONE_ORDER.map((tone) => ({ ...TONE_RING[tone], key: tone, caption: TONE_NAMES[tone], value: counts[tone], count: formatShare((counts[tone] / total) * 100) }));
+  node.append(ringLegend(parts, {
+    row: (part) => {
+      const button = pickButton(block, context, state, { tone: part.key }, 'problem-tile__tone', `${part.caption}: ${comments(part.value)}, ${part.count}`);
+      button.disabled = !part.value;
+      return button;
+    },
+  }));
   const top = [...emotions].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0], 'ru')).slice(0, 3).map(([emotion]) => emotion);
   if (top.length) node.append(element('p', 'problem-tile__top', `Чаще: ${top.join(', ')}`));
   return node;

@@ -128,7 +128,8 @@ const barsAxisWidth = (bars) => Math.max(bars.spec.caption.length, bars.spec.for
   события, у остальных — число событий интервала
 */
 const LANE_HEIGHT = 10;
-const LANE_GAP = 4;
+/* Правка пользователя к 1.4.20: от оси дат до полосы событий — 12, а не 4: точки событий не липнут к подписям дат */
+const LANE_GAP = 12;
 const LANE_RADIUS = [2, 3, 4];
 const laneRadius = (level) => LANE_RADIUS[level - 1];
 const SIZE_HINT = {
@@ -574,25 +575,11 @@ function labelBox(node) {
 }
 
 /* Подписи измеряются один раз все вместе: замер каждой позиции по отдельности перестраивал layout на каждой точке */
-/*
-  Неделя 16–22.11: на главной подписаны только опорные точки — минимум, максимум, последняя и выбранные; значение
-  остальных — в подсказке. В «Для аналитика» подписи прежние: каждая точка, которой хватило места
-*/
-export function keyLabelIndices(series, state) {
-  const values = series.map(({ voc }) => voc);
-  const finite = values.flatMap((value, index) => (Number.isFinite(value) ? [index] : []));
-  if (!finite.length) return new Set();
-  const days = selectionDays(state);
-  const pick = (better) => finite.reduce((best, index) => (better(values[index], values[best]) ? index : best));
-  return new Set([pick((a, b) => a < b), pick((a, b) => a > b), finite.at(-1),
-    ...finite.filter((index) => days.some((day) => day >= series[index].from && day <= series[index].to))]);
-}
-
-function placePointLabels(group, series, points, plan, plot, only = null) {
+function placePointLabels(group, series, points, plan, plot) {
   const values = series.map(({ voc }) => voc);
   const finite = values.filter(Number.isFinite);
   const extremes = [Math.min(...finite), Math.max(...finite)];
-  const order = labelOrder(values).filter((index) => !only || only.has(index));
+  const order = labelOrder(values);
   const labels = order.map((index) => {
     const tone = pointTone(values[index], plan);
     const node = svgText(`chart-point-label chart-point-label--${tone}`, formatVoc(values[index]), { 'dominant-baseline': 'middle' });
@@ -815,9 +802,15 @@ function chartMode(block, context) {
   return lead;
 }
 
+/*
+  Правка пользователя к 1.4.20: пунктира прошлого периода нет ни на главной, ни в «Для аналитика» — ни на графике, ни в
+  легенде, и шкала VOC по нему не растягивается. Выгрузка колонку прошлого периода сохраняет. Вернуть — флагом
+*/
+export const SHOW_PREVIOUS_LINE = false;
+
 function chartLegend(context, { plan, hasPrevious, previous }) {
   /* Неделя 16–22.11: прошлый период — только в «Для аналитика»; на главной график без пунктира и его подписи */
-  const shownPrevious = hasPrevious && context.analyst;
+  const shownPrevious = SHOW_PREVIOUS_LINE && hasPrevious && context.analyst;
   const compared = comparedPeriod(context.previousPeriod, context.rows);
   const legend = element('div', 'chart-legend');
   /* J-85: прошлый период шире неполного текущего, на графике видна только его часть — её и подписываем */
@@ -856,7 +849,7 @@ function chartModel(context, scale, plan) {
     hasPrevious: previous.some(({ voc }) => voc !== null),
     plan: shownPlan,
     /* Неделя 16–22.11: прошлый период рисуется только в «Для аналитика» — на главной он не растягивает шкалу; выгрузка его сохраняет */
-    domain: chartDomain(current, context.analyst ? previous : [], shownPlan),
+    domain: chartDomain(current, SHOW_PREVIOUS_LINE && context.analyst ? previous : [], shownPlan),
   };
 }
 
@@ -876,7 +869,7 @@ function drawChart(block, context, stage, tooltip, model, size) {
   const { plot } = frame;
   const plan = damageMode ? null : model.plan;
   /* Неделя 16–22.11: пунктир прошлого периода — только в «Для аналитика» */
-  const hasPrevious = !damageMode && model.hasPrevious && context.analyst;
+  const hasPrevious = SHOW_PREVIOUS_LINE && !damageMode && model.hasPrevious && context.analyst;
   const domain = damageMode ? chartDomain(current, [], null) : model.domain;
   const currentPoints = plotPoints(current, { width: plot.width, height: plot.height, ...domain });
   const previousPoints = plotPoints(previous, { width: plot.width, height: plot.height, ...domain });
@@ -934,7 +927,8 @@ function drawChart(block, context, stage, tooltip, model, size) {
   tooltip.hidden = true;
   stage.querySelector('.chart-svg')?.remove();
   stage.prepend(svg);
-  placePointLabels(labels, current, currentPoints, plan, plot, context.analyst ? null : keyLabelIndices(current, context.state));
+  /* Правка пользователя к 1.4.20: подписи экстремумов — как в 1.4.19, на главной и в «Для аналитика» (сокращение отменено) */
+  placePointLabels(labels, current, currentPoints, plan, plot);
   appendEventCards(stage, svg, model.cards, current, currentPoints, plot, tooltip, interaction, context);
   if (focused) svg.querySelector(`[data-focus-date="${focused}"]`)?.focus();
 }

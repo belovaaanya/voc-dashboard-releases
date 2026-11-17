@@ -93,15 +93,19 @@ export function defaultCallMonth(months) {
 }
 
 /**
- * Ступени воронки месяца: оценки → 1–3 → попытки → успешные; `share` — доля от предыдущей ступени, у оценок — база
- * 100 %. `branch` — «недозвон или отказ», доля от попыток: ответвление, а не ступень — успех и он вместе дают попытки.
+ * Ступени воронки месяца: оценки → 1–3 → попытки → успешные. `share` — доля от всех оценок (база 100 %, правка
+ * пользователя 17.11: проценты убывают от 100 %), `step` — доля от предыдущей ступени с её именем `of` (второстепенно,
+ * «68 % от попыток»); у оценок и 1–3 её нет — предыдущая ступень и есть база. `branch` — «недозвон или отказ»:
+ * ответвление от попыток, а не ступень — успех и он вместе дают попытки; его `step` — от попыток.
  */
 export function callFunnel(month) {
+  const base = month.rated;
+  const step = (key, count, previous, of) => ({ key, count, share: shareOf(count, base), step: previous === null ? null : { share: shareOf(count, previous), of } });
   const steps = [
-    { key: 'rated', count: month.rated, share: month.rated > 0 ? 100 : null },
-    { key: 'negative', count: month.negative, share: shareOf(month.negative, month.rated) },
-    { key: 'attempts', count: month.attempts, share: month.attemptShare },
-    { key: 'success', count: month.success, share: month.successShare },
+    step('rated', month.rated, null),
+    step('negative', month.negative, null),
+    step('attempts', month.attempts, month.negative, '1–3'),
+    step('success', month.success, month.attempts, 'попыток'),
   ];
-  return { steps, branch: { key: 'failed', count: month.failed, share: shareOf(month.failed, month.attempts) } };
+  return { steps, branch: step('failed', month.failed, month.attempts, 'попыток') };
 }

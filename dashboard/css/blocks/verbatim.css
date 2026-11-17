@@ -868,76 +868,48 @@
 /*
   J-348: ряд плиток-сводок над таблицей «Топ проблем» («Для аналитика»): три равные плитки — «Накал», «Обзвон»,
   «Эмоции». Нейтральные, одним приглушённым тоном (цветом на дашборде — только VOC и урон); негатив в кольце —
-  приглушённым тоном негатива. Выбранный столбик или тон — рамкой цвета текста
+  кольцом «Дней относительно плана». Поверхность, поле, скругление, зазор и заголовок — как у карточек шапки
+  страницы (.card, .card__title), зазор между плитками — как в сетке шапки (--gap-section)
 */
 .problem-tiles {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-3);
+  gap: var(--gap-section);
 }
 
 .problem-tile {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-3);
-  border: var(--hairline) solid var(--color-card-border);
-  border-radius: var(--radius-popover);
+  gap: var(--space-3);
+  padding: var(--card-padding);
+  border: var(--card-border-width) solid var(--color-card-border);
+  border-radius: var(--radius-card);
+  background: var(--card-surface);
+  box-shadow: var(--card-shadow);
 }
 
-.problem-tile__title,
-.problem-tile__caption,
-.problem-tile__top {
+.problem-tile__head {
+  display: flex;
+  align-items: center;
+  min-height: var(--space-6);
+}
+
+.problem-tile__title {
   margin: 0;
   color: var(--color-text-secondary);
+  font: var(--type-title);
+  letter-spacing: var(--tracking-title);
+}
+
+/* Строка внизу плитки — как .metric__meta карточек шапки, прижата к низу: плитки ряда одной высоты */
+.problem-tile__top {
+  margin: auto 0 0;
+  color: var(--color-text-tertiary);
   font: var(--type-caption);
   letter-spacing: var(--tracking-caption);
 }
 
-.problem-tile__value {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-2);
-  margin: 0;
-}
-
-.problem-tile__value strong {
-  color: var(--color-text-strong);
-  font: var(--type-text-strong);
-  letter-spacing: var(--tracking-text-strong);
-}
-
-/* «Накал»: столбики 0–3 высотой по числу */
-.problem-tile__bars {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-1);
-  align-items: end;
-  height: calc(var(--space-10) + var(--space-4));
-}
-
-.problem-tile__bar {
-  display: flex;
-  height: 100%;
-  flex-direction: column;
-  justify-content: flex-end;
-  gap: calc(var(--space-1) / 2);
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--color-text-tertiary);
-  cursor: pointer;
-  font: var(--type-axis);
-  letter-spacing: var(--tracking-axis);
-}
-
-.problem-tile__bar-fill {
-  height: calc(var(--space-10) * var(--bar-level, 0));
-  min-height: var(--hairline);
-  border-radius: var(--radius-tag);
-  background: var(--tile-fill);
-}
 
 .problem-tiles-wrap {
   display: grid;
@@ -951,38 +923,47 @@
   letter-spacing: var(--tracking-axis);
 }
 
-.problem-tiles__since,
-.problem-tile__bars {
+.problem-tiles__since {
   min-width: 0;
 }
 
-.problem-tile__bar[aria-pressed='true'] .problem-tile__bar-fill {
-  box-shadow: 0 0 0 var(--focus-ring) var(--color-text-strong);
-}
-
-.problem-tile__bar[aria-pressed='true'],
-.problem-tile__bar:hover:not(:disabled) {
-  color: var(--color-text-strong);
+/* «Накал»: строка воронки — кнопка выбора; выбранная — подпись подчёркнута, не только цветом */
+.problem-tile__bar {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  text-align: start;
 }
 
 .problem-tile__bar:disabled {
   cursor: default;
 }
 
-/* «Обзвон»: мини-воронка — подпись, полоса долей от 1–3, значение */
+.problem-tile__bar:hover:not(:disabled) .problem-tile__step-label,
+.problem-tile__bar[aria-pressed='true'] .problem-tile__step-label {
+  color: var(--color-text-strong);
+}
+
+.problem-tile__bar[aria-pressed='true'] .problem-tile__step-label {
+  text-decoration: underline;
+}
+
+/* «Обзвон»: воронка от базы 1–3 — подпись, полоса доли от базы, доля (у успешных — доля от попыток тише) */
 .problem-tile__funnel {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-2);
 }
 
 .problem-tile__step {
   display: grid;
-  grid-template-columns: calc(var(--space-10) + var(--space-6)) minmax(0, 1fr) auto;
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
   gap: var(--space-2);
   align-items: center;
   color: var(--color-text-secondary);
-  font: var(--type-axis);
-  letter-spacing: var(--tracking-axis);
+  font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 .problem-tile__step-bar {
@@ -994,10 +975,20 @@
 
 .problem-tile__step-value {
   color: var(--color-text-strong);
+  font: var(--type-caption-strong);
+  letter-spacing: var(--tracking-caption-strong);
+  text-align: end;
+}
+
+.problem-tile__step-note {
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 .problem-tile__details {
   align-self: flex-start;
+  margin-block-start: auto;
   padding: 0;
   border: 0;
   background: none;
@@ -1012,88 +1003,45 @@
   color: var(--color-text-strong);
 }
 
-/* «Эмоции»: кольцо по тону и подписи-кнопки */
-.problem-tile__donut-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-.problem-tile__donut-box {
-  position: relative;
-  display: grid;
-  flex: 0 0 auto;
-  place-items: center;
-  width: calc(var(--space-8) * 2);
-  height: calc(var(--space-8) * 2);
-}
-
-.problem-tile__donut {
-  width: 100%;
-  height: 100%;
-  transform: rotate(-90deg);
-}
-
-.problem-tile__arc {
-  fill: none;
-  stroke-width: 10;
-}
-
-.problem-tile__arc--negative { stroke: var(--tile-tone-negative); }
-.problem-tile__arc--neutral { stroke: var(--tile-tone-neutral); }
-.problem-tile__arc--positive { stroke: var(--tile-tone-positive); }
-
-.problem-tile__donut-center {
-  position: absolute;
-  color: var(--color-text-strong);
-  font: var(--type-caption-strong);
-  letter-spacing: var(--tracking-caption-strong);
-}
-
-.problem-tile__legend {
-  display: grid;
-  gap: calc(var(--space-1) / 2);
+/* «Эмоции»: кольцо и легенда — ringLegend «Дней относительно плана»; строка легенды — кнопка выбора тона */
+.problem-tile--emotions .plan-days {
+  flex: 1 1 auto;
 }
 
 .problem-tile__tone {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: var(--space-1);
-  align-items: center;
-  padding: calc(var(--space-1) / 2) var(--space-1);
-  border: var(--hairline) solid transparent;
-  border-radius: var(--radius-tag);
+  padding: 0;
+  border: 0;
   background: none;
-  color: var(--color-text-secondary);
+  color: inherit;
   cursor: pointer;
-  font: var(--type-axis);
-  letter-spacing: var(--tracking-axis);
+  font: inherit;
   text-align: start;
 }
 
-.problem-tile__tone-dot {
-  width: var(--space-2);
-  height: var(--space-2);
-  border-radius: var(--radius-pill);
+.problem-tile__tone:disabled {
+  cursor: default;
 }
 
-.problem-tile__tone--negative .problem-tile__tone-dot { background: var(--tile-tone-negative); }
-.problem-tile__tone--neutral .problem-tile__tone-dot { background: var(--tile-tone-neutral); }
-.problem-tile__tone--positive .problem-tile__tone-dot { background: var(--tile-tone-positive); }
-
-.problem-tile__tone-share {
+/* Выбранный тон — не только цветом: подпись подчёркнута */
+.problem-tile__tone:hover:not(:disabled) .plan-days__caption,
+.problem-tile__tone[aria-pressed='true'] .plan-days__caption {
   color: var(--color-text-strong);
 }
 
-.problem-tile__tone:hover,
-.problem-tile__tone[aria-pressed='true'] {
-  border-color: var(--color-text-strong);
-  color: var(--color-text-strong);
+.problem-tile__tone[aria-pressed='true'] .plan-days__caption {
+  text-decoration: underline;
 }
 
 /* Узкий блок — плитки одна под другой */
 @container verbatim-problems (max-width: 960px) {
   .problem-tiles {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* R-50: плитка-сводка — поверхность карточки; при reduced transparency плотная */
+@media (prefers-reduced-transparency: reduce) {
+  .problem-tile {
+    background: var(--card-surface-solid);
   }
 }

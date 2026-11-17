@@ -14,8 +14,7 @@ import { legendItem, legendList } from '../components/legend.js';
 import { CALL_COLUMNS, callFunnel, callStats, defaultCallMonth } from '../core/call-stats.js';
 import { earliestDate, latestDate } from '../core/dates.js';
 import { MONTHS, formatCount, formatDate, formatShare, monthName, plural } from '../core/format.js';
-import { element, withFullLabel } from '../ui/dom.js';
-import { BEAM_HEADROOM, beamNode, flowHeight } from './conversion.js';
+import { element, svgNode, withFullLabel } from '../ui/dom.js';
 
 /* Выбранный месяц воронки — до закрытия страницы; нет его в периоде — последний полный (`defaultCallMonth`) */
 let selectedMonth = null;
@@ -78,49 +77,84 @@ function statsTable({ months, total }) {
   return table;
 }
 
-/* Ступени воронки: подпись капсом, крупно доля от предыдущей ступени, мелко число; полное — в подсказке и доступном имени */
+/*
+  Ступени воронки (правка пользователя 17.11 — 1 в 1 как «Конверсия опроса» макета): подпись капсом сверху, внизу крупно
+  доля от всех оценок (база 100 %, по убыванию), рядом второстепенно — доля от предыдущей ступени, под ними число
+*/
 const STEPS = {
-  rated: { short: 'Оценки', full: 'Все оценки среза — база воронки' },
+  rated: { short: 'Оценки', full: 'Все оценки среза — база воронки, 100 %' },
   negative: { short: '1–3', full: 'Сниженные оценки — доля от всех оценок' },
-  attempts: { short: 'Попытки звонка', full: 'Сниженные оценки с экспертизой УИУКО — доля от оценок 1–3' },
-  success: { short: 'Успешные', full: 'Экспертиза с установленной причиной — доля от попыток' },
-  failed: { short: 'Недозвон или отказ', full: 'Экспертиза «выявить / выяснить причину снижения не удалось» — доля от попыток' },
+  attempts: { short: 'Попытки звонка', full: 'Сниженные оценки с экспертизой УИУКО — доля от всех оценок, в скобках — от оценок 1–3' },
+  success: { short: 'Успешные', full: 'Экспертиза с установленной причиной — доля от всех оценок, в скобках — от попыток' },
+  failed: { short: 'Недозвон или отказ', full: 'Экспертиза «выявить / выяснить причину снижения не удалось» — доля от всех оценок, в скобках — от попыток' },
 };
 const RATINGS = ['оценка', 'оценки', 'оценок'];
-/* Колонки луча — четыре ступени поровну; ответвление стоит пятой колонкой вне луча (call-stats.css) */
-const FUNNEL_COLUMNS = [1, 1, 1, 1];
-/* Поток проявляется у левого края и к хвосту светлеет — как узкая «Конверсия опроса» */
-const FUNNEL_KEYS = [[0, 0], [0.12, 0.8], [0.55, 0.65], [0.85, 0.6], [1, 0.3]];
-/*
-  Ширина полосы — от оценок 1–3, а не от всех оценок: сниженных единицы процентов, и от всех оценок обзвон сжался бы в
-  нить сразу за базой. Оценки — широкий контекст, как MAU и опрос у «Конверсии опроса»; доля 1–3 названа числом
-*/
-const CONTEXT_HEIGHT = 1.05;
 
-function stepNode({ key, count, share }, className = '') {
+function stepNode({ key, count, share, step }, className = '') {
   const { short, full } = STEPS[key];
   const item = element('li', `call-funnel__step call-funnel__step--${key}${className}`);
   item.title = full;
   const caption = element('span', 'call-funnel__label', short);
   caption.setAttribute('aria-hidden', 'true');
-  const value = share === null ? emptyValue('нет базы') : element('span', 'call-funnel__value', formatShare(share));
+  const line = element('span', 'call-funnel__line');
+  line.append(share === null ? emptyValue('нет базы') : element('span', 'call-funnel__value', formatShare(share)));
+  if (step?.share !== null && step?.share !== undefined) line.append(element('span', 'call-funnel__step-share', `(${formatShare(step.share)} от ${step.of})`));
   const small = element('span', 'call-funnel__count', formatCount(count));
   small.append(element('span', 'visually-hidden', ` ${plural(count, RATINGS)}`));
-  item.append(caption, element('span', 'visually-hidden', `${full}: `), value, small);
+  item.append(caption, element('span', 'visually-hidden', `${full}: `), line, small);
   return item;
+}
+
+/*
+  Луч макета («поток · тело», Figma 5366:8608): один контур, размытый на 5, с радиальным градиентом от прозрачного у
+  левого края через светло-серый к серому. Высота на ступени — её доля от всех оценок (форма соответствует реальности),
+  не тоньше нити; между центрами колонок — плавный переход, после последней ступени — ровный хвост
+*/
+const FLOW = { width: 600, height: 145, pad: 10, thread: 0.45 };
+function flowNode(steps) {
+  const { width, height, pad, thread } = FLOW;
+  const inner = height - 2 * pad;
+  const mid = height / 2;
+  const base = steps[0].count;
+  const half = steps.map(({ count }) => Math.max(thread, base ? (inner * count) / base : 0) / 2);
+  const centers = steps.map((_, index) => pad + ((index + 0.5) * (width - 2 * pad)) / steps.length);
+  const edge = (sign) => {
+    let path = '';
+    for (let index = 1; index < steps.length; index += 1) {
+      const [x0, x1] = [centers[index - 1], centers[index]];
+      const cx = (x0 + x1) / 2;
+      path += ` C${cx} ${mid + sign * half[index - 1]} ${cx} ${mid + sign * half[index]} ${x1} ${mid + sign * half[index]}`;
+    }
+    return path;
+  };
+  const last = steps.length - 1;
+  let d = `M${pad} ${mid - half[0]} L${centers[0]} ${mid - half[0]}${edge(-1)} L${width - pad} ${mid - half[last]} L${width - pad} ${mid + half[last]} L${centers[last]} ${mid + half[last]}`;
+  for (let index = last; index > 0; index -= 1) {
+    const [x0, x1] = [centers[index], centers[index - 1]];
+    const cx = (x0 + x1) / 2;
+    d += ` C${cx} ${mid + half[index]} ${cx} ${mid + half[index - 1]} ${x1} ${mid + half[index - 1]}`;
+  }
+  d += ` L${pad} ${mid + half[0]} Z`;
+  const svg = svgNode('svg', 'call-funnel__flow', { viewBox: `0 0 ${width} ${height}`, preserveAspectRatio: 'none', 'aria-hidden': 'true', focusable: 'false' });
+  const defs = svgNode('defs');
+  const gradient = svgNode('radialGradient', null, { id: 'call-funnel-flow-fill', cx: 0, cy: 0, r: 1, gradientUnits: 'userSpaceOnUse', gradientTransform: `translate(${pad} ${mid}) scale(${width * 0.625} ${height * 2})` });
+  gradient.append(svgNode('stop', 'call-funnel__flow-stop call-funnel__flow-stop--clear', { offset: 0 }),
+    svgNode('stop', 'call-funnel__flow-stop call-funnel__flow-stop--mid', { offset: 0.43 }),
+    svgNode('stop', 'call-funnel__flow-stop', { offset: 1 }));
+  const blur = svgNode('filter', null, { id: 'call-funnel-flow-blur', x: 0, y: 0, width: width, height: height, filterUnits: 'userSpaceOnUse' });
+  blur.append(svgNode('feGaussianBlur', null, { stdDeviation: 5 }));
+  defs.append(gradient, blur);
+  svg.append(defs, svgNode('path', 'call-funnel__flow-body', { d, fill: 'url(#call-funnel-flow-fill)', filter: 'url(#call-funnel-flow-blur)' }));
+  return svg;
 }
 
 function funnelNode(month) {
   const { steps, branch } = callFunnel(month);
   const layout = element('div', 'call-funnel');
-  layout.style.setProperty('--beam-headroom', BEAM_HEADROOM);
-  const negative = steps.find(({ key }) => key === 'negative').count;
-  const heights = steps.map(({ key, count }) => (key === 'rated' ? CONTEXT_HEIGHT : flowHeight(count, negative)));
-  const beam = beamNode(steps, true, { heights, columns: FUNNEL_COLUMNS, keys: FUNNEL_KEYS, threadFrom: 'success', id: 'call-funnel-beam' });
   const list = element('ol', 'call-funnel__steps');
   list.setAttribute('role', 'list');
   list.append(...steps.map((step) => stepNode(step)), stepNode(branch, ' call-funnel__step--branch'));
-  layout.append(beam, list);
+  layout.append(flowNode(steps), list);
   return layout;
 }
 

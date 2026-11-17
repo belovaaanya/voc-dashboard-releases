@@ -13,7 +13,6 @@ import {
   frequentElements,
   mergeVersionHeatmaps,
   quarterPlan,
-  withFrequency,
   offersVersions,
   splitVersionKey,
   versionRowKey,
@@ -27,7 +26,7 @@ import { chartTooltip, showChartTooltip } from '../components/chart-tooltip.js';
 import { icon } from '../ui/icons.js';
 import { DIMENSIONS, OS_ANDROID, OS_IOS, osName } from '../core/dimensions.js';
 import { element, withOverflowTitle } from '../ui/dom.js';
-import { bindShortWords, formatBucket, formatCount, formatDate, formatDelta, formatInterval, formatImpact, formatNumber, formatShare, formatVoc, plural } from '../core/format.js';
+import { bindShortWords, formatBucket, formatCount, formatDate, formatDelta, formatInterval, formatImpact, formatNumber, formatVoc, plural } from '../core/format.js';
 import { focusChip } from '../components/focus-chip.js';
 import { focusedContext } from '../state/focus.js';
 import { withFilter } from '../state/url-state.js';
@@ -72,7 +71,7 @@ const pagination = new WeakMap();
   Хранится желаемая ширина; показывается она с поправкой на текущую ширину карты
 */
 const TITLE_WIDTH_KEY = 'voc.antidrivers.titleWidth';
-export const TITLE_WIDTH_MIN = 160;
+export const TITLE_WIDTH_MIN = 200;
 export const TITLE_WIDTH_MAX = 480;
 const TITLE_WIDTH_STEP = 16;
 const TITLE_WIDTH_SLACK = 2;
@@ -114,6 +113,52 @@ export function contentTitleWidth(labels, shown) {
   return Math.max(TITLE_WIDTH_MIN, overflow ? shown + overflow + TITLE_WIDTH_SLACK : shown);
 }
 
+/**
+  Обрезка посередине: видны начало и конец, между ними «…». `visible` — сколько знаков влезает вместе с «…»
+*/
+export function middleCut(text, visible) {
+  if (visible >= text.length) return text;
+  const kept = Math.max(2, visible - 1);
+  const head = Math.ceil(kept / 2);
+  return `${text.slice(0, head)}…${text.slice(text.length - (kept - head))}`;
+}
+
+/**
+  Названия, у которых видимое начало совпало: в многоточии справа их не различить. `labels` — [{ text, visible }],
+  результат — та же длина: строка с обрезкой посередине или null, если хватает обычного многоточия справа
+*/
+export function sameStartCuts(labels) {
+  const starts = new Map();
+  for (const { text, visible } of labels) {
+    if (visible >= text.length) continue;
+    const start = text.slice(0, Math.max(0, visible - 1));
+    starts.set(start, (starts.get(start) ?? 0) + 1);
+  }
+  return labels.map(({ text, visible }) => {
+    if (visible >= text.length) return null;
+    return starts.get(text.slice(0, Math.max(0, visible - 1))) > 1 ? middleCut(text, visible) : null;
+  });
+}
+
+/*
+  Подписи, обрезанные одинаково, — посередине: полный текст остаётся в подсказке и имени строки (withOverflowTitle).
+  Видимое число знаков — по доле показанной ширины; меряется после подгонки ширины колонки
+*/
+function cutSameStarts(view) {
+  const labels = [...(view.querySelectorAll?.('.heatmap__row-label, .heatmap__freq-label') ?? [])];
+  const shown = labels.map((label) => label.firstChild).filter((node) => node?.title !== undefined);
+  for (const node of shown) node.textContent = node.title;
+  const measured = shown.map((node) => {
+    const label = node.parentNode;
+    const full = label.scrollWidth;
+    const visible = full > label.clientWidth + 1 ? Math.floor((node.title.length * label.clientWidth) / full) - 1 : node.title.length;
+    return { text: node.title, visible };
+  });
+  sameStartCuts(measured).forEach((cut, index) => {
+    if (cut) shown[index].textContent = cut;
+  });
+}
+
 /** Показанная ширина и предел ручки — по текущей ширине карты: на узком экране подписи не закрывают плитки. */
 function applyTitleWidth(view, resizer, width, frameWidth) {
   const shown = clampTitleWidth(width, frameWidth);
@@ -142,15 +187,12 @@ function titleResizer(view, frame) {
   let shown = TITLE_WIDTH_MIN;
   const autoWidth = (width) => {
     applyTitleWidth(view, resizer, TITLE_WIDTH_MIN, width);
-    /* Подпись переносится на две строки только за пределом ручки: меряется в одну строку, иначе перенос прячет переполнение */
-    view.dataset.measureTitles = '';
-    const measured = contentTitleWidth(view.querySelectorAll?.('.heatmap__row-label') ?? [], TITLE_WIDTH_MIN);
-    delete view.dataset.measureTitles;
-    return measured;
+    return contentTitleWidth(view.querySelectorAll?.('.heatmap__row-label') ?? [], TITLE_WIDTH_MIN);
   };
   const fit = () => {
     const width = frameWidth();
     shown = applyTitleWidth(view, resizer, titleWidth ?? autoWidth(width), width);
+    cutSameStarts(view);
   };
   const set = (width) => {
     titleWidth = width === null ? null : clampTitleWidth(width, frameWidth());
@@ -343,14 +385,6 @@ function togglePick(context, pick, node) {
 */
 const HOT_LEVEL = 0.5;
 
-/* Выбранный день карты: колонка выбранной ячейки (J-128) или день, выбранный на графике (focus) */
-function selectedDay(context, column) {
-  const driver = normalizeDriver(context.state.driver);
-  if (driver?.from) return driver.from === column.from && driver.to === column.to;
-  const { focus } = context.state;
-  return Boolean(focus && column.from <= focus && focus <= column.to);
-}
-
 function heatmapCell(context, heatmap, row, column, cell, highlight, tooltip, view) {
   const label = rowLabel(context, row.key);
   const interval = formatInterval(column);
@@ -360,12 +394,11 @@ function heatmapCell(context, heatmap, row, column, cell, highlight, tooltip, vi
   const value = element('span', 'heatmap-cell__value', cell.voc === null ? null : facts.value);
   if (cell.voc === null) value.append(emptyValue());
   /*
-    Горячая ячейка — в светлой теме насыщенная заливка от центра и белое число, по макету (antidrivers.css).
-    Красная — от HOT_LEVEL силы; зелёная — только в выбранном дне: в макете салатовые обе стоят в выбранной колонке
+    Горячая ячейка (от HOT_LEVEL силы) — в светлой теме насыщенная заливка от центра и белое число (antidriver.css),
+    одинаково для красной и зелёной; отдельной подсветки выбранного дня нет
   */
-  const hotBad = highlight.tone === 'bad' && !highlight.muted && highlight.strength >= HOT_LEVEL;
-  const hotGood = highlight.tone === 'good' && !highlight.muted && selectedDay(context, column);
-  const hot = hotBad || hotGood ? 'antidriver-cell--hot' : null;
+  const hot = (highlight.tone === 'bad' || highlight.tone === 'good') && !highlight.muted && highlight.strength >= HOT_LEVEL
+    ? 'antidriver-cell--hot' : null;
   const node = heatCell({ clickable: true, tone, muted: highlight.muted, strength: highlight.tone ? highlight.strength : null, className: hot, content: value });
   const pick = pickOf(row.key, column);
   const picked = samePick(context.state.driver, pick);
@@ -491,7 +524,6 @@ function heatmapHead(columns, scale) {
   corner.append(element('span', 'visually-hidden', isVersionCut() ? 'Версия' : 'Элемент'));
   headRow.append(corner);
   for (const column of columns) headRow.append(element('th', 'heatmap__date', columnLabel(column, scale)));
-  headRow.append(element('th', 'heatmap__freq', 'Упоминаний'));
   head.append(headRow);
   return head;
 }
@@ -515,20 +547,6 @@ function rowPickButton(context, row, driver, tagged) {
   return button;
 }
 
-/*
-  Частотность строки за период — простым текстом справа от колонок, без пилюли и заливки: оценки с упоминанием
-  (по ним идёт порядок «По частотности») и доля от всех оценок среза. Колонка закреплена справа (antidrivers.css)
-*/
-function frequencyCell(frequency) {
-  const td = element('td', 'heatmap__freq');
-  if (!frequency) return td;
-  const count = formatCount(frequency.mentions);
-  const share = formatShare(frequency.share);
-  td.textContent = `${count} · ${share}`;
-  td.title = `Оценок с упоминанием за период: ${count} — ${share} от всех оценок среза`;
-  return td;
-}
-
 function heatmapRow(context, heatmap, row, highlights, { tooltip, view, tagged }) {
   const driver = normalizeDriver(context.state.driver);
   const rowPicked = Boolean(driver && driver.cut === selectedAntidriverDimension && driver.key === row.key);
@@ -542,8 +560,39 @@ function heatmapRow(context, heatmap, row, highlights, { tooltip, view, tagged }
     td.append(heatmapCell(context, heatmap, row, heatmap.columns[index], cell, highlights[index], tooltip, view));
     tr.append(td);
   });
-  tr.append(frequencyCell(row.frequency));
   return tr;
+}
+
+/*
+  Частотность — второй таблицей сразу под картой VOC, с теми же колонками шага: оценки с упоминанием строки в каждом
+  интервале. Простым текстом, без пилюли и заливки; в той же прокрутке и с той же липкой колонкой названий, поэтому
+  колонки совпадают при любой прокрутке
+*/
+function frequencyBody(context, heatmap, tagged) {
+  const body = element('tbody', 'heatmap__freq-body');
+  const head = element('tr', 'heatmap__freq-head');
+  const title = element('th', 'heatmap__row-title heatmap__freq-title', 'Упоминаний');
+  title.setAttribute('scope', 'rowgroup');
+  head.append(title);
+  body.append(head);
+  for (const row of heatmap.rows) {
+    const tr = element('tr');
+    const name = element('th', 'heatmap__row-title');
+    name.setAttribute('scope', 'row');
+    if (isVersionCut()) {
+      const { os, version } = splitVersionKey(row.key);
+      name.append(withOverflowTitle(element('span', 'heatmap__freq-label', version)));
+      if (tagged && os) name.append(element('span', 'heatmap__freq-os', OS_TAGS[os] ?? os));
+    } else name.append(withOverflowTitle(element('span', 'heatmap__freq-label', rowLabel(context, row.key))));
+    tr.append(name);
+    for (const cell of row.cells) {
+      const td = element('td', 'heatmap__freq', cell.mentions ? formatCount(cell.mentions) : null);
+      if (!cell.mentions) td.append(emptyValue());
+      tr.append(td);
+    }
+    body.append(tr);
+  }
+  return body;
 }
 
 function heatmapBody(context, { heatmap, calibration }, columnPlans, overlay) {
@@ -599,7 +648,11 @@ function heatmapView(context, shown, rerender, cutTabs, lead) {
   /* Подсказка — вне прокрутки карты: иначе у верхней строки её срезал бы край области прокрутки */
   const tooltip = chartTooltip({ centered: true });
   const table = element('table', 'heatmap');
-  table.append(heatmapHead(columns, shown.scale), heatmapBody(context, shown, columnPlans, { tooltip, view, tagged: shown.tagged }));
+  table.append(
+    heatmapHead(columns, shown.scale),
+    heatmapBody(context, shown, columnPlans, { tooltip, view, tagged: shown.tagged }),
+    frequencyBody(context, shown.heatmap, shown.tagged),
+  );
   const scroll = heatmapScroll(table, tooltip);
   const frame = element('div', 'heatmap-frame');
   const resizer = titleResizer(view, frame);
@@ -760,8 +813,7 @@ export function renderAntidrivers(block, context) {
       : viewContext.slice;
     const ranked = frequentElements(slice, project, viewContext.label, dimension.key);
     /* J-11: наиболее частотные элементы текущего периода, сначала десять. */
-    /* Частотность строки — те же упоминания, по которым идёт порядок, и доля от оценок среза (у версии — своей ОС) */
-    const heatmap = withFrequency(buildHeatmap(slice, viewContext.period, scale, project, ranked.map(({ key }) => key)), ranked, slice.length);
+    const heatmap = buildHeatmap(slice, viewContext.period, scale, project, ranked.map(({ key }) => key));
     return { ranked, heatmap };
   };
   const { heatmap } = isVersion ? mergeVersionHeatmaps(shownOs.map(partOf)) : partOf(null);
