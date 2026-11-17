@@ -706,8 +706,13 @@
   --type-pill-hot: var(--weight-strong) 12px/1.4 var(--font-sans);
   --type-role-problem: var(--weight-accent) 12px/1.4 var(--font-sans);
 
-  --workspace-fill: rgba(245, 246, 249, 0.97);
-  --workspace-solid: #F3F4F6;
+  /*
+    Подложка рабочей области — по редизайну (Figma 5366:8382, «Содержимое»): #EEEEF1 под бликом слева сверху.
+    Карточки прозрачны в центре, белая рамка 1 px читается только на этой подложке; на прежней почти белой
+    (rgba(245,246,249,.97)) рамка «Главного вывода» и соседних карточек сливалась с фоном
+  */
+  --workspace-fill: #EEEEF1;
+  --workspace-solid: #EEEEF1;
   --workspace-edge: rgba(255, 255, 255, 0.5);
   --workspace-highlight: rgba(255, 255, 255, 0.7);
   --workspace-shadow: rgba(17, 24, 39, 0.18);
