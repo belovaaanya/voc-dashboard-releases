@@ -75,6 +75,7 @@
 */
 .card--summary[data-conclusion-tone]:not(:has(.state)) {
   --summary-tone: var(--color-neutral);
+  --summary-shape: var(--summary-glow-shape);
   --summary-core: var(--summary-tone);
   --summary-mid: color-mix(in srgb, var(--summary-tone) var(--summary-glow-mid), var(--summary-glow-blend));
   --summary-soft: color-mix(in srgb, var(--summary-tone) var(--summary-glow-soft), var(--summary-glow-blend));
@@ -94,20 +95,36 @@
   --summary-tone: var(--color-negative);
 }
 
+/*
+  Снижение — своими токенами (`--summary-glow-negative-*`): в тёмной они повторяют общий ход тона, в светлой — макет 5408:2:
+  центр ниже нижней кромки, внутри карточки уже светлый розовый, к верху гаснет в прозрачный розовый
+*/
+.card--summary[data-conclusion-tone='negative']:not(:has(.state)) {
+  --summary-shape: var(--summary-glow-negative-shape);
+  --summary-core: var(--summary-glow-negative-core);
+  --summary-mid: var(--summary-glow-negative-mid);
+  --summary-soft: var(--summary-glow-negative-soft);
+  --summary-end: var(--summary-glow-negative-end);
+  --summary-mid-at: var(--summary-glow-negative-mid-at);
+  --summary-soft-at: var(--summary-glow-negative-soft-at);
+}
+
 .card--summary[data-conclusion-tone]:not(:has(.state))::before {
   content: '';
   position: absolute;
   inset: 0;
   z-index: -1;
   border-radius: inherit;
-  background: radial-gradient(var(--summary-glow-shape), var(--summary-core), var(--summary-mid) 22%, var(--summary-soft) 44%, transparent);
+  background: radial-gradient(var(--summary-shape), var(--summary-core), var(--summary-mid) var(--summary-mid-at, 22%),
+    var(--summary-soft) var(--summary-soft-at, 44%), var(--summary-end, transparent));
   pointer-events: none;
 }
 
 /*
   Обводка по макету (тёмная 5362:4100): рамка 1 px внутрь, линейный градиент по всему контуру сверху вниз —
   от цвета рамки карточек (5 % высоты) к тону направления (82 %), обе точки на 50 % (у остальных карточек 0,5 px).
-  Кольцо-маска поверх рамки карточки. В светлой (5366:8609) рамка вывода — белая 1 px, как у соседних карточек
+  Кольцо-маска поверх рамки карточки. В светлой — так же (решение пользователя, вместо белой рамки макета 5366:8609):
+  белая рамка на белом крае не читалась, а у карточек сегментов со свечением кромка в тоне есть и в светлой
 */
 .card--summary[data-conclusion-tone]:not(:has(.state))::after {
   content: '';
@@ -120,10 +137,6 @@
   -webkit-mask-composite: xor;
   mask: linear-gradient(currentColor 0 0) content-box exclude, linear-gradient(currentColor 0 0);
   pointer-events: none;
-}
-
-:root[data-theme='light'] .card--summary[data-conclusion-tone]:not(:has(.state))::after {
-  content: none;
 }
 
 /* J-63: источник в шапке — подсказка, как подпись шапки `card__note`, а не текст вывода */

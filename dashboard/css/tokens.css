@@ -512,6 +512,14 @@
   --summary-glow-mid: 76%;
   --summary-glow-soft: 52%;
   --summary-glow-blend: transparent;
+  /* Снижение — в тёмной тем же ходом, что остальные тоны (меняет только светлая, макет 5408:2) */
+  --summary-glow-negative-shape: ellipse 62% 89% at 50% 114%;
+  --summary-glow-negative-core: var(--color-negative);
+  --summary-glow-negative-mid: color-mix(in srgb, var(--color-negative) var(--summary-glow-mid), transparent);
+  --summary-glow-negative-soft: color-mix(in srgb, var(--color-negative) var(--summary-glow-soft), transparent);
+  --summary-glow-negative-end: transparent;
+  --summary-glow-negative-mid-at: 22%;
+  --summary-glow-negative-soft-at: 44%;
   /* Обводка «Главного вывода» (макет 5362:4100): 1 px, к низу — тон направления на 50 % */
   --summary-border-width: 1px;
   --summary-border-tone: 50%;
@@ -862,6 +870,14 @@
   --summary-glow-mid: 79%;
   --summary-glow-soft: 57%;
   --summary-glow-blend: #FFFFFF;
+  /* Снижение (макет 5408:2): радиусы 164 × 209 px карточки 280 × 191, центр на 42 px ниже кромки */
+  --summary-glow-negative-shape: ellipse 59% 109% at 50% 122%;
+  --summary-glow-negative-core: #FF2468;
+  --summary-glow-negative-mid: #F8417C;
+  --summary-glow-negative-soft: #F15D8F;
+  --summary-glow-negative-end: rgba(250, 174, 202, 0);
+  --summary-glow-negative-mid-at: 12%;
+  --summary-glow-negative-soft-at: 24%;
   /* Цвета дельт макета (5366:8432, 5366:8479) — светлее ink: решение пользователя, текст 14 px SemiBold */
   --color-delta-positive: #45CE65;
   /* Полоса вклада в светлой — палитра светлой темы: от мягкого к насыщенному (#95DF93 → #45CE65, #F15D8F → #FF2468) */

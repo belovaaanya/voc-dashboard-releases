@@ -3,10 +3,12 @@
 import { dashboardRows } from '../core/cashback.js';
 import { VERSION_CHANNEL } from '../core/antidrivers.js';
 import { channelDimensions, servableFilters } from '../core/dimensions.js';
+import { pageShown } from '../core/features.js';
 import { normalizedDays } from './chart-selection.js';
 import { periodFromState } from './controls.js';
 import { normalizeDetailEvent } from './detail-event.js';
 import { normalizeDriver } from './driver-pick.js';
+import { isDeveloperMode } from './developer-mode.js';
 import { DEFAULT_PAGE, LOCAL_PERIOD_BLOCKS, PAGES, focusInPeriod } from './url-state.js';
 
 /* J-40: общий период группы аналитики — выбранный день живёт в нём, период прямой речи день не продлевает */
@@ -55,7 +57,8 @@ export function resolveState(requested, { rows, reference, channels, fallbackPer
     filters: servableFilters(requestedFilters, dimensions),
     channel,
     /* J-151: страница — из URL; без неё и с неизвестной — главная */
-    page: PAGES.includes(requested.page) ? requested.page : DEFAULT_PAGE,
+    /* J-?: страница «в разработке» вне режима разработчика — как неизвестная: прямая ссылка открывает главную */
+    page: PAGES.includes(requested.page) && pageShown(requested.page, isDeveloperMode()) ? requested.page : DEFAULT_PAGE,
     preset: period.preset,
     from: period.from,
     to: period.to,

@@ -738,7 +738,7 @@ const focusParameters = (context) => (context.state.focus ? [['Выбранна�
 
 export function renderAntidrivers(block, context) {
   block.setTitle('Антидрайверы');
-  /* J-40: период общий с графиком и календарём — выбирается в шапке группы */
+  /* J-40: период общий с графиком и календарём — выбирается в шапке «Динамики VOC» (J-?) */
   const period = context.periodControl?.shared ? null : { ...context.period, picker: context.periodControl };
   const viewContext = focusedContext(context);
   const dimensions = DIMENSION_KEYS.map((key) => DIMENSIONS.find((dimension) => dimension.key === key)).filter(Boolean);

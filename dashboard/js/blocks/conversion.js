@@ -7,11 +7,10 @@
 */
 
 import { EMPTY } from '../shell/block.js';
-import { badge } from '../components/badge.js';
 import { emptyValue } from '../components/empty-value.js';
 import { element, svgNode } from '../ui/dom.js';
 import { formatCount, formatShare, formatShareFine, monthName, plural } from '../core/format.js';
-import { audienceFor, conversionMonth, conversionScope, isWholeMonth, previousMonth, surveyConversion } from '../core/conversion.js';
+import { SURVEY_STEPS, audienceFor, conversionMonth, conversionScope, isWholeMonth, previousMonth, surveyConversion } from '../core/conversion.js';
 import { DELTA_SHAPES, GROWTH, deltaNode } from './metric-card.js';
 
 export const CONVERSION_TITLE = 'Конверсия опроса';
@@ -209,8 +208,36 @@ export function conversionNote(month, shifted = false) {
   return shifted ? `за ${monthName(month.from)} — последний полный месяц, от MAU` : `от MAU за ${monthName(month.from)}`;
 }
 
-/* Заглушка, пока MAU и рассылка не подключены: без сроков и без «in progress» */
-export const PENDING = { badge: 'В работе', text: 'Подключаем данные MAU и рассылки опроса' };
+/*
+  Данных MAU и рассылки ещё нет: композиция узкой карточки — луч и подписи ступеней — приглушена, на месте чисел серые
+  полосы, поверх — надпись. Ни одного числа: пример легко принять за данные. Без сроков и без «in progress»
+*/
+export const PENDING = { title: 'Данные в процессе сбора', detail: 'Подключаем MAU и рассылки опроса' };
+/* Форма луча условная — та же, что у узкой карточки с данными, но не по чьим-то числам */
+const PENDING_HEIGHTS = [0.62, 0.26, 0.14];
+
+function pendingNode() {
+  const steps = SURVEY_STEPS.filter(({ key }) => !(key in WIDE));
+  const layout = element('div', 'conversion conversion--compact conversion--pending');
+  layout.style.setProperty('--beam-headroom', BEAM_HEADROOM);
+  /* Каркас декоративный: скринридер читает только надпись */
+  const list = element('ol', 'conversion__steps');
+  list.setAttribute('aria-hidden', 'true');
+  list.append(...steps.map(({ key, short }) => {
+    const item = element('li', `conversion__step conversion__step--${key}`);
+    const line = element('span', 'conversion__line');
+    line.append(element('span', 'conversion__bar'));
+    item.append(element('span', 'conversion__label', short), line, element('span', 'conversion__share'));
+    return item;
+  }));
+  /* Надпись — одна строка поверх полосы луча; что подключается — в подсказке и для screen reader */
+  const note = element('p', 'conversion__pending', PENDING.title);
+  note.setAttribute('role', 'status');
+  note.title = PENDING.detail;
+  note.append(element('span', 'visually-hidden', `. ${PENDING.detail}`));
+  layout.append(beamNode(steps, true, { heights: PENDING_HEIGHTS, id: 'conversion-pending-beam' }), list, note);
+  return layout;
+}
 
 /* Пустые состояния с причиной: ступени не пересчитываются (решение руководителей — без «у вас не сходится») */
 export const CONVERSION_STATES = {
@@ -249,14 +276,14 @@ export function renderConversion(block, context) {
   const { slice, period, rows, state, select, audience: sheet, compact = false } = context;
   block.setTitle?.(CONVERSION_TITLE);
   /*
-    Листа MAU и рассылки ещё нет совсем — заглушка «В работе», а не пустое состояние: данные подключаются.
-    Прочерк на месте числа (J-65) у заглушки снят: числа здесь ещё нет, и строка в две строки с ним выше вывода
+    Листа MAU и рассылки ещё нет совсем — приглушённая композиция с надписью, а не пустое состояние: данные
+    подключаются. Надпись зависит только от наличия листа: появится MAU — карточка покажет конверсию без правки вёрстки
   */
   const pending = !context.audience?.length;
   block.element?.classList.toggle('card--conversion-pending', pending);
   if (pending) {
-    block.setHead({ note: badge(PENDING.badge, 'quiet', { fit: true }) });
-    block.setState(EMPTY, PENDING.text);
+    block.setHead();
+    block.setContent(pendingNode());
     return;
   }
   const chosen = conversionMonth(period, rows);

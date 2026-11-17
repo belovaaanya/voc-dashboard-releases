@@ -421,11 +421,6 @@
   letter-spacing: var(--tracking-value);
 }
 
-/* Заглушка конверсии без MAU: числа ещё нет — без прочерка, иначе строка в две строки делает карточку выше вывода */
-.card--conversion-pending .state--empty.state--compact::before {
-  content: none;
-}
-
 .card--metric-big .state--empty.state--compact::before {
   font: var(--type-display);
   letter-spacing: var(--tracking-display);
@@ -769,6 +764,42 @@
 .conversion__step + .conversion__step {
   border-inline-start: var(--hairline) solid var(--color-border);
   border-image: linear-gradient(180deg, var(--color-border) 0 15%, transparent 30% 55%, var(--color-border) 70%) 1;
+}
+
+/*
+  Данные MAU и рассылки собираются: композиция узкой карточки приглушена, на месте чисел — серые полосы (ни одного
+  числа: пример приняли бы за данные), поверх полосы луча — надпись. Ядра и нити луча нет: линия перечёркивала надпись
+*/
+.conversion--pending > .conversion__beam,
+.conversion--pending > .conversion__steps > .conversion__step {
+  opacity: var(--disabled-opacity);
+}
+
+.conversion--pending .conversion__core,
+.conversion--pending .conversion__thread {
+  display: none;
+}
+
+.conversion__bar {
+  display: block;
+  width: 3.5em;
+  height: 0.6lh;
+  margin-block: 0.2lh;
+  border-radius: var(--radius-control);
+  /* От цвета подписи, а не от подложки: «утопленная» поверхность в тёмной теме сливалась с карточкой */
+  background: color-mix(in srgb, var(--color-text-tertiary) var(--tone-rim), transparent);
+}
+
+.conversion__pending {
+  grid-row: 2;
+  grid-column: 1 / -1;
+  place-self: center;
+  margin: 0;
+  color: var(--color-text-secondary);
+  font: var(--type-text-strong);
+  letter-spacing: var(--tracking-text-strong);
+  text-align: center;
+  cursor: help;
 }
 
 .conversion__change {

@@ -1,8 +1,10 @@
 /* Входы блока записываются при чтении контекста: забыть зависимость нельзя (docs/ui-shell.md#обновление-на-месте) */
 
 const SLICE = ['channel', 'preset', 'from', 'to', 'filters', 'includeCashback'];
-const SLICED = new Set(['slice', 'previousSlice', 'select', 'period', 'previousPeriod', 'periodControl', 'previewPeriod', 'step', 'stepIsAuto']);
-const DERIVED = { rows: ['includeCashback'], dimensions: ['channel', 'includeCashback'], channelRows: ['channel'], analyst: ['page'], step: ['step', 'page'], stepIsAuto: ['step'] };
+const SLICED = new Set(['slice', 'previousSlice', 'select', 'period', 'previousPeriod', 'periodControl', 'step', 'stepIsAuto']);
+const DERIVED = { rows: ['includeCashback'], dimensions: ['channel', 'includeCashback'], channelRows: ['channel'], analyst: ['page'], step: ['page'] };
+/* J-?: шаг карточки — из своего ключа состояния (`step` у графика, `problemsStep` у «Топ проблем») */
+const STEP_KEYS = new Set(['step', 'stepIsAuto']);
 const KEY_SET = '#keys';
 const STALE = { values: new Map() };
 
@@ -59,6 +61,7 @@ export function watchInputs(context, { latest = () => context.state, local = nul
       if (key === 'verbatim' && texts) values.set('#verbatim', textsOf(target.verbatim));
       if (SLICED.has(key)) readSlice();
       DERIVED[key]?.forEach(record);
+      if (STEP_KEYS.has(key)) record(target.stepKey ?? 'step');
       return Reflect.get(target, key, receiver);
     },
     ownKeys(target) {

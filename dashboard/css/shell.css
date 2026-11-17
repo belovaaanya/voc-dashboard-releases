@@ -205,6 +205,11 @@ body::before {
   display: none;
 }
 
+/* J-?: карточка блока «в разработке» вне режима разработчика скрыта: свой display у .card перебил бы hidden */
+.card[hidden] {
+  display: none;
+}
+
 /* Колонка только режима аналитика (таблица прямой речи) на главной скрыта: свой display у .column перебил бы hidden */
 [data-mode='analyst'][hidden] {
   display: none;
@@ -263,7 +268,43 @@ body::before {
   padding-inline-start: 0;
 }
 
+/*
+  J-?: метка «В разработке» у пункта меню — второй строкой под подписью: в строку с ней не помещается в ширину меню.
+  В свёрнутом меню вместо неё точка тона у иконки
+*/
+.side-nav__link--dev {
+  position: relative;
+  flex-wrap: wrap;
+  row-gap: var(--space-1);
+}
+
+.side-nav__dev {
+  flex-basis: 100%;
+  padding-inline-start: calc(var(--icon-size-nav) + var(--space-3));
+  white-space: nowrap;
+}
+
+:root[data-nav='collapsed'] .side-nav__link--dev::after {
+  position: absolute;
+  inset-block-start: var(--space-1);
+  inset-inline-start: calc(var(--nav-item-inset) + var(--icon-size-nav) - var(--space-1));
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--calendar-orange);
+  content: '';
+}
+
+/* Вид продакта в режиме разработчика: пункт возврата — заметной рамкой тона, чтобы не забыть, что видно не всё */
+.side-nav__view--product {
+  flex-wrap: wrap;
+  row-gap: var(--space-1);
+  border-color: var(--calendar-orange);
+  color: var(--color-text-strong);
+}
+
 :root[data-nav='collapsed'] .side-nav__label,
+:root[data-nav='collapsed'] .side-nav__dev,
 :root[data-nav='collapsed'] .side-nav__data-body {
   position: absolute;
   width: 1px;
@@ -427,6 +468,18 @@ b {
   gap: var(--space-3);
 }
 
+/* J-?: метка статуса за заголовком — по центру его первой строки, как точка перед ним */
+.card__status {
+  display: flex;
+  flex: none;
+  align-items: center;
+  min-height: var(--space-6);
+}
+
+.card__status:empty {
+  display: none;
+}
+
 /* Точка перед заголовком (Figma 3030:3045) стоит по центру его первой строки и ближе к нему, чем слоты справа */
 .card__marker {
   display: flex;
@@ -467,6 +520,21 @@ b {
   border-color: transparent;
   background: none;
   box-shadow: none;
+}
+
+/*
+  J-?: шапка с длинным набором контролов («Динамика VOC»: период, шаг, действия): название не переносится и стоит
+  в первой строке, контролы уходят строкой ниже; блок может перестроить их по ширине шапки (`@container card-head`)
+*/
+.card--wide-head > .card__head {
+  container: card-head / inline-size;
+}
+
+.card--wide-head > .card__head > .card__title {
+  flex-shrink: 0;
+  align-self: flex-start;
+  min-height: var(--control-height);
+  white-space: nowrap;
 }
 
 /* J-169: карточка с портретом в слоте метки (роль) — заголовок по центру портрета */

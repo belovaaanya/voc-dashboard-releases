@@ -31,3 +31,30 @@ export function appState() {
   app ??= request('api/app').then((body) => (typeof body?.version === 'string' ? body : null)).catch(() => null);
   return app;
 }
+
+/*
+  J-?: режим разработчика (docs/desktop-app.md#режим-разработчика). В приложении — файл `developer` в каталоге данных
+  (сервер отвечает `developer: true`); локальный сайт `start.sh` — явный ответ `api/developer` (tools/local_server.py);
+  Pages и любой другой хост — никогда. Включается только явным «да»: ошибка, чужой ответ или ответ дольше
+  DEVELOPER_WAIT_MS — обычный режим, продакт лишнего не увидит. `?dev=0` на локальном хосте — обычный режим до
+  перезагрузки, для проверки вида продакта
+*/
+export const DEVELOPER_WAIT_MS = 3000;
+
+export async function developerAllowed(location = globalThis.location, waitMs = DEVELOPER_WAIT_MS) {
+  if (!isLocalHost(location?.hostname)) return false;
+  if (new URLSearchParams(location?.search ?? '').get('dev') === '0') return false;
+  const answer = (async () => {
+    const app = await appState();
+    if (app) return app.developer === true;
+    const local = await request('api/developer').catch(() => null);
+    return local?.developer === true;
+  })().catch(() => false);
+  let timer;
+  const late = new Promise((resolve) => { timer = setTimeout(() => resolve(false), waitMs); });
+  try {
+    return await Promise.race([answer, late]);
+  } finally {
+    clearTimeout(timer);
+  }
+}

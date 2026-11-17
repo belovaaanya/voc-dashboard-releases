@@ -105,6 +105,17 @@
   margin-inline-end: auto;
 }
 
+/*
+  J-?: период и шаг карточки — в шапке графика (`card--wide-head`). В «Для аналитика» режим «Средний VOC / Урон»
+  и всё справа не помещаются в строку — режим с числом оценок остаётся строкой рядом с названием, а период, шаг и
+  действия уходят второй строкой вправо целиком, а не рвутся посередине
+*/
+@container card-head (width < 960px) {
+  .chart-legend__lead--mode {
+    flex-basis: 100%;
+  }
+}
+
 .chart-legend__count {
   color: var(--color-text-secondary);
   font: var(--type-caption);

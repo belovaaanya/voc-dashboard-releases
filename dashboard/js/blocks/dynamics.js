@@ -81,11 +81,11 @@ function svgText(className, text, attributes) {
 
 function chartScaleTabs(block, context, scale) {
   return scaleTabs({
-    label: 'Масштаб графика',
+    label: context.setStep ? 'Шаг графика и антидрайверов' : 'Масштаб графика',
     ...(context.analyst ? {} : { options: MAIN_SCALES }),
     selected: scale,
     onSelect: (value) => {
-      /* J-?: в группе аналитики шаг общий — выбор пишет его в состояние группы */
+      /* J-?: шаг общий с антидрайверами — выбор пишет его в состояние карточки */
       if (context.setStep) return context.setStep(value);
       chartScale.choose(value, context.period);
       renderDynamics(block, context);
@@ -790,6 +790,8 @@ function chartMode(block, context) {
     lead.append(count);
     return lead;
   }
+  /* С переключателем режима строка не помещает период и шаг: на узкой шапке они уходят ниже (dynamics.css) */
+  lead.classList.add('chart-legend__lead--mode');
   lead.append(segmented({
     label: 'Показатель графика',
     options: MODE_OPTIONS,
@@ -961,8 +963,8 @@ function renderChart(block, context, scale, plan) {
     if (model.lanes.length) chart.append(stripLegend(model.lanes, context));
   /* Строка пояснения с полями абзаца, без role=status: перерисовка графика не объявляет её заново */
   } else chart.append(stateText('detail', 'Нет оценок за выбранный период графика. Выберите другой период на таймлайне.'));
-  /* Протягивание таймлайна показывает даты в выборе периода — в шапке группы, если период общий (J-40) */
-  const timeline = chartTimeline(context, { owner: block, onPreview: (range) => (context.previewPeriod ?? block.previewPeriod)?.(range) });
+  /* Протягивание таймлайна показывает даты в выборе периода в шапке графика */
+  const timeline = chartTimeline(context, { owner: block, onPreview: (range) => block.previewPeriod(range) });
   chart.append(timeline.node);
   return { chart, model, mode: chartMode(block, context), draw: () => {
     if (context.slice.length) observeStage(stage, (size) => {
@@ -973,6 +975,9 @@ function renderChart(block, context, scale, plan) {
   } };
 }
 
+/* Имя карточки группы аналитики — как `aria-label` её секции в index.html */
+const SHARED_SCOPE = 'Динамика, события и антидрайверы';
+
 export function renderDynamics(block, context) {
   lastContexts.set(block, context);
   /*
@@ -980,11 +985,13 @@ export function renderDynamics(block, context) {
     название графика видно всегда, тем же заголовком карточки. Раньше (ревью 13.11) его прятал заголовок группы над ним
   */
   block.setTitle('Динамика VOC');
-  /* J-40: общий период блока аналитики выбирается в шапке группы, а не графика */
-  /* Развёрнутая карточка закрывает шапку группы: общий период тогда подписан в своей шапке, без выбора */
-  const period = context.periodControl?.shared
-    ? (block.isExpanded() ? { ...context.period } : null)
-    : { ...context.period, ...(context.periodControl ? { picker: context.periodControl } : {}) };
+  /*
+    J-?: период и шаг карточки «Динамика, события и антидрайверы» выбираются в шапке графика, а не в строке группы:
+    так видно, чем они управляют (как в макете, Figma 3204:2866). Календарь и антидрайверы берут их отсюда же
+  */
+  /* Подпись для screen reader называет всю карточку, а не только график: период действует и на календарь, и на антидрайверы */
+  const picker = context.periodControl?.shared ? { ...context.periodControl, scope: SHARED_SCOPE } : context.periodControl;
+  const period = { ...context.period, ...(picker ? { picker } : {}) };
   const scale = context.step ?? scaleFor(context.period, context.analyst);
   const plan = planFor(context.reference?.plan, {
     channel: context.state.channel,
@@ -993,13 +1000,9 @@ export function renderDynamics(block, context) {
   });
   const { chart, draw, model, mode } = renderChart(block, context, scale, plan);
   const download = downloadAction(() => exportFileName('Динамика VOC', context), () => dynamicsSheets(context, model, scale));
-  /*
-    Неделя 16–22.11: шаг один на группу аналитики — переключатель в строке общего периода, своего у графика нет (было три
-    переключателя, стал один). Развёрнутая карточка закрывает строку группы — тогда шаг выбирается в её шапке и пишется
-    в тот же общий шаг. Вне группы (без `setStep`) — свой переключатель, как раньше
-  */
-  const ownStep = !context.setStep || block.isExpanded();
-  block.setHead({ ...(period ? { period } : {}), controls: ownStep ? [mode, chartScaleTabs(block, context, scale)] : [mode], actions: [expandAction(block, context), download] });
+  /* Шаг — общий для графика и антидрайверов (`setStep`); без него — свой у графика */
+  /* «Оценки» и режим — сразу за названием (слот `note` идёт перед периодом), период и шаг — справа, как в макете */
+  block.setHead({ note: mode, period, controls: [chartScaleTabs(block, context, scale)], actions: [expandAction(block, context), download] });
   block.setContent(chart);
   draw();
 }

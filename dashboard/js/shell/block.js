@@ -98,8 +98,8 @@ function periodPickerNode(id, scope, { from, to, preset, title, picker }, regist
     onReset: picker.onReset,
     scope,
     itemClass: 'card__period-picker',
-    /* J-?: общий период группы аналитики — пилюлей, как период в шапке дашборда: текстом его не опознавали как кнопку */
-    triggerClass: ['card__period card__period--control', picker.local && 'card__period--local', picker.shared && 'card__period--pill'].filter(Boolean).join(' '),
+    /* J-360: период карточки группы аналитики — пилюлей, как период в шапке дашборда: текстом его не опознавали как кнопку */
+    triggerClass: ['card__period card__period--control', picker.local && 'card__period--local', picker.pill && 'card__period--pill'].filter(Boolean).join(' '),
     iconClass: 'card__icon',
     align: 'end',
     onPreviewReady: registerPreview,
@@ -171,7 +171,9 @@ export function createBlock({ id, title, modifier, compact = false, level = 2 })
   /* J-143: слот пояснения — сразу за текстом заголовка (значок «i» с окном); пустой не занимает места */
   const help = element('span', 'card__help');
   heading.append(help);
-  head.append(marker, heading, tools);
+  /* J-?: метка статуса («В разработке») — сразу за заголовком, видна при любой ширине; пустая не занимает места */
+  const status = element('span', 'card__status');
+  head.append(marker, heading, status, tools);
 
   const body = element('div', 'card__body');
   card.append(head, body);
@@ -183,6 +185,11 @@ export function createBlock({ id, title, modifier, compact = false, level = 2 })
       heading.replaceChildren(...withStars(text), help);
       withFullLabel(heading, full);
       heading.classList.toggle('visually-hidden', hidden);
+    },
+    /* J-?: метка статуса карточки в режиме разработчика; null — снять. Шапка блока (setHead) её не трогает */
+    setStatusLabel(node) {
+      status.replaceChildren(...listOf(node));
+      card.classList.toggle('card--dev', Boolean(node));
     },
     previewPeriod(next) { updatePeriodPreview?.(next); },
     isExpanded: () => card.classList.contains('is-expanded'),
@@ -196,8 +203,8 @@ export function createBlock({ id, title, modifier, compact = false, level = 2 })
       marker.replaceChildren(...listOf(lead));
       help.replaceChildren(...listOf(explain));
       tools.replaceChildren(
-        ...listOf(note).map((content) => (content instanceof Node ? content : element('span', 'card__note', content))),
-        ...(period ? [period.picker ? periodPickerNode(id, title, period, (preview) => { updatePeriodPreview = preview; }) : periodNode(period)] : []),
+        ...listOf(note).map((content) => (typeof content === 'string' ? element('span', 'card__note', content) : content)),
+        ...(period ? [period.picker ? periodPickerNode(id, period.picker.scope ?? title, period, (preview) => { updatePeriodPreview = preview; }) : periodNode(period)] : []),
         ...listOf(controls),
         ...listOf(actions).map(actionNode),
         ...(ai ? [aiNode()] : []),

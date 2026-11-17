@@ -27,20 +27,23 @@ import { renderPlanDays } from './blocks/plan-days.js';
 import { renderEmotions } from './blocks/emotions.js';
 import { channelsOf, metricSegments } from './core/dimensions.js';
 import { renderEmptyHeader, renderHeader } from './shell/header.js';
-import { SECTIONS, renderSideNav } from './shell/side-nav.js';
+import { DEV_LABEL, SECTIONS, renderSideNav } from './shell/side-nav.js';
+import { DEV, blockShown, blockStatus, pageStatus } from './core/features.js';
+import { isDeveloperMode, setDeveloperAllowed } from './state/developer-mode.js';
+import { tag } from './components/tag.js';
 import { alignHeaderAmbient } from './shell/header-ambient.js';
 import { sideToggle } from './components/side-toggle.js';
 import { statusPanel } from './components/status-panel.js';
 import { mountFeedback } from './shell/feedback.js';
 import { createLabels } from './core/labels.js';
 import { SOURCE_EMPTY, loadVerbatim as loadVerbatimFile, startLoading } from './io/loader.js';
+import { developerAllowed } from './io/desktop.js';
 import { defaultPeriod, metricsBase } from './core/period.js';
 import { createSelector } from './state/selection.js';
 import { holdPageHeight as holdPage, releasePageHeight as releasePage } from './ui/page-height.js';
 import { sameInputs, staleInputs, watchInputs } from './shell/inputs.js';
 import { ROLE_SLOTS } from './core/digest.js';
-import { groupStep, isAutoStep, stepOptions } from './state/group-step.js';
-import { scaleTabs } from './components/scale-tabs.js';
+import { groupStep, isAutoStep } from './state/group-step.js';
 import { ANALYST_PAGE, DEFAULT_PAGE, LOCAL_PERIOD_BLOCKS, onStateChange, opensTable, readState, syncState, toSearch, viewOf, withFilter, writeState } from './state/url-state.js';
 import { SHARED_PERIOD, resolveState } from './state/resolve-state.js';
 import { validateVerbatim } from './core/verbatim.js';
@@ -55,7 +58,7 @@ const BLOCKS = [
   { id: 'plan-days', title: 'Дни относительно плана', host: 'metrics', modifier: 'card--metric card--metric-plan-days', compact: true, render: renderPlanDays },
   { id: 'distribution', title: 'Распределение оценок', host: 'metrics', modifier: 'card--distribution', render: renderDistribution },
   { id: 'summary', title: 'Главный вывод', host: 'metrics', modifier: 'card--summary', render: renderConclusion, ready: conclusionReady, placeholder: conclusionPlaceholder, detach: detachConclusion },
-  { id: 'dynamics', title: 'Динамика VOC', host: 'main', modifier: 'card--dynamics card--fill', render: renderDynamics },
+  { id: 'dynamics', title: 'Динамика VOC', host: 'main', modifier: 'card--dynamics card--fill card--wide-head', render: renderDynamics },
   { id: 'antidrivers', title: 'Антидрайверы', host: 'drivers', modifier: 'card--antidrivers', render: renderAntidrivers, heavy: true },
   { id: 'verbatim-cards', title: 'Топ проблем', host: 'problems', modifier: 'card--verbatim', heavy: true, render: renderVerbatimCards, verbatim: true },
   { id: 'insights', title: 'Календарь событий', host: 'rail-main', modifier: 'card--insights card--fill', render: renderInsights, ready: calendarReady },
@@ -95,7 +98,27 @@ function pageTitleOf(page) {
 
 /* J-151: страница блока; без поля — «Главная» */
 /* Блок с `page: ANALYST_PAGE` — только в режиме «Для аналитика» (вид главной); остальные — на своей странице */
-const shownOn = (spec, page) => (spec.page === ANALYST_PAGE ? page === ANALYST_PAGE : (spec.page ?? DEFAULT_PAGE) === viewOf(page));
+/* J-?: блок «в разработке» вне режима разработчика не показывается нигде (core/features.js) */
+const shownOn = (spec, page) => blockShown(spec.id, isDeveloperMode())
+  && (spec.page === ANALYST_PAGE ? page === ANALYST_PAGE : (spec.page ?? DEFAULT_PAGE) === viewOf(page));
+
+/*
+  J-?: статус карточек. Вне режима разработчика карточка блока «в разработке» скрыта целиком; в режиме — метка
+  «В разработке» у такого блока и у первой карточки страницы «в разработке» (её шапки страницы)
+*/
+function applyFeatureStatus(blocks) {
+  const developer = isDeveloperMode();
+  const pageHeads = new Set();
+  for (const spec of BLOCKS) {
+    const page = spec.page ?? DEFAULT_PAGE;
+    const pageHead = !pageHeads.has(page);
+    pageHeads.add(page);
+    const block = blocks.get(spec.id);
+    block.element.hidden = !blockShown(spec.id, developer);
+    const dev = blockStatus(spec.id) === DEV || (pageHead && page !== ANALYST_PAGE && pageStatus(page) === DEV);
+    block.setStatusLabel(developer && dev ? tag(DEV_LABEL, 'orange') : null);
+  }
+}
 /* `heavy`: расчёт дольше кадра — на кадрах жеста таймлайна стоит прежнее содержимое, блок обновляется по отпусканию (docs/ui-shell.md#скорость) */
 const waitsForGesture = (spec, live) => live && spec.heavy;
 /* Оценки канала до переключателя кэшбека: дайджест показывает VOC и с поправкой, и без */
@@ -109,12 +132,15 @@ function channelRowsOf(rows, channel) {
 }
 
 /*
-  J-40: группа аналитики с общим периодом `dynamics` для графика, календаря и антидрайверов; строка-заголовок
-  группы над двумя карточками (J-?; J-357 разрезал на три): «Динамика, события и антидрайверы» и «Топ проблем» с лентой.
+  J-40: группа аналитики, строка-заголовок над двумя карточками (J-?; J-357 разрезал на три): «Динамика, события и
+  антидрайверы» и «Топ проблем» с лентой. J-?: у каждой карточки свои период и шаг — в её шапке, а не в строке группы:
+  период `dynamics` и `step` — графика, календаря и антидрайверов (выбор — в шапке «Динамики VOC»), `problems` и
+  `problems-step` — «Топ проблем».
   J-128: выбор антидрайвера сужает «Топ проблем»; день графика — нет (J-49)
 */
 const ANALYSIS_TITLE = 'Динамика и проблемы';
-const ANALYSIS_BLOCKS = ['dynamics', 'insights', 'antidrivers', 'verbatim-cards'];
+const ANALYSIS_BLOCKS = ['dynamics', 'insights', 'antidrivers'];
+const PROBLEMS_PERIOD = 'problems';
 /* Колонки внутри группы: заголовок блока там — h3 под заголовком группы */
 const GROUPED_HOSTS = ['main', 'rail-main', 'drivers', 'problems'];
 
@@ -183,7 +209,7 @@ function pageHosts() {
 
 /* Карточки групп и блоков в скелете; `setAll` ставит всем одно служебное состояние */
 function mountCards(hosts) {
-  /* J-40: шапка группы аналитики несёт общий период графика, календаря и антидрайверов; карточки — под ней (J-?) */
+  /* J-40: строка-заголовок группы аналитики; периоды и шаги — в шапках её карточек (J-?) */
   const analysis = groupFromSlot({ id: 'analysis', title: ANALYSIS_TITLE, modifier: 'card--group card--analysis' });
 
   const blocks = new Map();
@@ -236,6 +262,8 @@ function sliceContext(env, { state, period, eligible, dimensions }, { setState, 
   const context = {
     /* Режим «Для аналитика»: та же главная, блоки сами решают, что показать (docs/ui-shell.md) */
     analyst: state.page === ANALYST_PAGE,
+    /* J-?: режим разработчика — блок не ссылается на скрытые блоки «в разработке» (`blockShown`) */
+    developer: isDeveloperMode(),
     rows: eligible,
     slice: current.rows,
     previousSlice: current.previous,
@@ -300,7 +328,7 @@ function renderPageHeader(env, context) {
     onChannelChange: (channel) => setState({ ...state, channel, days: [], detailEvent: null, driver: null }),
     /* Новый общий период снимает local period блоков: иначе блок молча остаётся на старом */
     onPeriodChange: (nextPeriod) =>
-      setState({ ...state, preset: nextPeriod.preset, from: nextPeriod.from, to: nextPeriod.to, local: {}, days: [], detailEvent: null, driver: null, step: null }),
+      setState({ ...state, preset: nextPeriod.preset, from: nextPeriod.from, to: nextPeriod.to, local: {}, days: [], detailEvent: null, driver: null, step: null, problemsStep: null }),
     onFilterChange: (dimension, values) =>
       setState({ ...state, filters: withFilter(state.filters, dimension, values), detailEvent: null }),
     onCashbackChange: (includeCashback) => setState({ ...state, includeCashback, detailEvent: null }),
@@ -315,12 +343,13 @@ const periodOf = (context, id) => (periodIds.set(context, id), context);
 /* Блок со своим периодом получает контекст того же среза, но со своим периодом и своим select */
 function localContext(env, { localPeriods, eligible, dimensions }, context, id) {
   const { state, setState } = context;
-  /* Выбор периода сохранённой шапки группы — поверх текущего состояния, а не состояния её отрисовки */
+  /* Выбор периода сохранённой шапки — поверх текущего состояния, а не состояния её отрисовки */
   const latest = env.latest;
   const local = localPeriods[id] ?? null;
   /* Период группы снимает событие из календаря, иначе таблица осталась бы на его днях */
-  /* J-?: ручной шаг группы — для её периода (J-181): новый период снова получает автоматический */
-  const selectionReset = id === SHARED_PERIOD ? { days: [], focus: null, detailEvent: null, driver: null, step: null } : { detailEvent: null };
+  /* J-?: ручной шаг карточки — для её периода (J-181): новый период снова получает автоматический */
+  const selectionReset = id === SHARED_PERIOD ? { days: [], focus: null, detailEvent: null, driver: null, step: null }
+    : id === PROBLEMS_PERIOD ? { problemsStep: null } : { detailEvent: null };
   const periodControl = {
     manifestPeriod: env.source.manifest.period,
     local: Boolean(local),
@@ -341,51 +370,42 @@ function localContext(env, { localPeriods, eligible, dimensions }, context, id) 
   }, id);
 }
 
-/* J-40: у трёх блоков аналитики один период — `dynamics`, его выбор в шапке группы; таблица «Обратная связь» — по шапке */
+/* Период и шаг карточки группы: свой local period и свой параметр шага в URL */
+/* `shared`: период и шаг общие у нескольких блоков карточки — выбор только в шапке одного из них */
+function cardContext(env, resolved, context, { periodId, stepKey, shared = false }) {
+  const baseContext = localContext(env, resolved, context, periodId);
+  return periodOf({
+    ...baseContext,
+    /* J-360: период карточки — пилюлей, как период в шапке дашборда */
+    periodControl: { ...baseContext.periodControl, pill: true, shared },
+    step: groupStep(context.state[stepKey], baseContext.period, context.analyst),
+    /* Автоматический шаг блоки подбирают себе молча; подпись замены — только у выбранного вручную */
+    stepIsAuto: isAutoStep(context.state[stepKey]),
+    setStep: (step) => context.setState({ ...env.latest(), [stepKey]: step }),
+    stepKey,
+  }, periodId);
+}
+
+/*
+  J-40, J-?: график, календарь и антидрайверы — один период `dynamics` и один шаг, выбор в шапке «Динамики VOC»;
+  «Топ проблем» — свой период и шаг в своей шапке; таблица «Обратная связь» — по шапке дашборда
+*/
 function groupContexts(env, resolved, context) {
-  const analysisContext = periodOf({
-    ...localContext(env, resolved, context, SHARED_PERIOD),
-    previewPeriod: (range) => env.cards.analysis.previewPeriod(range),
-  }, SHARED_PERIOD);
-  analysisContext.periodControl = { ...analysisContext.periodControl, shared: true };
-  /* J-?: один шаг на график, антидрайверы и «Топ проблем»; переключатель — в строке общего периода группы */
-  analysisContext.step = groupStep(context.state.step, analysisContext.period, context.analyst);
-  /* Автоматический шаг блоки подбирают себе молча; подпись замены — только у выбранного вручную */
-  analysisContext.stepIsAuto = isAutoStep(context.state.step);
-  analysisContext.setStep = (step) => context.setState({ ...env.latest(), step });
+  /* Период и шаг общие у графика, календаря и антидрайверов: выбор — в шапке «Динамики VOC», у остальных его нет */
+  const analysisContext = cardContext(env, resolved, context, { periodId: SHARED_PERIOD, stepKey: 'step', shared: true });
+  const problemsContext = cardContext(env, resolved, context, { periodId: PROBLEMS_PERIOD, stepKey: 'problemsStep' });
   const contextFor = (id) => {
     if (ANALYSIS_BLOCKS.includes(id)) return analysisContext;
+    if (id === 'verbatim-cards') return problemsContext;
     return LOCAL_PERIOD_BLOCKS.includes(id) ? localContext(env, resolved, context, id) : context;
   };
   return { analysisContext, contextFor };
 }
 
-/* J-?: шаг группы аналитики — один переключатель в строке общего периода; на главной без «Кварталов» (J-228) */
-function groupStepTabs(context) {
-  return scaleTabs({
-    label: 'Шаг графика, антидрайверов и «Топ проблем»',
-    options: stepOptions(context.analyst),
-    selected: context.step,
-    onSelect: (step) => context.setStep(step),
-  });
-}
-
-/*
-  Догрузка блоков шапки групп не меняет: перерисовка закрыла бы открытый выбор периода. На кадрах жеста шапку,
-  уже нарисованную в этом жесте, держит preview таймлайна; отпускание рисует её заново (`expireLive`)
-*/
-function paintGroupHeads({ analysis }, { analysisContext }, basePaint, live) {
-  const paint = live ? (id, ...rest) => {
-    if (basePaint.isLive(id)) return;
-    basePaint(id, ...rest);
-    basePaint.markLive(id);
-  } : basePaint;
+/* J-?: в строке группы — только заголовок; кнопка календаря событий — в строке первой карточки */
+function paintGroupHeads({ analysis }) {
   const analysisRow = analysis.element.querySelector('.group-row');
-  paint('#analysis', analysisContext, (watched) => analysis.setHead({
-    period: { ...watched.period, picker: watched.periodControl },
-    controls: [groupStepTabs(watched)],
-  }), { local: periodIds.get(analysisContext) });
-  /* Кнопка календаря — в строке группы, одна на строку */
+  /* Кнопка календаря — в строке карточки, одна на строку */
   if (analysisRow?.querySelector('#rail-main') && !analysisRow.querySelector(':scope > .side-toggle')) analysisRow.append(eventsToggle(analysisRow));
 }
 
@@ -472,7 +492,7 @@ function paintPage(env, resolved, context, { only, withHeader, mayDefer, live })
     paint('#header', context, (watched) => renderPageHeader(env, watched));
   }
   const groups = groupContexts(env, resolved, context);
-  if (withHeader) paintGroupHeads(env.cards, groups, paint, live);
+  if (withHeader) paintGroupHeads(env.cards);
   return renderBlocks(env.cards.blocks, { only, mayDefer, page: state.page, live }, groups.contextFor, context, paint);
 }
 
@@ -631,8 +651,11 @@ function main() {
   const cards = mountCards(hosts);
 
   /* Загрузку обычно уже запустил boot.js */
-  startLoading()
-    .then(({ source, rows, reference }) => {
+  /* J-?: режим разработчика решается до первой отрисовки; без ответа среды — обычный режим */
+  Promise.all([startLoading(), developerAllowed().catch(() => false)])
+    .then(([{ source, rows, reference }, developer]) => {
+      setDeveloperAllowed(developer);
+      applyFeatureStatus(cards.blocks);
       if (!Array.isArray(rows)) throw new Error('ratings: ожидался массив объектов (data-model §7)');
       if (source.source === SOURCE_EMPTY) {
         showEmptyApp(hosts, cards, source.manifest);

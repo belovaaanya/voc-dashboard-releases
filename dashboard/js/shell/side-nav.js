@@ -15,6 +15,13 @@ import { methodologyItems } from '../core/methodology.js';
 import { bindPopover, popoverPanel } from '../ui/popover.js';
 import { copyButton } from '../components/copy-button.js';
 import { animateNav } from './nav-motion.js';
+import { DEV, pageShown, pageStatus } from '../core/features.js';
+import { isDeveloperAllowed, isDeveloperMode, isViewingAsProduct, setViewAsProduct } from '../state/developer-mode.js';
+import { tag } from '../components/tag.js';
+
+/* J-?: метка непроверенного в режиме разработчика — у пункта меню и в шапке карточки (core/features.js) */
+export const DEV_LABEL = 'В разработке';
+const DEV_HINT = 'В разработке: продакты эту страницу не видят';
 
 export const NAV_KEY = 'voc.nav';
 const COLLAPSED = 'collapsed';
@@ -163,6 +170,33 @@ export function copyLinkControl(copy) {
   return item;
 }
 
+/*
+  J-?: только где режим разработчика разрешён — переключатель «Смотреть как продакт» ↔ «Режим разработчика» (с меткой «Вид продакта»).
+  Вид продакта — ровно то, что видят продакты; выбор помнится в этом окне. `onChange` перерисовывает дашборд,
+  без него (меню пустого приложения) страница перезагружается
+*/
+export function viewModeControl(onChange) {
+  const asProduct = isViewingAsProduct();
+  /* Подпись короткая — в строку меню; что сейчас на экране, говорит метка второй строкой */
+  const label = asProduct ? 'Режим разработчика' : 'Смотреть как продакт';
+  const button = element('button', asProduct ? 'side-nav__link side-nav__view side-nav__view--product' : 'side-nav__link side-nav__view');
+  button.type = 'button';
+  button.dataset.action = 'view-mode';
+  button.dataset.navTitle = label;
+  button.dataset.navHint = asProduct ? 'Сейчас видно только то, что видят продакты. Вернуть всё «В разработке»' : 'Скрыть всё «В разработке», как у продактов';
+  button.append(icon('eye', 'side-nav__icon'), navLabel(label));
+  if (asProduct) {
+    const mark = element('span', 'side-nav__dev');
+    mark.append(tag('Вид продакта', 'orange'));
+    button.append(mark);
+  }
+  button.addEventListener('click', () => {
+    setViewAsProduct(!asProduct);
+    globalThis.location?.reload();
+  });
+  return button;
+}
+
 /* Ссылка на страницу несёт текущий срез: в новой вкладке открывается тот же канал, период и фильтры */
 export function pageHref(search, page) {
   const params = new URLSearchParams(search);
@@ -182,13 +216,17 @@ export function renderSideNav(host, context) {
 
   const list = element('ul', 'side-nav__list');
   const page = context?.page ?? SECTIONS[0].id;
-  for (const section of SECTIONS) {
+  const developer = isDeveloperMode();
+  /* J-?: страница «в разработке» вне режима разработчика — без пункта меню */
+  for (const section of SECTIONS.filter(({ id }) => pageShown(id, developer))) {
+    const dev = developer && pageStatus(section.id) === DEV;
     const item = element('li');
     const link = element('a', 'side-nav__link');
     /* Настоящая ссылка: открывается в новой вкладке; обычный клик переключает страницу без перезагрузки */
     link.href = pageHref(globalThis.location?.search ?? '', section.id);
     link.dataset.navTitle = section.label;
-    if (section.hint) link.dataset.navHint = section.hint;
+    if (section.hint || dev) link.dataset.navHint = dev ? DEV_HINT : section.hint;
+    if (dev) link.classList.add('side-nav__link--dev');
     link.dataset.page = section.id;
     link.dataset.action = `page-${section.id}`;
     if (section.id === page) link.setAttribute('aria-current', 'page');
@@ -199,6 +237,11 @@ export function renderSideNav(host, context) {
       if (section.id !== page) context.onNavigate(section.id);
     });
     link.append(icon(section.icon, 'side-nav__icon'), navLabel(section.label));
+    if (dev) {
+      const mark = element('span', 'side-nav__dev');
+      mark.append(tag(DEV_LABEL, 'orange'));
+      link.append(mark);
+    }
     item.append(link);
     list.append(item);
   }
@@ -206,6 +249,7 @@ export function renderSideNav(host, context) {
   const foot = element('div', 'side-nav__foot');
   /* Дайджест не сужается срезом — «Скопировать ссылку на срез» на его странице нечего копировать (неделя 16–22.11) */
   if (context) foot.append(...[dataPanel(context), page === 'digest' ? null : copyLinkControl(), methodControl()].filter(Boolean));
+  if (isDeveloperAllowed()) foot.append(viewModeControl());
   foot.append(toggleButton(host));
   host.replaceChildren(brand, list, foot);
   syncTitles(host);

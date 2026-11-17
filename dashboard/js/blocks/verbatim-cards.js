@@ -18,7 +18,8 @@ import { hScroll, rememberScroll } from '../components/h-scroll.js';
 import { emptyValue } from '../components/empty-value.js';
 import { tag } from '../components/tag.js';
 import { heatCell } from '../components/heat-cell.js';
-import { buildTimeSeries } from '../core/timeseries.js';
+import { SCALE_OPTIONS, buildTimeSeries } from '../core/timeseries.js';
+import { scaleTabs } from '../components/scale-tabs.js';
 import { equalDaysPeriod } from '../core/period.js';
 import { earliestDate } from '../core/dates.js';
 import { holdPageHeight, releasePageHeight } from '../ui/page-height.js';
@@ -26,6 +27,7 @@ import { CLASSIFICATION_HINTS, FEW_COMPLAINTS, HEAT_MIN_NEGATIVE, INTENSITY_HINT
 import { hotStep } from '../core/heat-scale.js';
 import { callFunnel, callStats } from '../core/call-stats.js';
 import { ringLegend } from './plan-days.js';
+import { blockShown } from '../core/features.js';
 
 let selectedCut = 'domainProblem';
 /*
@@ -246,11 +248,11 @@ function segmentCode(code, label) {
 }
 
 const CHANNEL_WITH_OS = 'АБМ';
-/* Шаги таблицы динамики: своего переключателя нет — шаг общий у группы аналитики */
+/* Шаги таблицы динамики: свой переключатель «Топ проблем» предлагает только их (J-?) */
 const TABLE_STEPS = ['week', 'month'];
 /*
-  J-?: шаг — общий шаг группы аналитики; дни и кварталы таблице не подходят — она берёт ближайший; выбранный вручную
-  шаг подписывает в динамике («по неделям: дни для таблицы слишком мелкие»), автоматический заменяет молча
+  J-?: шаг — свой шаг карточки (`problems-step`); дни и кварталы из ссылки таблице не подходят — она берёт ближайший;
+  выбранный вручную шаг подписывает в динамике («по неделям: дни для таблицы слишком мелкие»), автоматический заменяет молча
 */
 const STEP_FIT_REASON = { day: 'дни для таблицы слишком мелкие', quarter: 'кварталы для таблицы слишком крупные' };
 const groupStepFit = { from: null };
@@ -266,6 +268,18 @@ function takeGroupStep(step, auto) {
   selectedScale = fit.step;
   groupStepFit.from = fit.fitted ? step : null;
 }
+/* J-?: шаг таблицы — только недели и месяцы: другие ей не подходят (TABLE_STEPS) */
+function stepTabs(context) {
+  if (!context.setStep) return null;
+  return scaleTabs({
+    label: 'Шаг «Топ проблем»',
+    options: SCALE_OPTIONS.filter(({ value }) => TABLE_STEPS.includes(value)),
+    selected: selectedScale,
+    onSelect: (step) => context.setStep(step),
+  });
+}
+const maxDate = (left, right) => (left > right ? left : right);
+const minDate = (left, right) => (left < right ? left : right);
 const segmentKey = (code) => (!code || code === 'Без сегмента' ? '' : code);
 
 
@@ -950,6 +964,8 @@ function callTile(context, rows) {
     funnel.append(row);
   }
   node.append(funnel);
+  /* J-?: «Статистика обзвона» в разработке — у продакта её нет, и ссылки на неё тоже (core/features.js) */
+  if (!blockShown('call-stats', context.developer)) return node;
   const more = element('button', 'problem-tile__details', 'Подробно');
   more.type = 'button';
   more.setAttribute('aria-label', 'Статистика обзвона по месяцам — ниже на странице');
@@ -964,7 +980,10 @@ function callTile(context, rows) {
 */
 const TONE_RING = { negative: { status: 'below', tone: 'negative' }, neutral: { status: 'in', tone: 'plan-in' }, positive: { status: 'above', tone: 'positive' } };
 function emotionTile(block, context, state, rows) {
-  const node = summaryTile('emotions', 'Эмоции', 'Тон размеченных комментариев таблицы: негатив, нейтрально, позитив. Строка легенды сужает топ и ленту. Точные эмоции — в блоке «Эмоции» ниже: они размечены с меньшей уверенностью');
+  /* J-?: отсылка к блоку «Эмоции» — только где он виден: в разработке у продакта его нет */
+  const hint = 'Тон размеченных комментариев таблицы: негатив, нейтрально, позитив. Строка легенды сужает топ и ленту.';
+  const node = summaryTile('emotions', 'Эмоции', blockShown('emotions', context.developer)
+    ? `${hint} Точные эмоции — в блоке «Эмоции» ниже: они размечены с меньшей уверенностью` : hint);
   const counts = Object.fromEntries(TONE_ORDER.map((tone) => [tone, 0]));
   const emotions = new Map();
   for (const row of rows) {
@@ -1186,7 +1205,13 @@ export function renderVerbatimCards(block, context) {
   const state = viewState(block, context);
   block.setHead();
   takeGroupStep(context.step, context.stepIsAuto);
-  const driver = normalizeDriver(context.state.driver);
+  /*
+    J-?: ячейка антидрайвера несёт интервал периода графика, а у «Топ проблем» период свой — интервал обрезается по нему.
+    Без пересечения таблица пишет об этом, а не «нет оценок»: оценки в ячейке были
+  */
+  const picked = normalizeDriver(context.state.driver);
+  const driver = picked?.from ? { ...picked, from: maxDate(picked.from, context.period.from), to: minDate(picked.to, context.period.to) } : picked;
+  const outside = Boolean(driver?.from && driver.from > driver.to);
   /* J-49: выбранный на графике день блок не сужает — только период группы. J-128: выбор антидрайвера — сужает */
   const current = driverRows(context.slice, driver, context.reference);
   /* У ячейки свой интервал: прошлого периода для сравнения доли у неё нет */
@@ -1199,8 +1224,15 @@ export function renderVerbatimCards(block, context) {
   const previous = compared ? driverRows(context.previousSlice, driver, context.reference)
     .filter(({ appeal_date: date }) => date >= compared.from && date <= compared.to) : [];
   const metricTabs = () => (context.analyst ? dynamicsTabs(block, context) : null);
-  const controls = () => [driverChip(context), cutTabs(block, context), metricTabs()].filter(Boolean);
-  const head = (extra = {}) => block.setHead({ controls: controls(), ...extra });
+  const controls = () => [driverChip(context), cutTabs(block, context), metricTabs(), stepTabs(context)].filter(Boolean);
+  /* J-?: свой период и шаг «Топ проблем» — в шапке карточки, а не в строке группы */
+  const period = context.setStep && context.periodControl ? { ...context.period, picker: context.periodControl } : null;
+  const head = (extra = {}) => block.setHead({ ...(period ? { period } : {}), controls: controls(), ...extra });
+  if (outside) {
+    head();
+    block.setContent(unavailable('Выбранная ячейка антидрайвера — вне периода «Топ проблем»', 'Выберите период карточки, который её включает, или снимите выбор в шапке блока.'));
+    return;
+  }
   if (current.length === 0) {
     head();
     if (driver) block.setContent(unavailable('Нет оценок с выбранным антидрайвером', 'Снимите выбор в шапке блока или выберите другую строку.'));
@@ -1257,7 +1289,8 @@ export function renderVerbatimCards(block, context) {
   const content = element('div', 'verbatim-problems');
   content.append(column, feedSlot, feedToggle(content, feedSlot));
   /* J-147: метки «Сделано с AI» у «Топ проблем» пока нет — по просьбе заказчика; лента отзывов начинается от заголовка */
-  head({ controls: [driverChip(context)].filter(Boolean) });
+  /* J-?: свои период и шаг «Топ проблем» — в шапке карточки, рядом с названием: управляют всей карточкой */
+  head({ controls: [driverChip(context), stepTabs(context)].filter(Boolean) });
   block.setContent(content);
   restoreTableScroll(restoreScroll);
 }

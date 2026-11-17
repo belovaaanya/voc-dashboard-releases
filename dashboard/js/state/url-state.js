@@ -22,9 +22,10 @@ const PARAM_FOCUS = 'focus';
   J-40: период `dynamics` — общий для блока аналитики (график, календарь, антидрайверы); свой период
   антидрайверов снят, старые параметры `antidrivers-*` игнорируются.
   Своего периода таблицы прямой речи (был `verbatim`, J-105) нет с недели 16–22.11: она живёт по периоду шапки;
-  старые параметры `verbatim-*` игнорируются, иначе тихо перебивали бы период шапки
+  старые параметры `verbatim-*` игнорируются, иначе тихо перебивали бы период шапки.
+  J-?: у «Топ проблем» свой период `problems` и свой шаг `problems-step` — контролы в шапке карточки, а не группы
 */
-export const LOCAL_PERIOD_BLOCKS = ['dynamics'];
+export const LOCAL_PERIOD_BLOCKS = ['dynamics', 'problems'];
 
 /* J-151: страницы дашборда — пункты меню; «Главная» в URL не пишется */
 export const PAGES = ['voc', 'analyst', 'roles', 'digest'];
@@ -92,8 +93,9 @@ export function readState(search = window.location.search) {
     ...(detailEvent ? { detailEvent } : {}),
     ...(driver ? { driver } : {}),
     ...(params.has('days') ? { days: normalizedDays(params.get('days').split(',')) } : {}),
-    /* J-?: шаг группы аналитики — один на график, антидрайверы и «Топ проблем»; неизвестный — автоматический */
+    /* J-?: шаг карточки «Динамика, события и антидрайверы»; у «Топ проблем» — свой; неизвестный — автоматический */
     ...(isStep(params.get('step')) ? { step: params.get('step') } : {}),
+    ...(isStep(params.get('problems-step')) ? { problemsStep: params.get('problems-step') } : {}),
     /* J-151: страница и месяц дайджеста; тема «Детализации» ушла вместе с карточкой */
     page: PAGES.includes(params.get('page')) ? params.get('page') : opensTable(search) ? ANALYST_PAGE : DEFAULT_PAGE,
     ...(MONTH.test(params.get('month') ?? '') ? { month: params.get('month') } : {}),
@@ -133,6 +135,7 @@ export function toSearch(state) {
   const days = normalizedDays(state.days);
   if (days.length) params.set('days', days.join(','));
   if (isStep(state.step)) params.set('step', state.step);
+  if (isStep(state.problemsStep)) params.set('problems-step', state.problemsStep);
   for (const id of LOCAL_PERIOD_BLOCKS) {
     const local = state.local?.[id];
     if (!local?.from || !local?.to) continue;
