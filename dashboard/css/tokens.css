@@ -446,6 +446,8 @@
   /* Индикаторы, легенда и sparkline (C-04, C-05): доли цвета тона и размеры из макета */
   --tone-tint: 12%;
   --tone-wash: 6%;
+  /* Правка к 1.4.20: край мягкой точки типа события в светлой теме — тон почти гаснет (Figma 5366:10015) */
+  --tone-fade: 9%;
   --tone-rim: 40%;
   --tone-ring-end: 8%;
   --tone-glow: 40%;
@@ -510,6 +512,10 @@
   --summary-glow-mid: 76%;
   --summary-glow-soft: 52%;
   --summary-glow-blend: transparent;
+  /* Обводка «Главного вывода» (макет 5362:4100): 1 px, к низу — тон направления на 50 % */
+  --summary-border-width: 1px;
+  --summary-border-tone: 50%;
+  /* Кромка статуса сегмента гаснет от правого верхнего угла (макет 5362:3956): эллипс 60 × 80 % */
   --plan-glow-rim-shape: ellipse 60% 80% at 100% 0;
   --plan-glow-soft: 34%;
   --plan-glow-strong: 52%;
@@ -842,6 +848,8 @@
   --badge-heat-at: 50% 50%;
   --badge-heat-ink: #FFFFFF;
   /* «Главный вывод» (макет 5366:8610): центр у нижней кромки, 76 × 83 %; непрозрачные стопы светлеют к белому */
+  /* Кромка статуса в светлой (макет 5366:8464) — от угла шире: 66 × 87 % */
+  --plan-glow-rim-shape: ellipse 66% 87% at 100% 0;
   --summary-glow-shape: ellipse 76% 83% at 50% 100%;
   --summary-glow-positive-core: #45CE65;
   --summary-glow-positive-mid: #6DD77C;

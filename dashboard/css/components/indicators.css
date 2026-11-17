@@ -209,6 +209,17 @@
   box-shadow: 0 0 var(--space-1) color-mix(in srgb, var(--tone) 40%, transparent);
 }
 
+/*
+  Правка пользователя к 1.4.20: в светлой теме иконка типа — мягкое пятно тона из центра, без тёмной сердцевины и свечения
+  (светлый макет: пункт ленты 5366:10015, чип 5366:9965 — тон 100 % в центре, 9 % у края). Тёмная тема — прежний
+  «шар» по тёмному макету 5362:5506
+*/
+:root[data-theme='light'] .status-dot--event,
+:root[data-theme='light'] .status-dot--event-sm {
+  background: radial-gradient(circle closest-side, var(--tone), color-mix(in srgb, var(--tone) var(--tone-fade), transparent));
+  box-shadow: none;
+}
+
 /* Длинный тег переносится, а не режется многоточием */
 .tag {
   display: inline-block;

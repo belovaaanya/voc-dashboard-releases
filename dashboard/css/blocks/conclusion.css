@@ -78,6 +78,7 @@
   --summary-core: var(--summary-tone);
   --summary-mid: color-mix(in srgb, var(--summary-tone) var(--summary-glow-mid), var(--summary-glow-blend));
   --summary-soft: color-mix(in srgb, var(--summary-tone) var(--summary-glow-soft), var(--summary-glow-blend));
+  --summary-border-end: color-mix(in srgb, var(--summary-tone) var(--summary-border-tone), transparent);
   position: relative;
   isolation: isolate;
 }
@@ -104,20 +105,25 @@
 }
 
 /*
-  Обводка 1 px по макету: в макете слой свечения лежит и на рамке — у нижнего края она цвета свечения и гаснет к верху.
-  Кольцо-маска толщиной рамки поверх неё тем же градиентом (как кольцо тона у сегментов)
+  Обводка по макету (тёмная 5362:4100): рамка 1 px внутрь, линейный градиент по всему контуру сверху вниз —
+  от цвета рамки карточек (5 % высоты) к тону направления (82 %), обе точки на 50 % (у остальных карточек 0,5 px).
+  Кольцо-маска поверх рамки карточки. В светлой (5366:8609) рамка вывода — белая 1 px, как у соседних карточек
 */
 .card--summary[data-conclusion-tone]:not(:has(.state))::after {
   content: '';
   position: absolute;
   inset: calc(-1 * var(--card-border-width, var(--hairline)));
-  padding: var(--card-border-width, var(--hairline));
+  padding: var(--summary-border-width);
   border-radius: inherit;
-  background: radial-gradient(var(--summary-glow-shape), var(--summary-core), var(--summary-mid) 22%, var(--summary-soft) 44%, transparent);
+  background: linear-gradient(var(--color-card-border) 5%, var(--summary-border-end) 82%);
   -webkit-mask: linear-gradient(currentColor 0 0) content-box, linear-gradient(currentColor 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(currentColor 0 0) content-box exclude, linear-gradient(currentColor 0 0);
   pointer-events: none;
+}
+
+:root[data-theme='light'] .card--summary[data-conclusion-tone]:not(:has(.state))::after {
+  content: none;
 }
 
 /* J-63: источник в шапке — подсказка, как подпись шапки `card__note`, а не текст вывода */

@@ -484,8 +484,11 @@
 .card--metric-segment[data-plan-glow]:not(:has(.state))::after {
   inset: calc(-1 * var(--card-border-width, var(--hairline)));
   padding: var(--card-border-width, var(--hairline));
-  /* Кромка статуса по макету 5362:3956 — ровная по всему контуру, а не гаснущая от угла: карточка не сливается с соседями */
-  background: color-mix(in srgb, var(--plan-tone) var(--plan-glow-rim), transparent);
+  /*
+    Кромка статуса по макету (тёмная 5362:3956, светлая 5366:8464) — гаснет от правого верхнего угла, как обводка
+    «Главного вывода» от нижнего края. Дальше от угла видна обычная рамка карточки: с соседями она не сливается
+  */
+  background: radial-gradient(var(--plan-rim-shape), color-mix(in srgb, var(--plan-tone) var(--plan-glow-rim), transparent), transparent);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
