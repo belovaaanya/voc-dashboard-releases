@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>VOC B2B — скачать</title>
-<meta name="description" content="Дашборд VOC для B2B в отдельном окне: macOS и Windows.">
+<meta name="description" content="Дашборд VOC для B2B в отдельном окне для macOS.">
 <!--
   Страница скачивания приложения (docs/desktop-app.md, «Страница скачивания»).
   Публикуется в открытом репозитории belovaaanya/voc-dashboard-releases вместе с
@@ -245,6 +245,8 @@
 
   .other { color: var(--dim); font-size: 13px; text-decoration: none; border-bottom: 1px solid var(--line); padding-bottom: 2px; }
   .other:hover { color: var(--ink); border-color: var(--dim); }
+  /* Подпись без ссылки: «Версия для Windows — по запросу» — не подчёркнута, на наведение не реагирует */
+  .other--note, .other--note:hover { color: var(--dim); border-bottom: 0; }
 
   /* ── подсказки: тусклые, проявляются при наведении на кнопку ─────── */
 
@@ -337,7 +339,8 @@
         <span id="primary-label">Скачать</span>
         <small id="primary-meta" hidden></small>
       </a>
-      <a class="other" id="secondary" href="https://github.com/belovaaanya/voc-dashboard-releases/releases/latest">Для другой системы</a>
+      <!-- Пока выпускается только macOS: Windows соберём по запросу (docs/desktop-app.md, «Только macOS») -->
+      <span class="other other--note" id="secondary">Версия для Windows — по запросу</span>
     </div>
     </div>
   </main>
@@ -345,63 +348,32 @@
   <footer>
     <section id="hint-install">
       <h2>01 Установка</h2>
-      <p id="install-text">Mac: откройте DMG и перетащите «VOC Dashboard» на ярлык «Программы». Windows: распакуйте архив и положите файл в удобную папку.</p>
+      <p id="install-text">Откройте DMG и перетащите «VOC Dashboard» на ярлык «Программы» — оттуда приложение сможет обновляться.</p>
     </section>
     <section>
       <h2>02 Первый запуск</h2>
-      <p id="launch-text">Приложение не заверено у Apple и Microsoft, система попросит подтвердить запуск один раз. Mac: «Готово», затем «Конфиденциальность и безопасность» → «Всё равно открыть». Windows: «Подробнее» → «Выполнить в любом случае».</p>
+      <p id="launch-text">Приложение не заверено у Apple, система попросит подтвердить запуск один раз: «Готово», затем «Системные настройки» → «Конфиденциальность и безопасность» → внизу «Всё равно открыть».</p>
     </section>
     <section>
       <h2>03 Данные</h2>
       <p>«Обновить данные» → CSV с компьютера или ссылка на страницу Confluence. Нужен VPN.</p>
     </section>
-    <p class="meta" id="version">Mac с процессором Apple (M1 и новее) · Windows 10 и 11</p>
+    <p class="meta" id="version">Mac с процессором Apple (M1 и новее)</p>
   </footer>
 
   <script type="module">
+    /*
+      Пока выпускается только macOS (решение 17.11): кнопка всегда ведёт на DMG последнего релиза, ссылки на Windows нет —
+      latest/download/VOC-Dashboard-Windows.zip дал бы 404. Вернуть Windows — docs/desktop-app.md, «Только macOS»
+    */
     const REPOSITORY = 'belovaaanya/voc-dashboard-releases';
     const RELEASES = `https://github.com/${REPOSITORY}/releases/latest`;
-    const TARGETS = {
-      mac: {
-        name: 'macOS', asset: 'VOC-Dashboard-macOS.dmg', other: 'windows',
-        install: 'Откройте DMG и перетащите «VOC Dashboard» на ярлык «Программы» — оттуда приложение сможет обновляться.',
-        launch: 'Откройте приложение. Появится предупреждение: нажмите «Готово», а не «В Корзину». Затем «Системные настройки» → «Конфиденциальность и безопасность» → внизу «Всё равно открыть». Нужно один раз.',
-      },
-      windows: {
-        name: 'Windows', asset: 'VOC-Dashboard-Windows.zip', other: 'mac',
-        install: 'Распакуйте архив и положите «VOC Dashboard.exe» в удобную папку, например «Документы».',
-        launch: 'Если появится SmartScreen — «Подробнее» → «Выполнить в любом случае». Запрещено политикой компьютера — обратитесь в ИТ.',
-      },
-    };
-
-    /* userAgentData — где он есть; иначе строка браузера. Телефон и неизвестная ОС — кнопка для macOS */
-    function detect() {
-      const platform = (navigator.userAgentData?.platform || navigator.platform || navigator.userAgent || '').toLowerCase();
-      if (platform.includes('win')) return 'windows';
-      if (platform.includes('mac')) return 'mac';
-      return null;
-    }
-
-    const os = detect();
-    const target = TARGETS[os ?? 'mac'];
-    const other = TARGETS[target.other];
-    document.getElementById('primary').href = `${RELEASES}/download/${target.asset}`;
-    document.getElementById('primary-label').textContent = `Скачать для ${target.name}`;
-    const secondary = document.getElementById('secondary');
-    secondary.href = `${RELEASES}/download/${other.asset}`;
-    secondary.textContent = `или для ${other.name}`;
-    const showSteps = (steps) => {
-      document.getElementById('install-text').textContent = steps.install;
-      document.getElementById('launch-text').textContent = steps.launch;
-    };
-    if (os) showSteps(target);
-    /* Скачивание начинается в этой же вкладке: шаги — для выбранной системы и уже не тусклые */
-    const onDownload = (steps) => () => {
-      showSteps(steps);
-      document.body.classList.add('is-downloading');
-    };
-    document.getElementById('primary').addEventListener('click', onDownload(target));
-    secondary.addEventListener('click', onDownload(other));
+    const ASSET = 'VOC-Dashboard-macOS.dmg';
+    const primary = document.getElementById('primary');
+    primary.href = `${RELEASES}/download/${ASSET}`;
+    document.getElementById('primary-label').textContent = 'Скачать для macOS';
+    /* Скачивание начинается в этой же вкладке: шаги установки уже не тусклые */
+    primary.addEventListener('click', () => document.body.classList.add('is-downloading'));
 
     const megabytes = (bytes) => `${Math.round(bytes / 1048576)} МБ`;
     fetch(`https://api.github.com/repos/${REPOSITORY}/releases/latest`)
@@ -409,13 +381,12 @@
       .then((release) => {
         const version = /^desktop-v(.+)$/.exec(release?.tag_name ?? '')?.[1];
         if (!version) return;
-        const asset = release.assets?.find((item) => item.name === target.asset);
+        const asset = release.assets?.find((item) => item.name === ASSET);
         const meta = document.getElementById('primary-meta');
         meta.textContent = asset ? `${version} · ${megabytes(asset.size)}` : version;
         meta.hidden = false;
         const date = new Date(release.published_at).toLocaleDateString('ru-RU');
-        document.getElementById('version').textContent =
-          `Версия ${version} от ${date} · Mac с процессором Apple (M1 и новее) · Windows 10 и 11`;
+        document.getElementById('version').textContent = `Версия ${version} от ${date} · Mac с процессором Apple (M1 и новее)`;
       })
       .catch(() => {});
   </script>

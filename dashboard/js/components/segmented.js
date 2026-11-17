@@ -2,6 +2,7 @@
 
 import { element, withFullLabel } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
+import { tag } from './tag.js';
 import { slideSelection } from '../ui/motion.js';
 import { holdDuring } from '../ui/page-height.js';
 
@@ -67,7 +68,13 @@ export function segmented({ label, options, selected, onSelect, size = 'sm', cap
       J-135: значки смысла после подписи (треугольники урона и влияния) — в одной строке с ней; таб — колонка ради
       ширины под жирное начертание, поэтому подпись и значки в своей строке. Имя таба — по-прежнему подпись
     */
-    const content = option.icons?.length ? element('span', 'segmented__row', option.label) : option.label;
+    /* `tag` — короткая метка после подписи («бета»): нейтральный тег со своей подсказкой, в одной строке с подписью */
+    const content = option.icons?.length || option.tag ? element('span', 'segmented__row', option.label) : option.label;
+    if (option.tag) {
+      const mark = tag(option.tag.text, option.tag.tone ?? 'neutral');
+      if (option.tag.title) mark.title = option.tag.title;
+      content.append(mark);
+    }
     if (option.icons?.length) {
       const marks = element('span', 'segmented__icons');
       marks.setAttribute('aria-hidden', 'true');

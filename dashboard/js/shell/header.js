@@ -301,8 +301,8 @@ export function renderHeader(host, context) {
     const filters = renderFilters(dimensions, state, label, onFilterChange, reference, onFiltersReset, { onCashbackChange });
     if (filters) barBefore.push(filters);
   } else {
-    /* J-174: на странице ролей из фильтров — только ОС, она есть лишь у АБМ; за кнопку её не прячем */
-    const osFilter = renderFilters(dimensions, state, label, onFilterChange, reference, onFiltersReset, { keys: ['os'], more: [], cashback: false });
+    /* J-174: на странице ролей из фильтров — сегмент и ОС (ОС — лишь у АБМ); за кнопку их не прячем */
+    const osFilter = renderFilters(dimensions, state, label, onFilterChange, reference, onFiltersReset, { keys: ['segment', 'os'], more: [], cashback: false });
     if (osFilter) barBefore.push(osFilter);
   }
   const barAfter = [];

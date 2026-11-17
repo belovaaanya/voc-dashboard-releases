@@ -98,7 +98,8 @@ function periodPickerNode(id, scope, { from, to, preset, title, picker }, regist
     onReset: picker.onReset,
     scope,
     itemClass: 'card__period-picker',
-    triggerClass: picker.local ? 'card__period card__period--control card__period--local' : 'card__period card__period--control',
+    /* J-?: общий период группы аналитики — пилюлей, как период в шапке дашборда: текстом его не опознавали как кнопку */
+    triggerClass: ['card__period card__period--control', picker.local && 'card__period--local', picker.shared && 'card__period--pill'].filter(Boolean).join(' '),
     iconClass: 'card__icon',
     align: 'end',
     onPreviewReady: registerPreview,

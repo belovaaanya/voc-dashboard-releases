@@ -18,8 +18,9 @@ import { dynamicsSheets, exportFileName } from '../core/export.js';
 import { downloadAction } from '../ui/download.js';
 import { planFor } from '../core/plan.js';
 import { roundDelta, roundVoc } from '../core/round.js';
-import { SCALE_OPTIONS, buildTimeSeries, recommendedScale, withDamage } from '../core/timeseries.js';
-import { ANOMALY_EVENT, EVENT_LANES, INCIDENT_EVENT, ROLLOUT_EVENT, SUSTAINED_EVENT, eventLanes, majorEvents } from '../core/calendar.js';
+import { SCALE_OPTIONS, buildTimeSeries, markPartial, recommendedScale, wholeBucketRange, withDamage } from '../core/timeseries.js';
+import { latestDate } from '../core/dates.js';
+import { ANOMALY_EVENT, EVENT_LANES, INCIDENT_EVENT, ROLLOUT_EVENT, SUSTAINED_EVENT, eventHint, eventLanes, majorEvents } from '../core/calendar.js';
 import { calendarEventsOf, calendarReady } from '../state/event-analysis.js';
 
 /* График рисуется в пикселях сцены, а не в растянутом viewBox: иначе на узкой странице текст мельче роли (B-17) */
@@ -28,7 +29,8 @@ const MARGIN = { top: 26, right: 12, bottom: 28, left: 44 };
 /* Ревью 13.11: названия осей — над шкалами, слева и справа на одной линии, с теми же краями, что их цифры */
 const AXIS_TITLE_Y = 8;
 /* Неделя 16–22.11: точка мельче — линия не теряется среди точек; мишень мыши — столбец интервала, он прежний */
-const POINT_RADIUS = 2;
+/* Радиус точки — половина --chart-dot (3 px): геометрия подписей и мишеней знает его заранее */
+const POINT_RADIUS = 1.5;
 /* Запас клипа под точку при наведении (3,5 + кольцо 3) и выбранную (5 + обводка); ряды по x обрезаны точно (B-02, V-05) */
 const PLOT_BLEED = 7;
 /* Переход тона линии — по центру границы коридора (J-15): точка у границы не стоит на сером участке */
@@ -83,6 +85,8 @@ function chartScaleTabs(block, context, scale) {
     ...(context.analyst ? {} : { options: MAIN_SCALES }),
     selected: scale,
     onSelect: (value) => {
+      /* J-?: в группе аналитики шаг общий — выбор пишет его в состояние группы */
+      if (context.setStep) return context.setStep(value);
       chartScale.choose(value, context.period);
       renderDynamics(block, context);
     },
@@ -218,6 +222,11 @@ const CARD_GAP = 4;
 const CARD_TOP = CARD_GAP * 2;
 const CARD_ZONE = CARD_TOP + CARD.height + CARD_GAP;
 const CARD_LIMIT = 5;
+/*
+  Неделя 16–22.11: карточки крупных событий временно скрыты по решению пользователя — на главной и в «Для аналитика».
+  Отбор (`majorEvents`), раскладка (`placeCards`) и отрисовка остаются: вернуть — поставить `true`
+*/
+export const SHOW_EVENT_CARDS = false;
 /* Кандидатов меряется с запасом: крупная карточка может не встать, и место займёт следующая */
 const CARD_MEASURED = CARD_LIMIT * 3;
 const CARD_LABELS = { [INCIDENT_EVENT]: 'Авария', [ANOMALY_EVENT]: 'Крит. снижение', [SUSTAINED_EVENT]: 'Инцидент' };
@@ -317,6 +326,16 @@ function appendEventCards(stage, svg, candidates, series, points, plot, tooltip,
   svg.append(stems);
 }
 
+function stripLegend(lanes, context) {
+  const items = lanes.map((lane) => {
+    const label = lane.kind === ROLLOUT_EVENT && context.state.channel ? `${lane.label} ${context.state.channel}` : lane.label;
+    const item = legendItem(label, lane.tone, 'dot');
+    item.title = eventHint(lane.kind);
+    return item;
+  });
+  return legendList(items, 'chart-events-legend');
+}
+
 function appendEventStrip(svg, lanes, series, points, frame, tooltip, interaction, context) {
   const { plot } = frame;
   const top = plot.y + plot.height + MARGIN.bottom + LANE_GAP;
@@ -344,6 +363,7 @@ function appendEventStrip(svg, lanes, series, points, frame, tooltip, interactio
         dot.classList.add('is-hovered');
         showChartTooltip(tooltip, {
           content: [element('span', 'chart-tooltip__value', `${when} · ${label} · ${formatCount(count)}`),
+            element('span', 'chart-tooltip__hint', eventHint(lane.kind)),
             element('span', 'chart-tooltip__hint', sizeHint), element('span', 'chart-tooltip__hint', POINT_HINT)],
           x: plot.x + x,
           y: top + y,
@@ -450,7 +470,12 @@ function appendSeries(group, defs, points, plan, domain, ids, plot) {
   const bottom = yPosition(plan.min, domain, plot);
   /* Коридор плана — зелёный градиент слева направо, как везде (неделя 16–22.11): цвет стопов — токен --color-plan-band */
   const band = svgNode('linearGradient', 'chart-plan-band-gradient', { id: ids.planBand, gradientUnits: 'userSpaceOnUse', x1: 0, x2: plot.width, y1: 0, y2: 0 });
-  band.append(svgNode('stop', 'chart-plan-band-stop chart-plan-band-stop--clear', { offset: 0 }), svgNode('stop', 'chart-plan-band-stop', { offset: 1 }));
+  /* J-?: стопы коридора 0 · 30 % · 75 % — общие с мини-линиями и легендой (--color-plan-band-mid, --color-plan-band) */
+  band.append(
+    svgNode('stop', 'chart-plan-band-stop chart-plan-band-stop--clear', { offset: 0 }),
+    svgNode('stop', 'chart-plan-band-stop chart-plan-band-stop--mid', { offset: 0.3 }),
+    svgNode('stop', 'chart-plan-band-stop', { offset: 0.75 }),
+  );
   defs.append(band);
   const radius = Math.min(bandRadius(group), (bottom - top) / 2);
   group.append(svgNode('rect', 'chart-plan-band', { x: 0, y: top, width: plot.width, height: bottom - top, rx: radius, ry: radius, fill: `url(#${ids.planBand})` }));
@@ -458,7 +483,6 @@ function appendSeries(group, defs, points, plan, domain, ids, plot) {
   appendClip(defs, ids.above, plot, { y: -PLOT_BLEED, height: top + PLOT_BLEED });
   appendClip(defs, ids.below, plot, { y: bottom, height: plot.height - bottom + PLOT_BLEED });
   appendZoneGradient(defs, ids.zones, plot, top, bottom);
-  appendZoneGradient(defs, ids.glow, plot, top, bottom, ' chart-zones--glow');
   const clearAbove = Math.max(top - BAND_FILL_GAP, 0);
   const clearBelow = Math.min(bottom + BAND_FILL_GAP, plot.height);
   appendGradient(defs, ids.fillAbove, 'positive', { strong: Math.min(highest, clearAbove), clear: clearAbove });
@@ -467,7 +491,7 @@ function appendSeries(group, defs, points, plan, domain, ids, plot) {
   appendPathGroup(group, areaPaths(points, top), 'chart-area', { ...clipped(ids.above), ...filled(ids.fillAbove) });
   appendPathGroup(group, areaPaths(points, bottom), 'chart-area', { ...clipped(ids.below), ...filled(ids.fillBelow) });
   const lines = linePaths(points);
-  appendPathGroup(group, lines, 'chart-line chart-line--glow', stroked(ids.glow));
+  /* Неделя 16–22.11 (макет пользователя): линия без свечения — одна линия тоном зон */
   appendPathGroup(group, lines, 'chart-line chart-line--zones', stroked(ids.zones));
 }
 
@@ -477,11 +501,16 @@ function appendSeries(group, defs, points, plan, domain, ids, plot) {
 export const POINT_HINT = 'Клик покажет события и антидрайверы этой точки';
 export const SELECTED_POINT_HINT = 'Клик снимет выбор';
 
+/* Неделя 16–22.11: интервал, который ещё идёт за последней датой данных, подписан как неполный — до какого дня данные */
+export const partialNote = (bucket) => `Неполный интервал: данные по ${formatDate(bucket.dataEnd)}`;
+
 function tooltipLines(bucket, damageMode) {
-  if (!damageMode) return [element('span', 'chart-tooltip__value', `${formatInterval(bucket)} · VOC ${formatVoc(bucket.voc)} · ${formatRatings(bucket.count)}`)];
+  const partial = bucket.partial ? [element('span', 'chart-tooltip__hint', partialNote(bucket))] : [];
+  if (!damageMode) return [element('span', 'chart-tooltip__value', `${formatInterval(bucket)} · VOC ${formatVoc(bucket.voc)} · ${formatRatings(bucket.count)}`), ...partial];
   return [
     element('span', 'chart-tooltip__value', `${formatInterval(bucket)} · Урон ${formatDelta(roundVoc(bucket.damage))} · ${formatRatings(bucket.count)}`),
     element('span', 'chart-tooltip__hint', `С пятёрками в этом интервале VOC периода — ${formatVoc(bucket.vocWithFives)}`),
+    ...partial,
   ];
 }
 
@@ -545,11 +574,25 @@ function labelBox(node) {
 }
 
 /* Подписи измеряются один раз все вместе: замер каждой позиции по отдельности перестраивал layout на каждой точке */
-function placePointLabels(group, series, points, plan, plot) {
+/*
+  Неделя 16–22.11: на главной подписаны только опорные точки — минимум, максимум, последняя и выбранные; значение
+  остальных — в подсказке. В «Для аналитика» подписи прежние: каждая точка, которой хватило места
+*/
+export function keyLabelIndices(series, state) {
+  const values = series.map(({ voc }) => voc);
+  const finite = values.flatMap((value, index) => (Number.isFinite(value) ? [index] : []));
+  if (!finite.length) return new Set();
+  const days = selectionDays(state);
+  const pick = (better) => finite.reduce((best, index) => (better(values[index], values[best]) ? index : best));
+  return new Set([pick((a, b) => a < b), pick((a, b) => a > b), finite.at(-1),
+    ...finite.filter((index) => days.some((day) => day >= series[index].from && day <= series[index].to))]);
+}
+
+function placePointLabels(group, series, points, plan, plot, only = null) {
   const values = series.map(({ voc }) => voc);
   const finite = values.filter(Number.isFinite);
   const extremes = [Math.min(...finite), Math.max(...finite)];
-  const order = labelOrder(values);
+  const order = labelOrder(values).filter((index) => !only || only.has(index));
   const labels = order.map((index) => {
     const tone = pointTone(values[index], plan);
     const node = svgText(`chart-point-label chart-point-label--${tone}`, formatVoc(values[index]), { 'dominant-baseline': 'middle' });
@@ -634,24 +677,12 @@ function selectedColumns(series, points, plot, state) {
   return group;
 }
 
-/*
-  Неделя 16–22.11: выбранная и последняя точки — светящийся круг, как иконка типа события (J-269): тёмная сердцевина
-  сверху, яркий тон к краю и свечение тона. Градиент — свой на тон в defs графика, цвет — у классов в стилях
-*/
+/* Выбранная и последняя точки — метка цвета своей зоны (зелёная, красная, серая по плану) */
 const POINT_MARK_TONES = { above: 'positive', below: 'negative', 'in-plan': 'neutral', default: 'neutral' };
 
-function appendMarkGradients(defs, prefix) {
-  for (const tone of ['positive', 'negative', 'neutral']) {
-    const gradient = svgNode('radialGradient', `chart-mark chart-mark--${tone}`, { id: `${prefix}-mark-${tone}`, cx: 0.5, cy: 0.5, r: 0.5, fx: 0.5, fy: 0.3 });
-    gradient.append(svgNode('stop', 'chart-mark__core', { offset: 0 }), svgNode('stop', 'chart-mark__tone', { offset: 0.6 }),
-      svgNode('stop', 'chart-mark__rim', { offset: 1 }));
-    defs.append(gradient);
-  }
-}
-
+/* Неделя 16–22.11 (макет пользователя): метка — точка цвета зоны крупнее обычной, без градиента и свечения */
 function markPoint(circle, prefix, tone) {
   circle.classList.add('is-mark', `chart-point--mark-${tone}`);
-  circle.style.fill = `url(#${prefix}-mark-${tone})`;
 }
 
 const lastIndex = (points) => points.reduce((found, { y }, index) => (y === null ? found : index), -1);
@@ -663,7 +694,6 @@ function appendDamageLine(group, defs, points, plot, ids) {
   appendGradient(defs, ids.damage, 'damage-area', { strong: Math.min(...ys), clear: plot.height });
   appendPathGroup(group, areaPaths(points, plot.height), 'chart-area', filled(ids.damage));
   const lines = linePaths(points);
-  appendPathGroup(group, lines, 'chart-line chart-line--glow chart-line--damage');
   appendPathGroup(group, lines, 'chart-line chart-line--damage');
 }
 
@@ -710,9 +740,11 @@ function appendPoints(block, marks, series, points, tooltip, plan, context, plot
     const selected = selectionDays(context.state).some((day) => day >= bucket.from && day <= bucket.to);
     circle.classList.toggle('is-selected', selected);
     /* Выбранная и последняя точки — светящийся круг цвета точки, как иконка типа события (J-269); в уроне — на его линии */
-    if (!damageMode && (selected || index === last)) markPoint(circle, prefix, POINT_MARK_TONES[pointTone(bucket.voc, plan)]);
+    /* Неполный интервал (ещё идёт за последней датой данных) — полая точка вместо светящейся */
+    if (bucket.partial) circle.classList.add('chart-point--partial');
+    else if (!damageMode && (selected || index === last)) markPoint(circle, prefix, POINT_MARK_TONES[pointTone(bucket.voc, plan)]);
     circle.setAttribute('aria-pressed', String(selected));
-    circle.setAttribute('aria-label', `${formatInterval(bucket)}: VOC ${formatVoc(bucket.voc)}, ${damageMode ? `урон ${formatDelta(roundVoc(bucket.damage))}, ` : ''}${formatRatings(bucket.count)}`);
+    circle.setAttribute('aria-label', `${formatInterval(bucket)}: VOC ${formatVoc(bucket.voc)}, ${damageMode ? `урон ${formatDelta(roundVoc(bucket.damage))}, ` : ''}${formatRatings(bucket.count)}${bucket.partial ? `. ${partialNote(bucket)}` : ''}`);
     const reveal = () => {
       for (const other of group.querySelectorAll('.is-hovered')) other.classList.remove('is-hovered');
       circle.classList.add('is-hovered');
@@ -801,8 +833,20 @@ function chartLegend(context, { plan, hasPrevious, previous }) {
   return legend;
 }
 
+/*
+  Неделя 16–22.11: на шаге недели и месяца график идёт целыми интервалами, накрывающими выбор, и считает их по всем
+  их оценкам (тот же срез, `context.select`). Неполная — только последняя точка, если её интервал ещё идёт за последней
+  датой данных. На шаге дня диапазон — сам выбор
+*/
+function currentSeries(context, scale) {
+  const range = wholeBucketRange(context.period, scale);
+  const same = range.from === context.period.from && range.to === context.period.to;
+  const rows = same || !context.select ? context.slice : context.select(range).rows;
+  return markPartial(shownSeries(rows, same || !context.select ? context.period : range, scale), latestDate(context.rows));
+}
+
 function chartModel(context, scale, plan) {
-  const current = shownSeries(context.slice, context.period, scale);
+  const current = currentSeries(context, scale);
   /* J-85: сравнение карточек идёт с полным прошлым периодом, а на графике интервалы идут встык: лишний хвост сжал бы ось времени */
   const previous = shownSeries(context.previousSlice, context.previousPeriod, scale).slice(0, current.length);
   const shownPlan = plan ? { ...plan, min: roundVoc(plan.min), max: roundVoc(plan.max) } : null;
@@ -857,9 +901,8 @@ function drawChart(block, context, stage, tooltip, model, size) {
 
   const defs = svgNode('defs');
   const prefix = `dynamics-${chartSequence += 1}`;
-  const ids = Object.fromEntries(['series', 'marks', 'above', 'below', 'zones', 'glow', 'fillAbove', 'fillBelow', 'volume', 'damage', 'planBand']
+  const ids = Object.fromEntries(['series', 'marks', 'above', 'below', 'zones', 'fillAbove', 'fillBelow', 'volume', 'damage', 'planBand']
     .map((name) => [name, `${prefix}-${name}`]));
-  appendMarkGradients(defs, prefix);
   const bled = { y: -PLOT_BLEED, height: plot.height + PLOT_BLEED * 2 };
   appendClip(defs, ids.series, plot, bled);
   appendClip(defs, ids.marks, plot, { y: -MARGIN.top, height: plot.height + MARGIN.top + PLOT_BLEED, sideBleed: PLOT_BLEED });
@@ -891,7 +934,7 @@ function drawChart(block, context, stage, tooltip, model, size) {
   tooltip.hidden = true;
   stage.querySelector('.chart-svg')?.remove();
   stage.prepend(svg);
-  placePointLabels(labels, current, currentPoints, plan, plot);
+  placePointLabels(labels, current, currentPoints, plan, plot, context.analyst ? null : keyLabelIndices(current, context.state));
   appendEventCards(stage, svg, model.cards, current, currentPoints, plot, tooltip, interaction, context);
   if (focused) svg.querySelector(`[data-focus-date="${focused}"]`)?.focus();
 }
@@ -907,7 +950,7 @@ function renderChart(block, context, scale, plan) {
   const ready = wanted && calendarReady(context);
   if (wanted && !ready) awaitCalendar(block, context);
   const events = ready ? calendarEventsOf(context) : [];
-  const model = { ...base, lanes: ready ? eventLanes(events, base.current, context.slice) : [], cards: majorEvents(events, base.current, context.slice) };
+  const model = { ...base, lanes: ready ? eventLanes(events, base.current, context.slice) : [], cards: SHOW_EVENT_CARDS ? majorEvents(events, base.current, context.slice) : [] };
   const chart = element('div', modeOf(context) === MODE_DAMAGE ? 'chart chart--damage' : 'chart');
   chart.append(chartLegend(context, model));
   const stage = element('div', 'chart-stage');
@@ -918,9 +961,12 @@ function renderChart(block, context, scale, plan) {
   /* Урон с пятёрками и подсказку клика знает только подсказка: диктор читает её, а не одно имя точки */
   const tooltip = chartTooltip({ spoken: true });
   stage.append(tooltip);
-  if (context.slice.length) chart.append(stage);
+  if (context.slice.length) {
+    chart.append(stage);
+    /* Неделя 16–22.11: строки полосы без подписей — под ней легенда типов; наведение на тип объясняет его одной фразой */
+    if (model.lanes.length) chart.append(stripLegend(model.lanes, context));
   /* Строка пояснения с полями абзаца, без role=status: перерисовка графика не объявляет её заново */
-  else chart.append(stateText('detail', 'Нет оценок за выбранный период графика. Выберите другой период на таймлайне.'));
+  } else chart.append(stateText('detail', 'Нет оценок за выбранный период графика. Выберите другой период на таймлайне.'));
   /* Протягивание таймлайна показывает даты в выборе периода — в шапке группы, если период общий (J-40) */
   const timeline = chartTimeline(context, { owner: block, onPreview: (range) => (context.previewPeriod ?? block.previewPeriod)?.(range) });
   chart.append(timeline.node);
@@ -935,14 +981,17 @@ function renderChart(block, context, scale, plan) {
 
 export function renderDynamics(block, context) {
   lastContexts.set(block, context);
-  /* Ревью 13.11: над графиком уже заголовок группы «Динамика, события и антидрайверы» — своё название видно только развёрнутым */
-  block.setTitle('Динамика VOC', undefined, { hidden: !block.isExpanded() });
+  /*
+    Неделя 16–22.11: группа аналитики разрезана на карточки со своими заголовками («Антидрайверы», «Топ проблем») —
+    название графика видно всегда, тем же заголовком карточки. Раньше (ревью 13.11) его прятал заголовок группы над ним
+  */
+  block.setTitle('Динамика VOC');
   /* J-40: общий период блока аналитики выбирается в шапке группы, а не графика */
   /* Развёрнутая карточка закрывает шапку группы: общий период тогда подписан в своей шапке, без выбора */
   const period = context.periodControl?.shared
     ? (block.isExpanded() ? { ...context.period } : null)
     : { ...context.period, ...(context.periodControl ? { picker: context.periodControl } : {}) };
-  const scale = scaleFor(context.period, context.analyst);
+  const scale = context.step ?? scaleFor(context.period, context.analyst);
   const plan = planFor(context.reference?.plan, {
     channel: context.state.channel,
     from: context.period.from,
@@ -950,7 +999,13 @@ export function renderDynamics(block, context) {
   });
   const { chart, draw, model, mode } = renderChart(block, context, scale, plan);
   const download = downloadAction(() => exportFileName('Динамика VOC', context), () => dynamicsSheets(context, model, scale));
-  block.setHead({ ...(period ? { period } : {}), controls: [mode, chartScaleTabs(block, context, scale)], actions: [expandAction(block, context), download] });
+  /*
+    Неделя 16–22.11: шаг один на группу аналитики — переключатель в строке общего периода, своего у графика нет (было три
+    переключателя, стал один). Развёрнутая карточка закрывает строку группы — тогда шаг выбирается в её шапке и пишется
+    в тот же общий шаг. Вне группы (без `setStep`) — свой переключатель, как раньше
+  */
+  const ownStep = !context.setStep || block.isExpanded();
+  block.setHead({ ...(period ? { period } : {}), controls: ownStep ? [mode, chartScaleTabs(block, context, scale)] : [mode], actions: [expandAction(block, context), download] });
   block.setContent(chart);
   draw();
 }

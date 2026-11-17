@@ -1,6 +1,6 @@
 # VOC Dashboard — релизы
 
-Сборки десктопного приложения VOC Dashboard для macOS и Windows.
+Сборки десктопного приложения VOC Dashboard для macOS (Windows — по запросу).
 
 **Скачать:** https://belovaaanya.github.io/voc-dashboard-releases/
 

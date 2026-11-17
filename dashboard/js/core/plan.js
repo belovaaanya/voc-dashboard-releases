@@ -70,10 +70,10 @@ export function planDays(ratings, plans, channel) {
   return days;
 }
 
-const GLOW_IN = 'in';
-const GLOW_ABOVE = 'above';
+export const GLOW_IN = 'in';
+export const GLOW_ABOVE = 'above';
 export const GLOW_ABOVE_STRONG = 'above-strong';
-const GLOW_BELOW = 'below';
+export const GLOW_BELOW = 'below';
 export const GLOW_BELOW_STRONG = 'below-strong';
 
 /**

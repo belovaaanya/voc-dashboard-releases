@@ -1,0 +1,262 @@
+/*
+  Воронка и динамика — сверху: воронка шире, столбики по месяцам справа; под ними сноска и «Подробнее» с таблицей
+*/
+.call-stats-view__top {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: var(--space-8);
+  align-items: stretch;
+}
+
+.call-stats-view__top > :only-child {
+  grid-column: 1 / -1;
+}
+
+/*
+  Воронка — язык «Конверсии опроса»: луч её же (beamNode из blocks/conversion.js, стили .conversion__* в metrics.css)
+  под четырьмя колонками ступеней, ответвление «Недозвон или отказ» — пятой колонкой вне луча, приглушённо
+*/
+.call-funnel {
+  display: grid;
+  grid-template-rows: auto minmax(calc(var(--space-10) * 1.5), 1fr) auto auto;
+  /* Ответвление шире ступени: подпись «Недозвон или отказ» в одну строку при отступе от потока */
+  grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(0, 1.25fr);
+  min-width: 0;
+  position: relative;
+  isolation: isolate;
+}
+
+/* Луч — только под четырьмя ступенями: ответвление не часть потока */
+.call-funnel > .conversion__beam {
+  grid-column: 1 / 5;
+}
+
+.call-funnel__steps {
+  display: contents;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.call-funnel__step {
+  display: grid;
+  grid-row: 1 / -1;
+  grid-template-rows: subgrid;
+  justify-items: center;
+  min-width: 0;
+  padding-inline: var(--space-1);
+  text-align: center;
+}
+
+.call-funnel__step:nth-child(1) { grid-column: 1; }
+.call-funnel__step:nth-child(2) { grid-column: 2; }
+.call-funnel__step:nth-child(3) { grid-column: 3; }
+.call-funnel__step:nth-child(4) { grid-column: 4; }
+.call-funnel__step:nth-child(5) { grid-column: 5; }
+
+.call-funnel__step + .call-funnel__step {
+  border-inline-start: var(--hairline) solid var(--color-border);
+  border-image: linear-gradient(180deg, var(--color-border) 0 15%, transparent 30% 55%, var(--color-border) 70%) 1;
+}
+
+/* Ответвление от попыток — отступом от потока, а не следующей ступенью (без пунктиров по редизайну 16–22.11) */
+.call-funnel__step--branch {
+  margin-inline-start: var(--space-2);
+}
+
+.call-funnel__label {
+  grid-row: 1;
+  color: var(--color-text-tertiary);
+  font: var(--type-axis);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+}
+
+.call-funnel__step > .visually-hidden {
+  grid-row: 1;
+}
+
+.call-funnel__value,
+.call-funnel__step > .value-empty {
+  grid-row: 3;
+  color: var(--color-text-strong);
+  font: var(--type-funnel-value);
+  letter-spacing: var(--tracking-funnel-value);
+  white-space: nowrap;
+}
+
+.call-funnel__count {
+  grid-row: 4;
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
+  white-space: nowrap;
+}
+
+/* Последняя ступень — понятная причина: подпись светлее, как «С ОС» конверсии */
+.call-funnel__step--success .call-funnel__label {
+  color: var(--color-text-secondary);
+}
+
+/* Ответвление приглушено и не окрашено: ни успех, ни провал — недозвон и отказ одной фразой не различить */
+.call-funnel__step--branch .call-funnel__value {
+  color: var(--color-text-secondary);
+}
+
+/*
+  Динамика: пара столбиков на месяц — попытки от 1–3 и успешные от попыток, шкала 0–100 %. Цвета нейтральные, как ключи
+  легенды (tone--faint, tone--quiet); месяц — кнопка, выбранный — подложкой
+*/
+.call-trend {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.call-trend__months {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.call-trend__month {
+  display: grid;
+  grid-template-rows: 1fr auto auto;
+  justify-items: center;
+  gap: var(--space-1);
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: calc(var(--space-10) * 2);
+  padding: var(--space-2) var(--space-1);
+  border: var(--hairline) solid transparent;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+}
+
+.call-trend__month:hover {
+  border-color: var(--color-border);
+}
+
+.call-trend__month[aria-pressed='true'] {
+  border-color: var(--color-control-border);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-strong);
+}
+
+.call-trend__pair {
+  display: flex;
+  align-items: flex-end;
+  gap: calc(var(--space-1) / 2);
+  height: calc(var(--space-10) * 2);
+}
+
+.call-trend__bar {
+  display: block;
+  width: var(--space-2);
+  height: calc(100% * var(--bar, 0));
+  min-height: var(--hairline);
+  border-radius: var(--radius-pill);
+}
+
+.call-trend__bar--attempts {
+  background: var(--color-text-tertiary);
+}
+
+.call-trend__bar--success {
+  background: var(--color-text-secondary);
+}
+
+.call-trend__name,
+.call-trend__edge {
+  font: var(--type-axis);
+  letter-spacing: var(--tracking-axis);
+  white-space: nowrap;
+}
+
+/* «Подробнее» — таблица по месяцам для точных чисел, свёрнута по умолчанию */
+.call-stats__details {
+  margin-top: var(--space-3);
+}
+
+.call-stats__summary {
+  color: var(--color-text-secondary);
+  font: var(--type-caption-strong);
+  letter-spacing: var(--tracking-caption-strong);
+  cursor: pointer;
+}
+
+.call-stats__details[open] > .call-stats__summary {
+  margin-bottom: var(--space-3);
+}
+
+/*
+  Статистика обзвона — таблица в стиле таблиц дайджеста: строки — месяцы, числа справа, шапка — третий уровень текста.
+  Итог за период отделён волосяной линией. Подсказка шапки — title у названия колонки (withFullLabel)
+*/
+/* Ширина — по содержимому: на всю карточку числа уезжали от названий месяцев, взгляд терял строку */
+.call-stats {
+  width: auto;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.call-stats th,
+.call-stats td {
+  padding: var(--space-2) 0 var(--space-2) var(--space-8);
+  border-bottom: var(--hairline) solid var(--color-card-border);
+  color: var(--color-text-strong);
+  font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
+  text-align: end;
+  white-space: nowrap;
+}
+
+.call-stats thead th {
+  color: var(--color-text-tertiary);
+  vertical-align: bottom;
+}
+
+.call-stats .call-stats__month {
+  padding-inline-start: 0;
+  min-width: 160px;
+  text-align: start;
+}
+
+.call-stats tbody .call-stats__month {
+  color: var(--color-text-secondary);
+}
+
+/* Доли — вторым уровнем: счётчики главнее, доля поясняет соседнюю колонку */
+.call-stats td.call-stats__share {
+  color: var(--color-text-secondary);
+}
+
+.call-stats td:has(> .value-empty) {
+  text-align: center;
+}
+
+.call-stats tbody tr:last-child th,
+.call-stats tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.call-stats__total th,
+.call-stats__total td {
+  font: var(--type-caption-strong);
+  letter-spacing: var(--tracking-caption-strong);
+}
+
+.call-stats tbody .call-stats__total .call-stats__month {
+  color: var(--color-text-strong);
+}
+
+.call-stats__note {
+  margin: var(--space-3) 0 0;
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
+}

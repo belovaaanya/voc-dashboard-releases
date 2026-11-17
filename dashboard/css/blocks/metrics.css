@@ -29,33 +29,43 @@
   letter-spacing: var(--tracking-caption);
 }
 
-/* Пара число + дельта карточек шапки (`valueDelta`): дельта по верху поля числа, а не по базовой линии */
+/* Пара число + дельта карточек шапки (`valueDelta`): дельта по верху поля числа, а не по базовой линии; вплотную к числу — 4 px, как в редизайне */
 .metric__pair {
   align-items: flex-start;
+  gap: var(--space-1);
   min-width: 0;
 }
 
 /*
-  Сегмент с мини-трендом (рисунок пользователя): тренд — своей зоной справа, от бейджа в шапке вниз, по правому краю
-  бейджа. Ширину зоне даёт левая колонка по ширине числа: дельта — под числом, «N оценок» — строкой во всю ширину
-  карточки у нижнего края (она шире числа и иначе ограничивала бы зону). Карточка прежней высоты (176 px)
+  Сегмент с мини-трендом (редизайн пользователя): число и дельта справа сверху от него — левой колонкой по своей ширине,
+  тренд — остатком строки справа, от бейджа в шапке вниз, не шире бейджа. «N оценок» — строкой во всю ширину карточки
+  у нижнего края (она шире числа и иначе ограничивала бы зону). Карточка — контейнер: в узкой дельта уходит под число
 */
 .metric--with-trend {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) max-content;
+  grid-template-columns: max-content minmax(0, 1fr);
   grid-template-rows: 1fr auto auto;
   align-items: end;
-  column-gap: var(--space-3);
+  column-gap: var(--space-2);
   row-gap: var(--space-1);
+  container-type: inline-size;
 }
 
-/* Число и под ним дельта: дельта справа от числа отнимала у тренда ≈60 px */
 .metric--with-trend > .metric__pair {
   grid-column: 1;
   grid-row: 2;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-1);
+}
+
+/*
+  Узкая карточка (на 1280 — 202 px содержимого): дельта справа оставила бы тренду ≈35 px — одна подпись и штрих.
+  Тогда дельта — под числом, тренд — во всю ширину бейджа, как до редизайна. Порог — число с дельтой 14 px (≈164 px), зазор
+  и тренд с обеими подписями (56 px); с запасом под «−0,12»
+*/
+@container (width < 232px) {
+  .metric--with-trend > .metric__pair {
+    flex-direction: column;
+    gap: var(--space-1);
+  }
 }
 
 .metric--with-trend > .metric__caption {
@@ -74,7 +84,10 @@
   grid-column: 2;
   grid-row: 1 / 3;
   align-self: stretch;
-  min-inline-size: calc(var(--space-10) * 2);
+  /* По ширине бейджа (копия бейджа — `.metric__trend-sizer`), но не шире остатка строки: подписи гаснут по ширине (ниже) */
+  justify-self: end;
+  inline-size: fit-content;
+  max-inline-size: 100%;
 }
 
 /* Копия бейджа нулевой высоты: задаёт только ширину колонки, не видна и не озвучивается; стоит первой в колонке */
@@ -168,8 +181,9 @@
   height: var(--icon-size);
 }
 
-/* «?» прогноза незаконченного периода — после дельты оценок, третьим серым; прогноз — в подсказке, как у пометки выборки */
-.metric__forecast {
+/* «?» прогноза незаконченного периода — после дельты оценок, третьим серым; прогноз — в подсказке, как у пометки выборки; тот же знак у пояснения «С ОС» плитки роли (metric__hint) */
+.metric__forecast,
+.metric__hint {
   display: inline-grid;
   place-items: center;
   align-self: center;
@@ -237,11 +251,21 @@
   }
 }
 
+/*
+  Большая карточка (редизайн пользователя, макет 5366:8386): число 96 px Regular (`--type-display`), справа сверху от
+  него — дельта с крупной стрелкой 22 px (`delta--lg`), по верху поля числа (`.metric__pair`)
+*/
+.metric--big .metric__value--big {
+  font: var(--type-display);
+  letter-spacing: var(--tracking-display);
+  padding-inline-end: calc(-1 * var(--tracking-display));
+}
+
 /* ── Малая карточка (design-spec §3.2) ─────────────────────────────── */
 
-/* Сегменты в верхней строке шапки — чуть выше своего содержимого (150 → 176 px): число не прижато к заголовку */
+/* Сегменты в верхней строке шапки — выше своего содержимого (150 → 176 → 196 px по обратной связи): верхний ряд ровнее */
 .card--metric-segment {
-  min-height: calc(var(--space-10) * 4 + var(--space-4));
+  min-height: calc(var(--space-10) * 5 - var(--space-1));
 }
 
 /* J-66, J-94: содержимое сегмента прижато к нижнему краю; числа на одной линии — у подписей одна строка (B-08) */
@@ -371,6 +395,11 @@
   letter-spacing: var(--tracking-value);
 }
 
+/* Заглушка конверсии без MAU: числа ещё нет — без прочерка, иначе строка в две строки делает карточку выше вывода */
+.card--conversion-pending .state--empty.state--compact::before {
+  content: none;
+}
+
 .card--metric-big .state--empty.state--compact::before {
   font: var(--type-display);
   letter-spacing: var(--tracking-display);
@@ -424,10 +453,11 @@
   background: radial-gradient(var(--plan-shape), color-mix(in srgb, var(--plan-tone) var(--plan-glow), transparent), transparent);
 }
 
-/* Рамка тона гаснет от угла: кольцо-маска поверх обычной рамки карточки */
+/* Рамка тона гаснет от угла: кольцо-маска поверх обычной рамки карточки — той же толщины, что рамка (в светлой теме
+   редизайна 1 px): кольцо в полрамки красило только её внешнюю половину */
 .card--metric-segment[data-plan-glow]:not(:has(.state))::after {
-  inset: calc(-1 * var(--hairline));
-  padding: var(--hairline);
+  inset: calc(-1 * var(--card-border-width, var(--hairline)));
+  padding: var(--card-border-width, var(--hairline));
   background: radial-gradient(var(--plan-rim-shape), color-mix(in srgb, var(--plan-tone) var(--plan-glow-rim), transparent), transparent);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
@@ -466,6 +496,39 @@
   font: inherit;
   text-align: start;
   cursor: pointer;
+}
+
+/*
+  Вся карточка — одна область нажатия (дефект: заголовок «VOC КИБ» и бейдж плана в шапке не нажимались). Кнопка
+  остаётся одна — один фокус, Enter и Space; её прозрачный слой растянут на всю карточку, поверх шапки и бейджа,
+  поэтому нажатие и наведение в любом месте — это нажатие и наведение кнопки
+*/
+.card--metric-segment:has(.metric__toggle) {
+  position: relative;
+}
+
+.metric__toggle::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-card);
+}
+
+/* Кольцо фокуса — по всей карточке, как область нажатия: кольцо слоя, а не рамка вокруг содержимого кнопки */
+.metric__toggle:focus-visible {
+  outline-color: transparent;
+}
+
+.metric__toggle:focus-visible::after {
+  box-shadow: 0 0 0 var(--focus-ring) var(--color-text-strong);
+}
+
+/* Подсказки пометки выборки и прогноза и тренд с подсказкой — над слоем: наведение их открывает, нажатие доходит до кнопки */
+.metric__toggle .metric__warning,
+.metric__toggle .metric__forecast,
+.metric__toggle .metric__trend {
+  position: relative;
+  z-index: 1;
 }
 
 /*

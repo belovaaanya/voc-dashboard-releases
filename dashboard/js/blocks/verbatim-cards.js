@@ -11,17 +11,21 @@ import { segmented } from '../components/segmented.js';
 import { sharePie } from '../components/share-pie.js';
 import { sideToggle } from '../components/side-toggle.js';
 import { pagingButtons } from '../components/paging.js';
-import { scaleTabs } from '../components/scale-tabs.js';
+import { fitStep, stepNote } from '../state/group-step.js';
 import { searchField } from '../components/search-field.js';
 import { emptyTableRow, statusPanel } from '../components/status-panel.js';
 import { hScroll, rememberScroll } from '../components/h-scroll.js';
 import { emptyValue } from '../components/empty-value.js';
+import { tag } from '../components/tag.js';
 import { heatCell } from '../components/heat-cell.js';
 import { buildTimeSeries } from '../core/timeseries.js';
 import { equalDaysPeriod } from '../core/period.js';
 import { earliestDate } from '../core/dates.js';
 import { holdPageHeight, releasePageHeight } from '../ui/page-height.js';
-import { FEW_COMPLAINTS, NO_CATEGORY_GROUP, NO_DOMAIN, PEAK_RULE, POSITIVE_GROUP, buildProblemCards, damageOf, negativeShare } from '../core/verbatim.js';
+import { CLASSIFICATION_HINTS, FEW_COMPLAINTS, HEAT_MIN_NEGATIVE, INTENSITY_HINTS, INTENSITY_LABELS, emotionsNoteFor, heatZones, inHeatZone, NEGATIVE_EMOTIONS, SHARP_INTENSITY, NO_CATEGORY_GROUP, NO_DOMAIN, PEAK_RULE, POSITIVE_GROUP, buildProblemCards, damageOf, negativeShare, emotionTone, heatOf } from '../core/verbatim.js';
+import { hotStep } from '../core/heat-scale.js';
+import { callStats } from '../core/call-stats.js';
+import { svgNode } from '../ui/dom.js';
 
 let selectedCut = 'domainProblem';
 /*
@@ -66,7 +70,7 @@ function viewState(block, context) {
     normalizeDriver(context.state.driver), selectedCut]);
   let state = viewStates.get(block);
   if (state?.key !== key) {
-    state = { key, shown: PROBLEM_PAGE, side: null, selected: null, feedShown: FEED_PAGE };
+    state = { key, shown: PROBLEM_PAGE, side: null, selected: null, feedShown: FEED_PAGE, tilePick: null };
     viewStates.set(block, state);
   }
   return state;
@@ -77,11 +81,12 @@ function viewState(block, context) {
   ДКО считается как в антидрайверах (J-33, J-34, J-109), урон — формулой ДКО (J-110)
 */
 export const CUT_OPTIONS = [
-  { value: 'domainProblem', label: 'ФО и проблематика', title: 'Функциональная область и проблематика', empty: 'с проблематикой' },
-  { value: 'categoryPair', label: 'ДКО', title: 'Группа и категория основного негатива', empty: 'с категорией негатива' },
+  /* Подсказка разреза — что это за классификация и откуда она (CLASSIFICATION_HINTS ядра) */
+  { value: 'domainProblem', label: 'Функ. область и проблематика', title: `Функциональная область и проблематика. ${CLASSIFICATION_HINTS.labeling}`, empty: 'с проблематикой' },
+  { value: 'categoryPair', label: 'ДКО', title: `Группа и категория основного негатива. ${CLASSIFICATION_HINTS.dko}`, empty: 'с категорией негатива' },
 ];
 const GROUPINGS = {
-  domainProblem: { groupHead: 'ФО', groupTitle: 'Функциональная область', nameHead: 'Проблематика', none: NO_DOMAIN, all: 'Все ФО',
+  domainProblem: { groupHead: 'Функ. область', groupTitle: 'Функциональная область', nameHead: 'Проблематика', none: NO_DOMAIN, all: 'Все функ. области',
     unit: 'проблемы' },
   categoryPair: { groupHead: 'Группа негатива', groupTitle: 'Группа категорий основного негатива', nameHead: 'Категория', nameTitle: 'Категория основного негатива', none: NO_CATEGORY_GROUP,
     all: 'Все группы', unit: 'категории' },
@@ -135,6 +140,11 @@ function cutTabs(block, context) {
 
 const SHARE_TITLE = 'Доля значения в потерях (5 − оценка) размеченных оценок 1–4: размеченные отзывы растянуты на весь негатив. Оценка с несколькими проблемами входит в каждую';
 
+/* J-348: накал — по тону эмоции (точная эмоция путается), только в «Для аналитика»: разметка не проверена вручную */
+const NEGATIVE_LIST = NEGATIVE_EMOTIONS.map((emotion) => emotion.toLowerCase()).join(', ');
+const HEAT_RULE = `Накалённая жалоба — негативный тон (${NEGATIVE_LIST}) с накалом ${quoted(INTENSITY_LABELS[SHARP_INTENSITY])} или ${quoted(INTENSITY_LABELS[3])}. Доля — от размеченных комментариев проблемы, при ${HEAT_MIN_NEGATIVE} и больше комментариях с негативным тоном; при меньшем — «N из M»: накалённые из размеченных комментариев. Без размеченных комментариев — нет данных. Тон и накал — автоматическая разметка`;
+const HEAT_TITLE = `Сначала накалённые: по доле накалённых жалоб. ${HEAT_RULE}. Проблемы, где комментариев с негативным тоном меньше ${HEAT_MIN_NEGATIVE}, — в конце`;
+
 const DAMAGE_TITLE = 'На сколько VOC был бы выше без этих жалоб, в пунктах VOC: доля негатива × (5 − VOC)';
 const DYNAMICS = {
   count: { label: 'Частотность', title: 'Число жалоб за шаг', of: 'Жалоб' },
@@ -143,10 +153,18 @@ const DYNAMICS = {
 };
 
 /* J-142: что показывают колонки шагов; итог за период от выбора не зависит */
+/*
+  Урон по проблематикам — методика не согласована: в разрезе «ФО и проблематика» таб и колонка «Урон» с меткой «бета»;
+  урон ДКО — своя, принятая формула (J-110), без метки
+*/
+export const DAMAGE_BETA = { text: 'бета', tone: 'neutral', title: 'Методика урона по проблематикам пока не согласована — значения предварительные' };
+const damageBeta = () => (selectedCut === 'domainProblem' ? DAMAGE_BETA : null);
+
 function dynamicsTabs(block, context) {
   return segmented({
     label: 'Динамика топа проблем',
-    options: Object.entries(DYNAMICS).map(([value, { label, title }]) => ({ value, label, title })),
+    options: Object.entries(DYNAMICS).map(([value, { label, title }]) => ({ value, label, title,
+      ...(value === 'damage' && damageBeta() ? { tag: damageBeta() } : {}) })),
     selected: selectedDynamics,
     onSelect: (value) => {
       selectedDynamics = value;
@@ -161,16 +179,26 @@ function dynamicsTabs(block, context) {
   Проблематики / ФО», у ДКО — «Категории / Группы»; поведение то же
 */
 export const ORDER_LABEL = 'Сначала частые:';
-const ORDER_OPTIONS = { domainProblem: ['Проблематики', 'ФО'], categoryPair: ['Категории', 'Группы'] };
+/* J-348: в «Для аналитика» — ещё «Накалённые» (по доле накалённых жалоб); подпись слева тогда общая — «Сначала:» */
+export const ORDER_LABEL_ANALYST = 'Сначала:';
+export const HEAT_ORDER = 'Накалённые';
+const ORDER_OPTIONS = { domainProblem: ['Проблематики', 'Функ. области'], categoryPair: ['Категории', 'Группы'] };
+/* «Для аналитика»: «Сначала: Частые | По ФО | Накалённые» — коротко, тулбар не переносится */
+const ORDER_OPTIONS_ANALYST = { domainProblem: ['Частые', 'По функ. области'], categoryPair: ['Частые', 'По группам'] };
 function orderTabs(block, context) {
-  const [value, group] = ORDER_OPTIONS[selectedCut];
+  const analyst = Boolean(context.analyst);
+  const [value, group] = (analyst ? ORDER_OPTIONS_ANALYST : ORDER_OPTIONS)[selectedCut];
+  const caption = analyst ? ORDER_LABEL_ANALYST : ORDER_LABEL;
+  /* Выбор «Накалённые» на главной не живёт: там колонки накала нет */
+  if (!analyst && selectedOrder === 'heat') selectedOrder = 'value';
   return segmented({
-    caption: ORDER_LABEL,
+    caption,
     captionTone: 'secondary',
-    label: `Сортировка топа проблем: ${ORDER_LABEL.slice(0, -1).toLowerCase()}`,
+    label: `Сортировка топа проблем: ${(analyst ? 'сначала' : ORDER_LABEL.slice(0, -1)).toLowerCase()}`,
     options: [
       { value: 'value', label: value, title: `${grouping().nameTitle ?? grouping().nameHead}: сначала частые, по числу жалоб` },
       { value: 'group', label: group, title: `${grouping().groupTitle}: сначала частые, внутри — по числу жалоб` },
+      ...(analyst ? [{ value: 'heat', label: HEAT_ORDER, title: HEAT_TITLE }] : []),
     ],
     selected: selectedOrder,
     onSelect: (next) => {
@@ -218,20 +246,28 @@ function segmentCode(code, label) {
 }
 
 const CHANNEL_WITH_OS = 'АБМ';
-const SCALE_TABS = [{ value: 'week', label: 'Недели' }, { value: 'month', label: 'Месяцы' }];
+/* Шаги таблицы динамики: своего переключателя нет — шаг общий у группы аналитики */
+const TABLE_STEPS = ['week', 'month'];
+/*
+  J-?: шаг — общий шаг группы аналитики; дни и кварталы таблице не подходят — она берёт ближайший; выбранный вручную
+  шаг подписывает в динамике («по неделям: дни для таблицы слишком мелкие»), автоматический заменяет молча
+*/
+const STEP_FIT_REASON = { day: 'дни для таблицы слишком мелкие', quarter: 'кварталы для таблицы слишком крупные' };
+const groupStepFit = { from: null };
+function takeGroupStep(step, auto) {
+  /* Без шага группы (блок вне группы аналитики) — недели, как раньше по умолчанию, без подписи замены */
+  if (!step) {
+    selectedScale = 'week';
+    groupStepFit.from = null;
+    return;
+  }
+  /* Автоматический шаг заменяется молча: подпись замены — только у выбранного вручную */
+  const fit = fitStep(step, TABLE_STEPS, { auto });
+  selectedScale = fit.step;
+  groupStepFit.from = fit.fitted ? step : null;
+}
 const segmentKey = (code) => (!code || code === 'Без сегмента' ? '' : code);
 
-function stepTabs(block, context) {
-  return scaleTabs({
-    label: 'Шаг частотности проблем',
-    options: SCALE_TABS,
-    selected: selectedScale,
-    onSelect: (value) => {
-      selectedScale = value;
-      rerenderInPlace(block, context);
-    },
-  });
-}
 
 /*
   Колонки сегментов — только ММБ, СБ, КИБ в порядке карточек метрик (J-42, J-120) и только те, что есть в срезе.
@@ -252,6 +288,29 @@ const pointsCaption = (share, base) => {
 };
 /* J-128: пустое значение — серым прочерком, а не цветом числа */
 /* Пустое значение — общий прочерк emptyValue (аудит 13.11): один вид на всех страницах */
+/*
+  J-348: накал проблемы — доля накалённых жалоб; при малом числе негатива — «N из M» (накалённые из размеченных) без доли, у похвалы и без
+  разметки — прочерк «нет данных». Средний накал и база — в подсказке
+*/
+function heatCellOf(item) {
+  const heat = item.positive ? null : item.heat;
+  if (!heat) {
+    const cell = valueCell(null, 'problem-table__count problem-table__heat');
+    cell.title = item.positive ? 'Накал считается только у жалоб' : 'Нет размеченных комментариев: накала нет данных';
+    return cell;
+  }
+  /* «N из M» — та же база, что у доли: накалённые из размеченных комментариев, а не из негатива (иначе «4 из 4» читалось бы как 100 %) */
+  const text = heat.share === null ? `${formatCount(heat.sharp)} из ${formatCount(heat.labelled)}` : formatShare(heat.share);
+  const cell = valueCell(text, `problem-table__count problem-table__heat${heat.share === null ? ' problem-table__heat--few' : ''}`);
+  const average = heat.averageIntensity === null ? '' : `средний накал негатива ${formatNumber(heat.averageIntensity, 1)} из 3`;
+  cell.title = [
+    `Накалённых жалоб: ${formatCount(heat.sharp)}. Размечено комментариев: ${formatCount(heat.labelled)}, с негативным тоном: ${formatCount(heat.negative)}`,
+    average,
+    heat.share === null ? `комментариев с негативным тоном меньше ${HEAT_MIN_NEGATIVE} — доля не считается, показано «накалённые из размеченных комментариев»` : '',
+  ].filter(Boolean).join('; ');
+  return cell;
+}
+
 function valueCell(text, className = 'problem-table__count') {
   if (text !== null) return element('td', className, text);
   const cell = element('td', `${className} problem-table__none`);
@@ -328,6 +387,11 @@ const HEAT_FLOOR = 0.1;
 const EDGE_FLOOR = 0.25;
 const FILL_MAX = 0.42;
 const FILL_GAMMA = 1.8;
+/*
+  Горячая пилюля (макет «Топ проблем», светлая тема): верхняя треть шкалы — пять ступеней вида, от мягкой (5) у порога
+  к самой яркой (1); порог и ступени — общие с картой антидрайверов (core/heat-scale.js). Включает вид тема
+  (--pill-hot-on), в тёмной — прежний. Только у жалоб: светлое ядро ступеней — оттенок тона негатива
+*/
 
 function bucketCell(bucket, positive, gap, heatLevelOf, metric) {
   const value = stepValue(bucket, positive, gap, metric);
@@ -335,12 +399,26 @@ function bucketCell(bucket, positive, gap, heatLevelOf, metric) {
   /* В «Доле» и «Уроне» вторая строка у каждого шага, и у пустого («нет жалоб»): пилюли строки одной высоты */
   const withCount = metric !== 'count';
   const cell = element('td', `problem-table__count problem-table__step${withCount ? ' problem-table__step--with-count' : ''}${main === null ? ' problem-table__none' : ''}`);
-  const level = value === null ? null : heatLevelOf(value);
+  /*
+    Цветом на дашборде заливаются только средний VOC и урон: в «Частотности» и «Доле» пилюля нейтральная — рамка и
+    обычное число, без тона, свечения и горячих ступеней; в «Уроне» — заливка по силе
+  */
+  const level = value === null || metric !== 'damage' ? null : heatLevelOf(value);
   const strength = level === null ? null : HEAT_FLOOR + (1 - HEAT_FLOOR) * level;
   const pill = heatCell({ tone: level === null ? null : (positive ? 'good' : 'bad'), strength, className: 'problem-step-pill' });
   if (level !== null) {
-    pill.style.setProperty('--pill-edge', `${Math.round((EDGE_FLOOR + (1 - EDGE_FLOOR) * level) * 100)}%`);
-    pill.style.setProperty('--pill-fill', `${Math.round(FILL_MAX * level ** FILL_GAMMA * 100)}%`);
+    const edge = `${Math.round((EDGE_FLOOR + (1 - EDGE_FLOOR) * level) * 100)}%`;
+    const fill = `${Math.round(FILL_MAX * level ** FILL_GAMMA * 100)}%`;
+    const hot = positive ? null : hotStep(level);
+    if (hot) {
+      /* Край и заливка обычной пилюли гаснут, где тема включает горячий вид: значения — как базовые */
+      pill.classList.add('problem-step-pill--hot', `problem-step-pill--hot-${hot}`);
+      pill.style.setProperty('--pill-edge-base', edge);
+      pill.style.setProperty('--pill-fill-base', fill);
+    } else {
+      pill.style.setProperty('--pill-edge', edge);
+      pill.style.setProperty('--pill-fill', fill);
+    }
   }
   const shown = element('span', 'problem-table__step-main');
   if (main === null) shown.append(emptyValue());
@@ -448,7 +526,7 @@ function problemRow(item, { columns, selected, onSelect, base }) {
   const damageCell = valueCell(damage === null ? null : formatImpact(-roundImpact(damage)), 'problem-table__count problem-table__damage');
   if (damage !== null) damageCell.title = [`Доля негатива ${formatNegative(item.negativeShare)}`, pointsCaption(item.negativeShare, base),
     few ? `меньше ${FEW_COMPLAINTS} жалоб — доля неустойчива` : ''].filter(Boolean).join('. ');
-  if (columns.analyst) row.append(damageCell);
+  if (columns.analyst) row.append(damageCell, heatCellOf(item));
   row.append(...columns.segments.map((code) => countCell(bySegment.get(code))));
   if (columns.os) {
     row.append(countCell(item.os.ios), versionCell(item.versions.ios, 'iOS', item.positive),
@@ -473,6 +551,7 @@ function problemRow(item, { columns, selected, onSelect, base }) {
   item.buckets.forEach((bucket, index) => {
     const cell = bucketCell(bucket, item.positive, columns.bucketGaps[index], columns.heatLevel, columns.metric);
     if (index === 0) cell.classList.add('problem-table__step--first');
+    cell.dataset.step = String(index);
     row.append(cell);
   });
   row.addEventListener('click', onSelect);
@@ -519,6 +598,8 @@ export function clampNameWidth(width, frameWidth = 0) {
 function applyNameWidth(table, resizer, width, frameWidth) {
   const shown = clampNameWidth(width ?? NAME_WIDTH_MIN, frameWidth);
   table.style.setProperty('--problem-name-width', shown === NAME_WIDTH_MIN ? '' : `${shown}px`);
+  /* Прокрутке тоже: левое затухание начинается за закреплённой колонкой её текущей ширины */
+  table.parentElement?.style.setProperty('--problem-name-width', shown === NAME_WIDTH_MIN ? '' : `${shown}px`);
   resizer.setAttribute('aria-valuenow', String(shown));
   resizer.setAttribute('aria-valuemax', String(clampNameWidth(Infinity, frameWidth)));
   resizer.setAttribute('aria-valuetext', `${shown} пикселей`);
@@ -602,22 +683,45 @@ function tableHead(context, columns) {
     return cell;
   };
   /* Название и группа — без подписи части; итог — жалобы, доля, урон, сегменты, ОС с версиями и «Когда чаще» */
-  const summarySpan = 2 + 2 + (columns.analyst ? 2 : 0) + columns.segments.length + (columns.os ? 4 : 0);
-  parts.append(part('', 2, 'problem-table__part--lead'), part('За период', summarySpan - 2),
-    part(`Динамика · ${DYNAMICS[columns.metric].label.toLowerCase()} ${selectedScale === 'month' ? 'по месяцам' : 'по неделям'}`, columns.buckets.length, 'problem-table__part--steps'));
+  const summarySpan = 2 + 2 + (columns.analyst ? 3 : 0) + columns.segments.length + (columns.os ? 4 : 0);
+  /*
+    Над названием — закреплённая ячейка того же фона, что колонка под ней: подписи частей при горизонтальной прокрутке
+    уходят под неё, а не проезжают поверх названий; над группой — пустая обычная ячейка
+  */
+  /*
+    Над одним шагом (месяц по месяцам) подписи группы нет — название в подсказке: даже «Динамика» шире колонки шага
+    и раздвинула бы её; один шаг и так равен итогу за период
+  */
+  const dynamicsCaption = `Динамика · ${DYNAMICS[columns.metric].label.toLowerCase()} ${stepNote(selectedScale, STEP_FIT_REASON[groupStepFit.from] ?? '')}`;
+  const dynamicsPart = part(columns.buckets.length > 1 ? dynamicsCaption : '', columns.buckets.length, 'problem-table__part--steps');
+  if (columns.buckets.length === 1) dynamicsPart.title = dynamicsCaption;
+  parts.append(part('', 1, 'problem-table__part--lead'), part('', 1), part('За период', summarySpan - 2), dynamicsPart);
   head.append(parts);
-  const nameCell = th(nameHead, nameTitle);
+  /* Шапки названия и группы — с источником классификации: разметка или категория из выгрузки */
+  const hint = selectedCut === 'domainProblem' ? CLASSIFICATION_HINTS.labeling : CLASSIFICATION_HINTS.dko;
+  const nameCell = th(nameHead, `${nameTitle ?? nameHead}. ${hint}`);
   nameCell.append(columns.resizer);
   /* Шапка группы — по левому краю, над значениями: значения группы стоят у названий */
-  const groupCell = th(groupHead, groupTitle);
+  const groupCell = th(groupHead, `${groupTitle}. ${hint}`);
   groupCell.classList.add('problem-table__group-head');
   row.append(nameCell, groupCell);
   /* J-139: «было» — за какой период. J-195: период — в подсказке шапки и «было», а не второй строкой шапки */
   const was = columns.previousPeriod ? `было — за ${formatInterval(columns.previousPeriod)}` : null;
-  row.append(th('Жалоб', `Жалоб за период${was ? `; ${was}` : ''}`),
-    th('Доля', 'Доля жалоб — от кейсов с обратной связью, где проблема выявлена: без недозвонов, «без категории» и «Невозможно выделить проблему». Треугольник — изменение доли к прошлому периоду'));
+  /* J-348: при выбранном накале или тоне числитель — жалобы выбора, база — весь срез: так и названо в подсказках шапки */
+  const zoneBase = columns.tilePick ? `. ${PICK_BASE}` : '';
+  row.append(th('Жалоб', `Жалоб за период${was ? `; ${was}` : ''}${zoneBase ? `. Только жалобы: ${pickName(columns.tilePick)}` : ''}`),
+    th('Доля', `Доля жалоб — от кейсов с обратной связью, где проблема выявлена: без недозвонов, «без категории» и «Невозможно выделить проблему». Треугольник — изменение доли к прошлому периоду${zoneBase}`));
   const coverage = columns.coverage === null ? '' : `. Размечено ${formatNegative(columns.coverage)} оценок 1–4`;
-  if (columns.analyst) row.append(th('Урон', `${DAMAGE_TITLE}${coverage}`));
+  if (columns.analyst) {
+    const damageHead = th('Урон', `${DAMAGE_TITLE}${coverage}${zoneBase}`);
+    const beta = damageBeta();
+    if (beta) {
+      const mark = tag(beta.text, beta.tone);
+      mark.title = beta.title;
+      damageHead.append(' ', mark);
+    }
+    row.append(damageHead, th('Накал', `Доля накалённых: выраженный и острый. ${HEAT_RULE}${columns.labelledSince ? `. ${columns.labelledSince}` : ''}${zoneBase ? '. При выбранном накале или тоне — накалённые жалобы выбора от всех размеченных комментариев проблемы' : ''}`));
+  }
   for (const code of columns.segments) row.append(th(code, context.label('segment', code)));
   if (columns.os) {
     const versionHead = (os) => th(`Версия ${os}`, `Частая версия ${os} в жалобах проблемы. Круг — её доля среди жалоб проблемы с ${os}: закрашенная часть — доля`);
@@ -629,9 +733,10 @@ function tableHead(context, columns) {
   if (columns.analyst) row.append(peakHead);
   columns.buckets.forEach((bucket, index) => {
     const cell = th(headCaption(bucket), `${DYNAMICS[columns.metric].of} за ${bucketCaption(bucket)}`);
-    /* Шапка шага — по ширине пилюли под ней: те же поля 1 px, подпись по центру */
+    /* Шапка шага — той же ширины, что колонка пилюль, подпись по центру в строку */
     cell.classList.add('problem-table__step');
     if (index === 0) cell.classList.add('problem-table__step--first');
+    cell.dataset.step = String(index);
     row.append(cell);
   });
   head.append(row);
@@ -640,7 +745,7 @@ function tableHead(context, columns) {
 
 /* Отзыв ленты: звёзды, пометка «Фрагмент экспертизы», если цитата разметки взята из экспертизы, а не из комментария клиента */
 export const EXPERTISE_QUOTE = 'Фрагмент экспертизы';
-function feedEntry(entry, label) {
+export function feedEntry(entry, label) {
   const node = element('article', 'verbatim-feed__item');
   const text = element('p', 'verbatim-feed__quote', quoted(entry.comment));
   const badge = entry.expertise ? [element('p', 'verbatim-feed__kind', EXPERTISE_QUOTE)] : [];
@@ -738,6 +843,157 @@ function skeleton() {
   return content;
 }
 
+/*
+  J-348: ряд плиток-сводок над таблицей («Для аналитика») вместо полосы зон накала — «Накал», «Обзвон», «Эмоции».
+  Плитка — заголовок, главное число и мини-визуализация, нейтральным приглушённым тоном: цветом на дашборде — только
+  средний VOC и урон; негатив в кольце эмоций — приглушённым тоном негатива. Столбик накала и сегмент тона сужают
+  «Топ проблем» и ленту (один выбор на ряд, повторное нажатие снимает); «Обзвон» ведёт к «Статистике обзвона»
+*/
+export const PICK_BASE = 'При выбранном накале или тоне — жалобы выбора от всех оценок среза';
+export const TONE_NAMES = { negative: 'Негатив', neutral: 'Нейтрально', positive: 'Позитив' };
+const TONE_ORDER = ['negative', 'neutral', 'positive'];
+export const pickMatch = (pick) => (pick.zone !== undefined
+  ? (row) => inHeatZone(row, pick.zone)
+  : (row) => emotionTone(row.emotion ?? null) === pick.tone);
+export const pickName = (pick) => (pick.zone !== undefined ? `накал ${quoted(INTENSITY_LABELS[pick.zone])}` : `тон ${quoted(TONE_NAMES[pick.tone])}`);
+const samePick = (left, right) => Boolean(left && right && left.zone === right.zone && left.tone === right.tone);
+
+function summaryTile(name, title, hint) {
+  const node = element('section', `problem-tile problem-tile--${name}`);
+  node.setAttribute('aria-label', title);
+  const head = element('p', 'problem-tile__title', title);
+  head.title = hint;
+  node.append(head);
+  return node;
+}
+const tileEmpty = (node, text) => {
+  node.append(statusPanel('problem-tile__empty', { title: text, look: 'quiet' }));
+  return node;
+};
+function tileValue(node, value, caption) {
+  const line = element('p', 'problem-tile__value');
+  line.append(element('strong', null, value), element('span', 'problem-tile__caption', caption));
+  node.append(line);
+}
+
+function pickButton(block, context, state, pick, className, label) {
+  const button = element('button', className);
+  button.type = 'button';
+  button.dataset.pick = pick.zone !== undefined ? `zone-${pick.zone}` : `tone-${pick.tone}`;
+  const selected = samePick(state.tilePick, pick);
+  button.setAttribute('aria-pressed', String(selected));
+  button.setAttribute('aria-label', `${label}. ${selected ? 'Снять выбор' : 'Показать в топе и ленте только их'}`);
+  button.title = label;
+  button.addEventListener('click', () => {
+    state.tilePick = selected ? null : pick;
+    rerenderInPlace(block, context);
+    block.element.querySelector(`.problem-tiles [data-pick='${button.dataset.pick}']`)?.focus();
+  });
+  return button;
+}
+
+/* «Накал»: доля накалённых (выраженный и острый) среди размеченных комментариев жалоб и столбики накала негативного тона словами — «Нет / Слабый / Выраженный / Острый» */
+function heatTile(block, context, state, rows) {
+  const node = summaryTile('heat', 'Накал', `Доля накалённых: выраженный и острый. ${HEAT_RULE}. Столбики — жалобы с негативным тоном по накалу: ${INTENSITY_LABELS.map((label) => label.toLowerCase()).join(', ')}; нажатие сужает топ и ленту`);
+  const heat = heatOf(rows);
+  const { zones } = heatZones(rows);
+  if (!heat) return tileEmpty(node, 'Эмоции не размечены');
+  tileValue(node, heat.share === null ? `${formatCount(heat.sharp)} из ${formatCount(heat.labelled)}` : formatShare(heat.share), 'накалённых');
+  const bars = element('div', 'problem-tile__bars');
+  const max = Math.max(1, ...zones.map(({ count }) => count));
+  for (const { zone, count } of zones) {
+    const button = pickButton(block, context, state, { zone }, 'problem-tile__bar', `${INTENSITY_LABELS[zone]} накал (${INTENSITY_HINTS[zone]}): ${complaints(count)}`);
+    button.disabled = !count;
+    button.style.setProperty('--bar-level', String(Math.round((count / max) * 100) / 100));
+    button.append(element('span', 'problem-tile__bar-fill'), element('span', 'problem-tile__bar-label', INTENSITY_LABELS[zone]));
+    bars.append(button);
+  }
+  node.append(bars);
+  return node;
+}
+
+/* «Обзвон»: мини-воронка «1–3 → попытки → успешные»; счёт — core/call-stats.js, подробно — карточка «Статистика обзвона» */
+function callTile(context, rows) {
+  const node = summaryTile('calls', 'Обзвон', 'Сниженные оценки 1–3, попытки звонка (экспертиза УИУКО) и успешные звонки за период. Поля «звонок» в выгрузке нет — попытка определяется по экспертизе');
+  const { total } = callStats(rows, context.verbatim.data, context.period, context.periodControl?.manifestPeriod ?? context.period);
+  if (!total.attempts) return tileEmpty(node, 'Нет данных обзвона');
+  tileValue(node, formatShare(total.successShare), 'успешных от попыток');
+  const funnel = element('div', 'problem-tile__funnel');
+  const steps = [
+    ['1–3', total.negative, formatCount(total.negative)],
+    ['Попытки', total.attempts, formatShare(total.attemptShare)],
+    ['Успешные', total.success, formatShare(total.successShare)],
+  ];
+  for (const [label, count, text] of steps) {
+    const step = element('div', 'problem-tile__step');
+    step.style.setProperty('--bar-level', String(total.negative ? Math.round((count / total.negative) * 100) / 100 : 0));
+    step.append(element('span', 'problem-tile__step-label', label), element('span', 'problem-tile__step-bar'), element('span', 'problem-tile__step-value', text));
+    funnel.append(step);
+  }
+  node.append(funnel);
+  const more = element('button', 'problem-tile__details', 'Подробно');
+  more.type = 'button';
+  more.setAttribute('aria-label', 'Статистика обзвона по месяцам — ниже на странице');
+  more.addEventListener('click', () => document.querySelector('.card--call-stats')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  node.append(more);
+  return node;
+}
+
+/* «Эмоции»: кольцо по тону размеченных комментариев таблицы; в центре — доля негатива, строкой — три частые негативные эмоции */
+const DONUT_RADIUS = 26;
+function emotionTile(block, context, state, rows) {
+  const node = summaryTile('emotions', 'Эмоции', 'Тон размеченных комментариев таблицы: негатив, нейтрально, позитив. Сегмент или подпись сужают топ и ленту. Точные эмоции — в блоке «Эмоции» ниже: они размечены с меньшей уверенностью');
+  const counts = Object.fromEntries(TONE_ORDER.map((tone) => [tone, 0]));
+  const emotions = new Map();
+  for (const row of rows) {
+    const tone = emotionTone(row.emotion ?? null);
+    if (tone === null) continue;
+    counts[tone] += 1;
+    if (tone === 'negative') emotions.set(row.emotion, (emotions.get(row.emotion) ?? 0) + 1);
+  }
+  const total = TONE_ORDER.reduce((sum, tone) => sum + counts[tone], 0);
+  if (!total) return tileEmpty(node, 'Эмоции не размечены');
+  const body = element('div', 'problem-tile__donut-row');
+  const svg = svgNode('svg', 'problem-tile__donut', { viewBox: '0 0 64 64', 'aria-hidden': 'true' });
+  const length = 2 * Math.PI * DONUT_RADIUS;
+  let offset = 0;
+  for (const tone of TONE_ORDER) {
+    const part = (counts[tone] / total) * length;
+    if (!part) continue;
+    svg.append(svgNode('circle', `problem-tile__arc problem-tile__arc--${tone}`, {
+      cx: 32, cy: 32, r: DONUT_RADIUS, 'stroke-dasharray': `${part} ${length - part}`, 'stroke-dashoffset': -offset,
+    }));
+    offset += part;
+  }
+  const center = element('span', 'problem-tile__donut-center', formatShare((counts.negative / total) * 100));
+  const donut = element('div', 'problem-tile__donut-box');
+  donut.append(svg, center);
+  const legend = element('div', 'problem-tile__legend');
+  for (const tone of TONE_ORDER) {
+    if (!counts[tone]) continue;
+    const share = formatShare((counts[tone] / total) * 100);
+    const button = pickButton(block, context, state, { tone }, `problem-tile__tone problem-tile__tone--${tone}`, `${TONE_NAMES[tone]}: ${comments(counts[tone])}, ${share}`);
+    button.append(element('span', 'problem-tile__tone-dot'), element('span', null, TONE_NAMES[tone]), element('span', 'problem-tile__tone-share', share));
+    legend.append(button);
+  }
+  body.append(donut, legend);
+  node.append(body);
+  const top = [...emotions].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0], 'ru')).slice(0, 3).map(([emotion]) => emotion);
+  if (top.length) node.append(element('p', 'problem-tile__top', `Чаще: ${top.join(', ')}`));
+  return node;
+}
+
+function summaryTiles(block, context, state, { complaintRows, cardRows, current }) {
+  const tiles = element('div', 'problem-tiles');
+  tiles.append(heatTile(block, context, state, complaintRows), callTile(context, current), emotionTile(block, context, state, cardRows));
+  /* Период шапки раньше разметки — подпись под рядом: месяцы без разметки не считаются накалом «Нет» */
+  const since = emotionsNoteFor(context);
+  if (!since) return tiles;
+  const wrap = element('div', 'problem-tiles-wrap');
+  wrap.append(tiles, element('p', 'problem-tiles__since', since));
+  return wrap;
+}
+
 function unavailable(title, detail) {
   return statusPanel('verbatim-unavailable', { title, detail });
 }
@@ -769,14 +1025,21 @@ function problemOrder(cards, analyst) {
   if (selectedCut === 'categoryPair' && analyst) complaintCards.sort((left, right) => rankDamage(right) - rankDamage(left) || right.count - left.count);
   const praise = cards.filter((item) => item.positive);
   /* Похвала — после жалоб: без списка групп слева иначе её не найти */
-  const ordered = () => (selectedOrder === 'group'
-    ? [...complaintCards].sort(byGroup).concat(praise)
-    : complaintCards.concat(praise));
+  /* J-348: «Накалённые» — по доле накалённых; без доли (мало негатива или нет разметки) — в конце, там по числу накалённых и жалоб */
+  const heatRank = (item) => item.heat?.share ?? -1;
+  const byHeat = (left, right) => heatRank(right) - heatRank(left) || (right.heat?.sharp ?? -1) - (left.heat?.sharp ?? -1) || right.count - left.count;
+  const ordered = () => {
+    if (selectedOrder === 'group') return [...complaintCards].sort(byGroup).concat(praise);
+    if (selectedOrder === 'heat' && analyst) return [...complaintCards].sort(byHeat).concat(praise);
+    return complaintCards.concat(praise);
+  };
   return { base, complaintCards, ordered };
 }
 
 function problemColumns(context, { cards, complaintCards, buckets, previous, compared, base }) {
   const columns = {
+    /* Период шапки раньше разметки эмоций — подпись в подсказке «Накала»; месяц начала отдаёт контекст, иначе — по данным */
+    labelledSince: emotionsNoteFor(context),
     analyst: Boolean(context.analyst),
     metric: shownDynamics(context),
     segments: context.analyst ? segmentColumns(cards) : [],
@@ -808,11 +1071,19 @@ function problemTable(context, state, { cards, ordered, columns, base }) {
   };
   keepSelection();
   const table = element('table', 'problem-table');
+  /* «Доля» и «Урон» с числом жалоб под значением — колонки шагов и пилюли шире */
+  table.classList.toggle('problem-table--with-count', columns.metric !== 'count');
   const body = element('tbody');
   columns.resizer = nameResizer(table);
   table.append(tableHead(context, columns), body);
+  /* Наведение на шаг подсвечивает его колонку — шапку и ячейки всех строк */
+  const markStep = (step) => {
+    for (const cell of table.querySelectorAll('.problem-table__step')) cell.classList.toggle('is-column-hover', step !== undefined && cell.dataset.step === step);
+  };
+  table.addEventListener('pointerover', (event) => markStep(event.target.closest?.('.problem-table__step')?.dataset.step));
+  table.addEventListener('pointerleave', () => markStep());
   /* Аудит 13.11: таблица шире видимой — общая прокрутка с затуханием края (hScroll), колонка не режется посреди слова */
-  const scroll = hScroll(table, { className: 'problem-table-scroll', label: 'Таблица топа проблем', fade: 'end' });
+  const scroll = hScroll(table, { className: 'problem-table-scroll', label: 'Таблица топа проблем', fade: 'none' });
   const buttons = element('div', 'verbatim-problems__actions');
   const feedSlot = element('div', 'verbatim-problems__feed');
   const showFeed = () => {
@@ -866,7 +1137,7 @@ function problemTable(context, state, { cards, ordered, columns, base }) {
 function problemSearch(onChange) {
   return searchField({
     className: 'verbatim-search problem-search', inputClass: 'verbatim-search__input',
-    label: selectedCut === 'categoryPair' ? 'Поиск по категории и группе' : 'Поиск по проблематике и ФО',
+    label: selectedCut === 'categoryPair' ? 'Поиск по категории и группе' : 'Поиск по проблематике и функ. области',
     placeholder: selectedCut === 'categoryPair' ? 'Поиск по категории…' : 'Поиск по проблематике…',
     value: problemQuery,
     onInput: (value) => {
@@ -909,6 +1180,7 @@ export function renderVerbatimCards(block, context) {
   const restoreScroll = rememberScroll(block.element, '.problem-table-scroll');
   const state = viewState(block, context);
   block.setHead();
+  takeGroupStep(context.step, context.stepIsAuto);
   const driver = normalizeDriver(context.state.driver);
   /* J-49: выбранный на графике день блок не сужает — только период группы. J-128: выбор антидрайвера — сужает */
   const current = driverRows(context.slice, driver, context.reference);
@@ -922,7 +1194,7 @@ export function renderVerbatimCards(block, context) {
   const previous = compared ? driverRows(context.previousSlice, driver, context.reference)
     .filter(({ appeal_date: date }) => date >= compared.from && date <= compared.to) : [];
   const metricTabs = () => (context.analyst ? dynamicsTabs(block, context) : null);
-  const controls = () => [driverChip(context), cutTabs(block, context), metricTabs(), stepTabs(block, context)].filter(Boolean);
+  const controls = () => [driverChip(context), cutTabs(block, context), metricTabs()].filter(Boolean);
   const head = (extra = {}) => block.setHead({ controls: controls(), ...extra });
   if (current.length === 0) {
     head();
@@ -934,27 +1206,49 @@ export function renderVerbatimCards(block, context) {
 
   const buckets = buildTimeSeries([], driver?.from ? { from: driver.from, to: driver.to } : context.period, selectedScale)
     .map(({ from, to }) => ({ from, to }));
-  const cards = buildProblemCards(previous, current, context.period, context.verbatim.data, 'frequent',
-    { cut: selectedCut, limit: Infinity, reference: context.reference, buckets });
-  /* Табы остаются и у пустого разреза: иначе из него не вернуться */
+  /*
+    J-348: полоса зон — по тем же строкам, что таблица: оценки с жалобой (значение разреза, не «Позитив»), каждая один
+    раз; число зоны совпадает с тем, что она открывает. Выбор зоны — у экземпляра блока; зона, которой нет, снимается
+  */
+  const build = (only) => buildProblemCards(previous, current, context.period, context.verbatim.data, 'frequent',
+    { cut: selectedCut, limit: Infinity, reference: context.reference, buckets, ...(only ? { only } : {}) });
+  const allCards = build();
+  const complaintRows = [...new Set(allCards.filter((card) => !card.positive).flatMap((card) => card.rows))];
+  const cardRows = [...new Set(allCards.flatMap((card) => card.rows))];
+  /* Выбор плитки (накал или тон), которого нет в новом срезе, снимается */
+  const tilePick = state.tilePick;
+  if (!context.analyst || (tilePick && !cardRows.some(pickMatch(tilePick)))) state.tilePick = null;
+  const strip = context.analyst ? summaryTiles(block, context, state, { complaintRows, cardRows, current }) : null;
+  /* Выбор сужает жалобы строк и ленту; базы доли, урона и накала — от всего среза (only в buildProblemCards) */
+  const chosen = state.tilePick;
+  const cards = chosen === null ? allCards : build(pickMatch(chosen));
+  /* Табы остаются и у пустого разреза: иначе из него не вернуться; полоса зон — тоже, иначе выбор зоны не снять */
   if (!cards.length) {
     head();
     const marked = CUT_OPTIONS.find(({ value }) => value === selectedCut).empty;
-    block.setContent(unavailable('Нет размеченной прямой речи', `Для выбранного среза нет комментариев ${marked}.`));
+    const empty = state.tilePick === null
+      ? unavailable('Нет размеченной прямой речи', `Для выбранного среза нет комментариев ${marked}.`)
+      : unavailable('В выбранном накале или тоне нет размеченных жалоб', 'Нажмите выбранное ещё раз, чтобы снять выбор.');
+    if (strip) {
+      const wrap = element('div', 'verbatim-problems__list');
+      wrap.append(strip, empty);
+      block.setContent(wrap);
+    } else block.setContent(empty);
     return;
   }
 
   const { base, complaintCards, ordered } = problemOrder(cards, Boolean(context.analyst));
   const columns = problemColumns(context, { cards, complaintCards, buckets, previous, compared, base });
+  columns.tilePick = chosen;
   const { scroll, buttons, feedSlot, refilter } = problemTable(context, state, { cards, ordered, columns, base });
   /*
     J-136: разрез, числа и шаг — в строке поиска, а не в шапке блока: лента справа начинается от шапки и занимает всю
     высоту. Кнопка, которая прячет ленту и отдаёт её место таблице, — в верхней строке колонки ленты
   */
   const toolbar = element('div', 'problem-toolbar');
-  toolbar.append(...[problemSearch(refilter), cutTabs(block, context), orderTabs(block, context), metricTabs(), stepTabs(block, context)].filter(Boolean));
+  toolbar.append(...[problemSearch(refilter), cutTabs(block, context), orderTabs(block, context), metricTabs()].filter(Boolean));
   const column = element('div', 'verbatim-problems__list');
-  column.append(toolbar, scroll, ...(columns.os ? [versionLegend()] : []), buttons);
+  column.append(toolbar, ...(strip ? [strip] : []), scroll, ...(columns.os ? [versionLegend()] : []), buttons);
   const content = element('div', 'verbatim-problems');
   content.append(column, feedSlot, feedToggle(content, feedSlot));
   /* J-147: метки «Сделано с AI» у «Топ проблем» пока нет — по просьбе заказчика; лента отзывов начинается от заголовка */

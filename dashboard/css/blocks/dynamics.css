@@ -75,6 +75,10 @@
   stop-color: transparent;
 }
 
+.chart-plan-band-stop--mid {
+  stop-color: var(--color-plan-band-mid);
+}
+
 .chart-bars {
   pointer-events: none;
 }
@@ -163,18 +167,6 @@
   stop-color: var(--color-negative);
 }
 
-/* J-72: линия в коридоре не светится — свечение несёт смысл тона, у нейтрального его нет */
-.chart-zones--glow .chart-zones__stop--in-plan {
-  stop-opacity: 0;
-}
-
-/* Свечение — та же линия тем же градиентом, размытая и приглушённая: светится своим тоном каждый участок */
-.chart-line--glow {
-  opacity: var(--chart-glow-strength);
-  filter: blur(var(--chart-glow-radius));
-  stroke-width: var(--chart-glow-radius);
-}
-
 .chart-line--previous {
   opacity: var(--chart-previous-opacity);
   stroke-dasharray: var(--space-1) var(--space-1);
@@ -237,11 +229,8 @@
 }
 
 .chart-point.is-hovered:not(.is-selected) {
-  /* Неделя 16–22.11: кольцо наведения — цвета самой точки (красное, зелёное, серое), а не белое; точка чуть крупнее */
-  r: calc(var(--chart-point-selected-radius) * 0.7);
-  stroke: color-mix(in srgb, currentColor 50%, transparent);
-  stroke-width: calc(var(--divider-width) * 6);
-  paint-order: stroke;
+  /* Неделя 16–22.11 (макет пользователя): наведённая точка — 6×6 цвета своей зоны, без ореола */
+  r: calc(var(--chart-dot-active) / 2);
 }
 
 /* Фокус с клавиатуры — отдельное сплошное кольцо цвета текста: полупрозрачное кольцо наведения у серой точки слишком тусклое */
@@ -260,46 +249,27 @@
 }
 
 /*
-  Неделя 16–22.11: последняя и выбранная точки — светящийся круг, как иконка типа события (J-269): градиент тона
-  в defs (`appendMarkGradients`), свечение тона. Последняя — чуть крупнее обычной; выбранная — крупнее и ярче, с мягким
-  ореолом вместо белой заливки
+  Неделя 16–22.11 (макет пользователя): все точки 3×3 (--chart-dot), включая последнюю; выбранная и наведённая — 6×6
+  (--chart-dot-active), цвета своей зоны; свечения, градиента и ореола нет. Выбранная — с тонким кольцом цвета текста
 */
-.chart-mark {
-  color: var(--chart-line-neutral);
-}
-
-.chart-mark--positive {
-  color: var(--color-positive);
-}
-
-.chart-mark--negative {
-  color: var(--color-negative);
-}
-
-.chart-mark__core {
-  stop-color: var(--color-surface-sunken);
-}
-
-.chart-mark__tone {
-  stop-color: currentColor;
-}
-
-.chart-mark__rim {
-  stop-color: color-mix(in oklab, currentColor 70%, var(--color-surface-sunken));
-}
-
 .chart-point.is-mark {
-  r: calc(var(--chart-point-selected-radius) * 0.8);
   stroke: none;
-  filter: drop-shadow(0 0 var(--space-1) currentColor);
 }
 
+/* Крупнее — только выбранная и наведённая; последняя точка — 3×3, как остальные (пользователь: «размер точки 3×3») */
 .chart-point.is-mark.is-selected {
-  r: calc(var(--chart-point-selected-radius) * 1.2);
-  stroke: color-mix(in srgb, currentColor 30%, transparent);
-  stroke-width: calc(var(--divider-width) * 8);
-  paint-order: stroke;
-  filter: drop-shadow(0 0 var(--space-2) currentColor);
+  r: calc(var(--chart-dot-active) / 2);
+  fill: currentColor;
+  stroke: var(--color-text-strong);
+  stroke-width: var(--divider-width);
+}
+
+/* Неделя 16–22.11: неполный интервал (ещё идёт за последней датой данных) — полая точка цвета своей зоны */
+.chart-point--partial {
+  fill: var(--color-surface);
+  stroke: currentColor;
+  stroke-width: calc(var(--divider-width) * 2);
+  r: calc(var(--chart-point-selected-radius) * 0.7);
 }
 
 .chart-damage-marks {
@@ -311,7 +281,7 @@
   opacity: 1;
 }
 
-/* Урон (неделя 16–22.11): гладкая красная линия со свечением, заливка под ней гаснет к оси */
+/* Урон (неделя 16–22.11): гладкая красная линия без свечения, заливка под ней гаснет к оси */
 .chart-line--damage {
   stroke: var(--color-negative);
 }
@@ -336,6 +306,15 @@
 }
 
 /* Соседние интервалы строки — тонкая линия её цвета под точками; через пропуск линии нет */
+/* Легенда полосы (неделя 16–22.11): типы строк сверху вниз, мелко, под полосой */
+.chart-events-legend {
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
+}
+
 .chart-events__link {
   stroke: color-mix(in srgb, var(--tone) var(--tone-rim), transparent);
   stroke-width: var(--divider-width);

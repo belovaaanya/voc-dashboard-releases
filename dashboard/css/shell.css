@@ -129,8 +129,8 @@ body::before {
 
 .side-nav__logo {
   color: var(--color-text-strong);
-  font: var(--type-caption-strong);
-  letter-spacing: var(--tracking-caption-strong);
+  font: var(--type-logo);
+  letter-spacing: var(--tracking-logo);
   white-space: nowrap;
 }
 
@@ -196,6 +196,11 @@ body::before {
 }
 
 /* J-151: скрытая страница не видна, даже если её контейнер задаёт свой display (у дайджеста — flex) */
+/* Вид главной («Главная» и «Для аналитика»): строки-секции — с бо́льшим вертикальным воздухом, чем карточки в строке */
+.page-view[data-page='voc'] {
+  gap: var(--gap-stack);
+}
+
 .page-view[hidden] {
   display: none;
 }
@@ -297,7 +302,8 @@ body::before {
 .workspace > .page {
   display: flex;
   flex-direction: column;
-  gap: var(--gap-section);
+  /* J-?: шапка → страница — тем же воздухом, что фильтры → заголовок (было --gap-section, 8) */
+  gap: var(--gap-page-head);
   margin: 0;
   padding: var(--workspace-pad);
 }
@@ -359,8 +365,8 @@ body::before {
 .metrics-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr));
-  /* Зазор карточек шапки — как у остальных блоков страницы */
-  gap: var(--gap-section);
+  /* Зазор карточек шапки в строке — как у остальных блоков; между двумя строками сетки — больше (по обратной связи) */
+  gap: var(--gap-row) var(--gap-section);
   align-items: stretch;
 }
 
@@ -377,7 +383,7 @@ body::before {
   (поля 40 + шапка 24 + зазор 12 + две строки по 49 и зазор 8 = 182), строка не скачет при смене фильтров
   и длины текста; дни плана и распределение растягиваются под неё. Лишнее прокручивается в карточке (D-55)
 */
-/* «Распределение оценок» — только у аналитика: на главной его колонку берёт «Конверсия опроса» — две колонки, вывод — одна */
+/* Распределение теперь и на главной: правило срабатывает, только если блок снова спрячет карточку — тогда конверсия берёт её колонку */
 .metrics-grid:has(> .card--distribution[hidden]) > .card--metric-plan-days {
   grid-column: span 2;
 }
@@ -399,7 +405,7 @@ body::before {
   gap: var(--space-3);
   min-width: 0;
   padding: var(--card-padding);
-  border: var(--hairline) solid var(--color-card-border);
+  border: var(--card-border-width) solid var(--color-card-border);
   border-radius: var(--radius-card);
   background: var(--card-surface);
   box-shadow: var(--card-shadow);
@@ -464,6 +470,12 @@ body::before {
 }
 
 /* J-168, J-170: карточка-шапка страницы — заголовок страницы крупнее и жирнее заголовка блока */
+/* J-?: у карточки-шапки страницы (роли, дайджест) заголовок стоит на том же расстоянии от фильтров, что «Главная»:
+   верхнего поля нет, воздух задаёт --gap-page-head */
+.card--page-head {
+  padding-block-start: 0;
+}
+
 .card--page-head .card__title {
   color: var(--color-text-strong);
   font: var(--type-page-title);
@@ -529,6 +541,25 @@ body::before {
 .card__period--control:hover,
 .card__period--control[aria-expanded='true'] {
   border-color: transparent;
+}
+
+/*
+  J-?: период группы аналитики — тот же вид, что период в шапке дашборда: пилюля с рамкой и поверхностью дорожки
+  фильтров, иконка календаря; высота — как у переключателя шага рядом (--control-height). Наведение и открытый —
+  общие правила .card__period--control, фокус — кольцо каркаса
+*/
+.card__period--pill {
+  height: var(--control-height);
+  min-height: 0;
+  padding-block: 0;
+  padding-inline: var(--space-3);
+  border: var(--divider-width) solid var(--filter-edge);
+  background: var(--filter-surface);
+}
+
+.card__period--pill:hover,
+.card__period--pill[aria-expanded='true'] {
+  border-color: var(--color-border-strong);
 }
 
 /* Свой период блока отличается от общего не только цветом: подпись подчёркнута, как применённый фильтр (D-26) */
@@ -604,15 +635,13 @@ body::before {
 }
 
 /*
-  J-40, J-41: группа блоков — одна карточка. Блоки внутри — секции без своей поверхности:
-  рамка, фон и тень у группы, у секций — шапка и содержимое; секции делит линия, а не зазор
-  карточек. Развёрнутый блок снова получает поверхность слоя (D-32)
+  J-40, J-?: группа аналитики — строка-заголовок с общим периодом и под ней три карточки. У самой группы подложки
+  нет, у карточек внутри — обычная поверхность. Между карточками группы — --gap-group, между группами страницы —
+  --gap-stack; зоны их не переопределяют. В карточке «Динамика и события» график и календарь — секции без своей
+  поверхности, их делит линия строки. Развёрнутый блок снова получает поверхность слоя (D-32)
 */
 .card--group {
-  gap: var(--space-6);
-}
-
-.card--group .card:not(.is-expanded) {
+  gap: var(--gap-group);
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -620,21 +649,22 @@ body::before {
   box-shadow: none;
 }
 
-.card--group .column {
-  gap: var(--space-6);
+.card--group > .card__body {
+  gap: var(--gap-group);
 }
 
-.card--group .column > .card + .card:not(.is-expanded),
-.card--group .group-section > .card:first-child:not(.is-expanded) {
-  padding-top: var(--space-6);
-  border-top: var(--hairline) solid var(--color-card-border);
+.group-card .card:not(.is-expanded) {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
 }
 
 /*
-  Строка «график и антидрайверы | календарь»: текст календаря начинается там же, где текст
+  Строка «график | календарь» в карточке «Динамика и события»: текст календаря начинается там же, где текст
   карточек правого рейла выше, текст графика кончается там же, где у метрик; линия — посередине
-  зазора. Высоту строки задают график с антидрайверами (J-49), календарь тянется на всю высоту
-  группы и прокручивается в своей колонке (D-55)
+  зазора. Высоту строки задаёт график, календарь прокручивается в своей колонке (D-55)
 */
 .group-row {
   --group-rail: calc(var(--rail-width) - 2 * var(--card-padding));
@@ -650,7 +680,7 @@ body::before {
   background-position: calc(100% - var(--group-rail) - var(--group-gap) / 2) 0;
 }
 
-/* J-136, J-148: календарь скрыт — график и антидрайверы во всю ширину; линия — у полосы кнопки «События» справа */
+/* J-136, J-148: календарь скрыт — график во всю ширину карточки; линия — у полосы кнопки «События» справа */
 .group-row--no-rail {
   grid-template-columns: minmax(0, 1fr);
   background-position: calc(100% - var(--side-toggle-reserve) + var(--space-4)) 0;
@@ -788,7 +818,8 @@ body::before {
 .shell-head {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  /* J-?: фильтры → заголовок страницы — вдвое больше прежних 12 */
+  gap: var(--gap-page-head);
 }
 
 /* Каналы и фильтры — одной строкой (E-01): при нехватке места сжимаются подписи фильтров, а не переносится панель */
@@ -866,8 +897,9 @@ body::before {
 .shell-head__title {
   margin: 0;
   color: var(--color-text-strong);
-  font: var(--type-title);
-  letter-spacing: var(--tracking-title);
+  /* Заголовок страницы — ролью заголовка страницы (24), как у «VOC ролей» и дайджеста: 14 не читался заголовком */
+  font: var(--type-page-title);
+  letter-spacing: var(--tracking-page-title);
 }
 
 /* J-115: «С кэшбеком» — переключатель в строке фильтров; состояние — положением ручки и подписью, не только цветом (D-26) */
@@ -1116,19 +1148,30 @@ body::before {
   list-style: none;
 }
 
+/* J-?: строки — на общей сетке списка: кнопки стоят столбцами и у листов без «Заменить»; время — под названием */
 .data-import__sheets {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-content: start;
   max-height: calc(var(--space-10) * 4);
   overflow-y: auto;
 }
 
 .data-import__sheet {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-control);
   background: var(--glass-control);
+}
+
+.data-import__label {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .data-import__name {
@@ -1143,6 +1186,11 @@ body::before {
   color: var(--color-text-tertiary);
 }
 
+.data-import__empty {
+  grid-column: 1 / -1;
+}
+
+.data-import__replace,
 .data-import__remove {
   padding: var(--space-1) var(--space-2);
   border: 0;
@@ -1151,6 +1199,10 @@ body::before {
   color: var(--color-text-secondary);
   font: inherit;
   cursor: pointer;
+}
+
+.data-import__replace:hover {
+  color: var(--color-text-strong);
 }
 
 .data-import__remove:hover,

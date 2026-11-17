@@ -63,7 +63,30 @@ function reloadClean() {
   location.assign(location.pathname);
 }
 
-function renderSheets(list, sheets, onRemove) {
+/*
+  J-?: после переразметки лист канала заменяется одним действием — «Заменить данные АБМ»: выбранный файл встаёт вместо
+  всех частей листа, имя файла не важно. Раньше лист убирали и загружали заново
+*/
+function replaceButton(sheet, onReplace) {
+  const input = element('input', 'visually-hidden');
+  input.type = 'file';
+  input.accept = '.csv,text/csv';
+  input.tabIndex = -1;
+  input.setAttribute('aria-hidden', 'true');
+  const button = element('button', 'data-import__replace', 'Заменить');
+  button.type = 'button';
+  button.setAttribute('aria-label', `Заменить данные ${sheet.name}`);
+  button.title = `Заменить данные ${sheet.name}: выбранный файл заменит все части листа`;
+  button.addEventListener('click', () => input.click());
+  input.addEventListener('change', () => {
+    const [file] = input.files;
+    input.value = '';
+    if (file) onReplace(sheet.name, file);
+  });
+  return [button, input];
+}
+
+function renderSheets(list, sheets, onRemove, onReplace) {
   if (!sheets.length) {
     list.replaceChildren(element('li', 'data-import__empty', 'Листы не загружены'));
     return;
@@ -92,7 +115,10 @@ function renderSheets(list, sheets, onRemove) {
         remove.textContent = 'Убрать';
       }, CONFIRM_MS);
     });
-    row.append(name, time, remove);
+    /* Время — под названием: колонка «Заменить» иначе обрезала бы «Справочник АБМ» */
+    const label = element('span', 'data-import__label');
+    label.append(name, time);
+    row.append(label, ...(sheet.rating ? replaceButton(sheet, onReplace) : [element('span')]), remove);
     return row;
   }));
 }
@@ -144,7 +170,7 @@ export function confluenceStatus(state) {
 
 function importPanel() {
   const panel = popoverPanel({ id: 'data-import-popover', title: 'Обновить данные', className: 'data-import', align: 'end' });
-  panel.append(element('p', 'data-import__lead', 'Оценки дополнят загруженные: если код уже есть, верна новая версия. Справочник и план заменятся.'));
+  panel.append(element('p', 'data-import__lead', 'Оценки дополнят загруженные: если код уже есть, верна новая версия. Справочник и план заменятся. После переразметки — «Заменить» у канала: новый файл заменит старый целиком.'));
   const list = element('ul', 'data-import__sheets');
   list.setAttribute('aria-label', 'Загруженные листы');
   const status = element('div', 'data-import__status');
@@ -169,7 +195,7 @@ function diskSource() {
   section.append(
     element('h3', 'control-popover__subtitle', 'С компьютера'),
     /* J-126: главное — выбрать все файлы разом и как назвать часть листа; иначе ошибка про канал и справочник непонятна */
-    element('p', 'data-import__note', 'Выберите сразу все CSV из папки выгрузки (⌘A в окне выбора): оценки проверяются вместе со справочником своего канала. Имя файла — имя листа, буква в букву: АБМ.csv, НИБ.csv, plan.csv, Справочник АБМ.csv. Часть листа — через два подчёркивания: НИБ__переразметка.csv.'),
+    element('p', 'data-import__note', 'Выберите сразу все CSV из папки выгрузки (⌘A в окне выбора): оценки проверяются вместе со справочником своего канала. Имя файла — имя листа, буква в букву: АБМ.csv, НИБ.csv, plan.csv, audience.csv, Справочник АБМ.csv. Часть листа — через два подчёркивания: НИБ__переразметка.csv.'),
   );
   const actions = element('div', 'control-popover__actions');
   actions.append(pick, input);
@@ -221,7 +247,7 @@ function sheetImporter({ panel, list, status, disk, wiki }) {
   const session = { importing: false, sheets: [] };
   const showSheets = (next) => {
     session.sheets = next;
-    renderSheets(list, session.sheets, remove);
+    renderSheets(list, session.sheets, remove, replace);
   };
   const busy = (on) => {
     session.importing = on;
@@ -270,6 +296,17 @@ function sheetImporter({ panel, list, status, disk, wiki }) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name }),
+    }));
+  }
+  async function replace(name, file) {
+    await run(`Заменяем данные ${name}…`, `Данные ${name} заменены.`, () => request(API_IMPORT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        'X-Import-Files': importHeader([file]),
+        'X-Import-Replace': encodeURIComponent(name),
+      },
+      body: file,
     }));
   }
   disk.input.addEventListener('change', async () => {

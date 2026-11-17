@@ -67,6 +67,16 @@ function appendFill(svg, points) {
   его верхнего края, ниже — красная над линией до нижнего края, внутри коридора заливки нет. Та же геометрия
   (areaPaths от линии до края коридора, обрезка по краю), градиент гаснет к коридору
 */
+/* Ступени коридора плана — общие: прозрачный край, --color-plan-band-mid к 30 %, --color-plan-band с 75 % до края */
+function bandStops() {
+  return [
+    svgNode('stop', 'sparkline__band-stop sparkline__band-stop--clear', { offset: 0 }),
+    svgNode('stop', 'sparkline__band-stop sparkline__band-stop--mid', { offset: 0.3 }),
+    svgNode('stop', 'sparkline__band-stop', { offset: 0.75 }),
+    svgNode('stop', 'sparkline__band-stop', { offset: 1 }),
+  ];
+}
+
 function appendPlanFill(svg, points, scale, band) {
   const y = (value) => VIEWBOX.height - ((value - scale.min) / (scale.max - scale.min)) * VIEWBOX.height;
   const top = Math.max(0, Math.min(VIEWBOX.height, y(band.max)));
@@ -107,8 +117,8 @@ function appendPlanFill(svg, points, scale, band) {
   на одном графике (iOS и Android дайджеста) различаются цветом ряда, а не попаданием в план
 */
 /*
-  `glow` — широкая линия дайджеста: линия светится своим тоном, заливки под ней нет, точки маленькие, подписи значений —
-  над каждой точкой; коридор плана со скруглёнными углами
+  `glow` — широкая линия дайджеста (имя прежнее): заливки под линией нет, точки 3 px, подписи значений — над каждой
+  точкой; коридор плана со скруглёнными углами. Свечения с редизайна 16–22.11 нет
 */
 /*
   `crispBand` — коридор плана ровной полосой с границами-линиями на шкале, без размытия и скругления: размытие в единицах
@@ -116,6 +126,7 @@ function appendPlanFill(svg, points, scale, band) {
 */
 /*
   Мини-тренд сегмента (стиль Apple Health): `halo` — под линией её размытая копия тем же тоном, заливка остаётся;
+  `dots: 'sm'` — точки 3 × 3 px (`--sparkline-dot-sm`, мини-тренд карточек по редизайну).
   `endRule` — тонкая вертикаль последней точки во всю высоту линии до оси; `level` — тихая пунктирная горизонталь уровня
   (граница плана), только если он внутри шкалы ряда: иначе она сплющила бы линию
 */
@@ -125,7 +136,7 @@ function appendPlanFill(svg, points, scale, band) {
   `flatBand` — коридор без размытия и скругления; заливка та же, что везде: зелёный градиент `--color-plan-band` слева направо
   (неделя 16–22.11 — коридор плана везде зелёный, раньше `flatBand` давал серую ровную заливку)
 */
-export function sparkline(values, { tone, domain, wide = false, fill = false, band: singleBand = null, bands = null, zones = true, label = null, axis = null, glow = false, crispBand = false, flatBand = false, labelBelow = null, halo = false, endRule = false, level = null, planFill = false }) {
+export function sparkline(values, { tone, domain, wide = false, fill = false, band: singleBand = null, bands = null, zones = true, label = null, axis = null, glow = false, crispBand = false, flatBand = false, labelBelow = null, halo = false, endRule = false, level = null, planFill = false, dots = null }) {
   const sameBand = (left, right) => left && right && left.min === right.min && left.max === right.max;
   const known = bands?.filter(Boolean) ?? [];
   const stepped = known.length > 0 && !known.every((item) => sameBand(item, known[0])) ? bands : null;
@@ -143,7 +154,7 @@ export function sparkline(values, { tone, domain, wide = false, fill = false, ba
     /* Коридор плана — горизонтальный градиент тона «хорошо»: прозрачный слева, насыщеннее к текущей точке справа */
     const id = `sparkline-band-${sequence += 1}`;
     const gradient = svgNode('linearGradient', 'sparkline__band-gradient', { id, x1: 0, x2: 1, y1: 0, y2: 0 });
-    gradient.append(svgNode('stop', 'sparkline__band-stop sparkline__band-stop--clear', { offset: 0 }), svgNode('stop', 'sparkline__band-stop', { offset: 1 }));
+    gradient.append(...bandStops());
     const defs = svgNode('defs');
     defs.append(gradient);
     svg.append(defs);
@@ -163,7 +174,7 @@ export function sparkline(values, { tone, domain, wide = false, fill = false, ba
   } else if (!glow) appendFill(svg, points);
   /* Точка без соседей — отрезок нулевой длины: её видно только кружком */
   const lines = linePaths(points).filter((path) => path.includes(' C '));
-  if (band && zones) appendPlanLines(svg, lines, scale, band, glow);
+  if (band && zones) appendPlanLines(svg, lines, scale, band);
   else {
     if (halo) for (const d of lines) svg.append(svgNode('path', 'sparkline__line sparkline__line--glow', { d }));
     for (const d of lines) svg.append(svgNode('path', 'sparkline__line', { d }));
@@ -202,7 +213,7 @@ export function sparkline(values, { tone, domain, wide = false, fill = false, ba
     const below = labelBelow?.(index) ? ' sparkline-labels__value--below' : '';
     plot.append(at(element('span', `sparkline-labels__value${edge}${below}`, text), x, y));
   });
-  const wrap = element('div', ['sparkline-labels', fill && 'sparkline-labels--fill', glow && 'sparkline-labels--glow', labelBelow && 'sparkline-labels--below'].filter(Boolean).join(' '));
+  const wrap = element('div', ['sparkline-labels', fill && 'sparkline-labels--fill', glow && 'sparkline-labels--glow', labelBelow && 'sparkline-labels--below', dots === 'sm' && 'sparkline-labels--dots-sm'].filter(Boolean).join(' '));
   wrap.append(plot);
   if (axis) {
     const row = element('div', 'sparkline-labels__axis');
@@ -223,11 +234,8 @@ export function sparkline(values, { tone, domain, wide = false, fill = false, ba
 */
 const ZONE_FADE = VIEWBOX.height / 4;
 
-/*
-  `glow`: под линией — её размытая копия тем же градиентом, но участок в коридоре прозрачный (`chart-zones--glow`, как
-  J-72 графика динамики): светятся только красная и зелёная части, у серой свечения нет
-*/
-function appendPlanLines(svg, lines, scale, band, glow = false) {
+/* Линия тоном зон коридора. Свечения у линий дайджеста больше нет (редизайн 16–22.11: «у графиков я убрала свечение») */
+function appendPlanLines(svg, lines, scale, band) {
   const y = (value) => VIEWBOX.height - ((value - scale.min) / (scale.max - scale.min)) * VIEWBOX.height;
   const defs = svgNode('defs');
   const zoneGradient = (className) => {
@@ -240,15 +248,7 @@ function appendPlanLines(svg, lines, scale, band, glow = false) {
     return id;
   };
   const id = zoneGradient('chart-zones');
-  const glowId = glow ? zoneGradient('chart-zones chart-zones--glow') : null;
   svg.append(defs);
-  if (glowId) {
-    for (const d of lines) {
-      const halo = svgNode('path', 'sparkline__line sparkline__line--zones sparkline__line--glow', { d });
-      halo.style.setProperty('--sparkline-zones', `url(#${glowId})`);
-      svg.append(halo);
-    }
-  }
   for (const d of lines) {
     const path = svgNode('path', 'sparkline__line sparkline__line--zones', { d });
     path.style.setProperty('--sparkline-zones', `url(#${id})`);
@@ -264,7 +264,7 @@ function appendSteppedBand(svg, points, bands, scale, flat) {
   {
     const id = `sparkline-band-${sequence += 1}`;
     const gradient = svgNode('linearGradient', 'sparkline__band-gradient', { id, gradientUnits: 'userSpaceOnUse', x1: 0, x2: VIEWBOX.width, y1: 0, y2: 0 });
-    gradient.append(svgNode('stop', 'sparkline__band-stop sparkline__band-stop--clear', { offset: 0 }), svgNode('stop', 'sparkline__band-stop', { offset: 1 }));
+    gradient.append(...bandStops());
     const defs = svgNode('defs');
     defs.append(gradient);
     svg.append(defs);

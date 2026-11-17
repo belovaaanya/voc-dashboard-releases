@@ -37,6 +37,34 @@ function bucketsFor(period, scale) {
   return buckets;
 }
 
+function naturalBucketStart(day, scale) {
+  if (scale === 'day') return day;
+  if (scale === 'week') return addDays(day, -((day.getUTCDay() + 6) % 7));
+  return parseIso(calendarRange(scale, isoDate(day)).from);
+}
+
+/**
+ * Неделя 16–22.11: на шаге недели, месяца и квартала крайние точки — целые календарные интервалы, а не попавшие в выбор
+ * дни: выбор на ленте со сдвигом на день не делает крайнюю неделю «неполной». Диапазон графика — от начала интервала
+ * с первым днём выбора до конца интервала с последним; на шаге дня — сам выбор.
+ */
+export function wholeBucketRange(period, scale) {
+  if (!SCALES.has(scale)) throw new Error(`Неизвестный масштаб: ${scale}`);
+  if (scale === 'day') return { from: period.from, to: period.to };
+  return { from: isoDate(naturalBucketStart(parseIso(period.from), scale)), to: isoDate(naturalBucketEnd(parseIso(period.to), scale)) };
+}
+
+/**
+ * Неполная точка — только интервал, который ещё идёт: начался не позже последней даты данных и кончается после неё.
+ * Остальные интервалы считаются целиком и неполными не бывают.
+ */
+export function markPartial(series, dataEnd) {
+  return series.map((point) => {
+    const partial = Boolean(dataEnd) && point.from <= dataEnd && point.to > dataEnd;
+    return partial ? { ...point, partial, dataEnd } : { ...point, partial };
+  });
+}
+
 export function buildTimeSeries(ratings, period, scale = 'day') {
   const buckets = bucketsFor(period, scale);
   const bucketByDate = new Map();

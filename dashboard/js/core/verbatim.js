@@ -5,7 +5,7 @@ import { OS_ANDROID, OS_IOS, osCode, osName } from './dimensions.js';
 import { createLabels, normalizeLabel } from './labels.js';
 import { CATEGORY_CUT } from './antidrivers.js';
 import { voc } from './metrics.js';
-import { formatNumber } from './format.js';
+import { formatNumber, monthGenitive } from './format.js';
 
 export function validateVerbatim(verbatim) {
   if (!verbatim || typeof verbatim !== 'object' || Array.isArray(verbatim)) {
@@ -35,7 +35,7 @@ const complaintDomains = (row, reference) => [...new Set(complaintAnnotations(ro
   J-119: разрез «ФО и проблематика» — пара (ФО, проблема) из одной метки: проблема в таблице стоит под своей ФО.
   Проблема без ФО — под «Без ФО». Ключ пары — текст из двух частей с невидимым разделителем, части — в полях карточки
 */
-export const NO_DOMAIN = 'Без ФО';
+export const NO_DOMAIN = 'Без функ. области';
 /* J-121: ДКО — тем же видом: группа негатива `category_group` и категории под ней; без группы — «Без группы» */
 export const NO_CATEGORY_GROUP = 'Без группы';
 const PAIR = '\u001f';
@@ -128,6 +128,8 @@ const hiddenTopLabels = new Set(['dlp-блок']);
   показанная категория негатива (без «Нет категории» и исключённых, J-27, J-34, J-109): ДКО ставит эксперт, а не модель
 */
 const NO_REASON = /(выявить|выяснить) причину снижения не удалось/u;
+/** Экспертиза без установленной причины — недозвон или отказ от ОС; одной фразой их не различить (J-134). */
+export const isNoReasonExpertise = (text) => NO_REASON.test(normalizedTopLabel(text));
 const UNIDENTIFIED_PROBLEMS = new Set(['проблема не определена', 'невозможно выделить проблему']);
 const UNIDENTIFIED_DOMAIN = 'без категории';
 
@@ -140,7 +142,7 @@ function isFeedbackCase(row, items) {
   if (saved?.items === items) return saved.value;
   const item = items[row.voc_ccode];
   const expertise = textOf(item?.oslk_expertise_name);
-  const value = Boolean(textOf(item?.client_comment)) || (Boolean(expertise) && !NO_REASON.test(normalizedTopLabel(expertise)));
+  const value = Boolean(textOf(item?.client_comment)) || (Boolean(expertise) && !isNoReasonExpertise(expertise));
   feedbackByRow.set(row, { items, value });
   return value;
 }
@@ -367,6 +369,165 @@ export function negativeShare(rows, base) {
 /* J-129: при малом числе жалоб доля скачет от периода к периоду — строка помечается, значение остаётся */
 export const FEW_COMPLAINTS = 10;
 
+/*
+  J-348: накал жалоб — по тону эмоции, а не по точной эмоции: слепая проверка разметки показала, что тон и накал
+  надёжны, а соседние эмоции путаются. Тон: негатив, позитив, нейтрально; без эмоции (нет комментария или месяц
+  не размечен) — «нет данных». «Нет» — это данные: эмоции нет, тон нейтральный
+*/
+export const NEGATIVE_EMOTIONS = ['Злость', 'Разочарование', 'Тревога', 'Усталость', 'Растерянность', 'Недоверие'];
+export const POSITIVE_EMOTIONS = ['Удовлетворение'];
+/*
+  Подписи накала — одна константа на дашборд (правка пользователя): 0 — «Нет», 1 — «Слабый», 2 — «Выраженный»,
+  3 — «Острый»; расшифровка — в подсказку. Накалённая жалоба — негативный тон с накалом «Выраженный» или «Острый»
+  (от 2): «острый» — только 3, поэтому доля и сортировка называются «накалённые»
+*/
+export const INTENSITY_LABELS = ['Нет', 'Слабый', 'Выраженный', 'Острый'];
+export const INTENSITY_HINTS = ['накала нет', 'сожаление, сдержанная претензия', 'явная претензия', 'угроза уйти, деньги под угрозой, ругань'];
+export const intensityLabel = (intensity) => INTENSITY_LABELS[intensity] ?? null;
+
+/* Месяц начала разметки эмоций (YYYY-MM) — по самой ранней размеченной оценке среза; разметки нет — null.
+   Месяцы раньше него — «нет разметки», а не накал 0 */
+export function emotionsLabelledSince(rows) {
+  let first = null;
+  for (const row of rows) {
+    if ((row.emotion ?? null) === null || !row.appeal_date) continue;
+    if (first === null || row.appeal_date < first) first = row.appeal_date;
+  }
+  return first === null ? null : first.slice(0, 7);
+}
+
+/*
+  Подпись блока, когда период шапки начинается раньше разметки: «Эмоции размечены с сентября»; иначе — null.
+  Месяц начала — `context.emotions.labelledFrom` (первый размеченный месяц канала, импорт); без него — по данным среза
+*/
+export function emotionsNoteFor(context) {
+  const from = context.emotions?.labelledFrom ?? emotionsLabelledSince(context.rows ?? context.slice ?? []);
+  return emotionsSinceNote(context.period, from ? String(from).slice(0, 7) : null);
+}
+/* Подпись блока, когда период шапки начинается раньше разметки: «Эмоции размечены с сентября»; иначе — null */
+export function emotionsSinceNote(period, since) {
+  if (!since || !period?.from || period.from.slice(0, 7) >= since) return null;
+  return `Эмоции размечены с ${monthGenitive(since)}`;
+}
+export const SHARP_INTENSITY = 2;
+/* Доля накалённых — от 5 комментариев с негативным тоном: на меньшем числе доля скачет, показывается их число */
+export const HEAT_MIN_NEGATIVE = 5;
+
+export function emotionTone(emotion) {
+  if (emotion === null || emotion === undefined) return null;
+  if (NEGATIVE_EMOTIONS.includes(emotion)) return 'negative';
+  return POSITIVE_EMOTIONS.includes(emotion) ? 'positive' : 'neutral';
+}
+
+export const isSharp = (row) => emotionTone(row.emotion ?? null) === 'negative' && (row.emotion_intensity ?? -1) >= SHARP_INTENSITY;
+
+/*
+  Полоса зон накала (J-348): четыре зоны по накалу 0–3 среди размеченных комментариев с негативным тоном — позитив и
+  нейтральное в полосу не входят. Ширина зоны — доля жалоб в ней, число — над зоной
+*/
+export const HEAT_ZONES = [0, 1, 2, 3];
+export const inHeatZone = (row, zone) => emotionTone(row.emotion ?? null) === 'negative' && (row.emotion_intensity ?? null) === zone;
+export function heatZones(rows) {
+  const counts = HEAT_ZONES.map((zone) => ({ zone, count: 0 }));
+  for (const row of rows) {
+    if (emotionTone(row.emotion ?? null) !== 'negative') continue;
+    const intensity = row.emotion_intensity ?? null;
+    if (HEAT_ZONES.includes(intensity)) counts[intensity].count += 1;
+  }
+  const total = counts.reduce((sum, { count }) => sum + count, 0);
+  return { total, zones: counts.map((zone) => ({ ...zone, share: total ? (zone.count / total) * 100 : 0 })) };
+}
+
+/*
+  Блок «Эмоции» (J-348): точные эмоции по группам тона, у каждой — всего и по накалу 0–3. База — размеченные
+  комментарии: у оценки без комментария поля эмоции пусты, она не считается. Точная эмоция размечена с меньшей
+  уверенностью, чем тон и накал, — поэтому группы тона идут заголовками, а точная эмоция — строками под ними
+*/
+export const EMOTION_TONES = [
+  { tone: 'negative', label: 'Негатив', emotions: NEGATIVE_EMOTIONS },
+  { tone: 'neutral', label: 'Нейтрально', emotions: ['Пожелание', 'Нет'] },
+  { tone: 'positive', label: 'Позитив', emotions: POSITIVE_EMOTIONS },
+];
+export const EMOTION_INTENSITIES = [0, 1, 2, 3];
+
+const emptyCounts = () => ({ total: 0, byIntensity: EMOTION_INTENSITIES.map(() => 0) });
+function addTo(counts, intensity) {
+  counts.total += 1;
+  if (EMOTION_INTENSITIES.includes(intensity)) counts.byIntensity[intensity] += 1;
+}
+
+export function emotionTable(rows) {
+  const byEmotion = new Map(EMOTION_TONES.flatMap(({ emotions }) => emotions.map((emotion) => [emotion, emptyCounts()])));
+  const byTone = new Map(EMOTION_TONES.map(({ tone }) => [tone, emptyCounts()]));
+  let total = 0;
+  for (const row of rows) {
+    const emotion = row.emotion ?? null;
+    const tone = emotionTone(emotion);
+    if (tone === null) continue;
+    total += 1;
+    const intensity = row.emotion_intensity ?? null;
+    addTo(byTone.get(tone), intensity);
+    if (byEmotion.has(emotion)) addTo(byEmotion.get(emotion), intensity);
+  }
+  return {
+    total,
+    groups: EMOTION_TONES.map(({ tone, label, emotions }) => ({
+      tone, label, ...byTone.get(tone),
+      rows: emotions.map((emotion) => ({ emotion, ...byEmotion.get(emotion) })),
+    })),
+  };
+}
+
+/** Выбор блока «Эмоции»: { tone? | emotion?, intensities? } — тон или эмоция и, если заданы, накал из списка. */
+export function inEmotionPick(row, pick) {
+  const emotion = row.emotion ?? null;
+  if (emotion === null) return false;
+  if (pick.emotion !== undefined && emotion !== pick.emotion) return false;
+  if (pick.tone !== undefined && emotionTone(emotion) !== pick.tone) return false;
+  if (pick.intensities && !pick.intensities.includes(row.emotion_intensity ?? null)) return false;
+  return true;
+}
+
+/** Лента выбора: комментарии клиента оценок, свежие сверху — как лента «Топ проблем». */
+export const emotionFeed = (rows, verbatim, reference = null) => feedOf(rows, validateVerbatim(verbatim), reference);
+
+/*
+  Накал строк: база — размеченные комментарии (эмоция не null: у оценки без комментария поля эмоции пусты),
+  острые — негативный тон с накалом ≥ 2; средний накал — по комментариям с негативным тоном.
+  Ни одного размеченного комментария — null, «нет данных», а не 0
+*/
+export function heatOf(rows, base = rows) {
+  /* База (размеченные и негатив) — `base`, острые и средний накал — `rows`: при зоне накала (J-348) острые — жалобы
+     зоны, а база — все комментарии проблемы, как у доли и урона «жалобы зоны от всех оценок среза» */
+  let labelled = 0;
+  let negative = 0;
+  for (const row of base) {
+    const tone = emotionTone(row.emotion ?? null);
+    if (tone === null) continue;
+    labelled += 1;
+    if (tone === 'negative') negative += 1;
+  }
+  if (!labelled) return null;
+  let sharp = 0;
+  let intensitySum = 0;
+  let intensityCount = 0;
+  for (const row of rows) {
+    if (emotionTone(row.emotion ?? null) !== 'negative') continue;
+    const intensity = row.emotion_intensity ?? null;
+    if (intensity === null) continue;
+    intensitySum += intensity;
+    intensityCount += 1;
+    if (intensity >= SHARP_INTENSITY) sharp += 1;
+  }
+  return {
+    labelled,
+    negative,
+    sharp,
+    share: negative >= HEAT_MIN_NEGATIVE ? (sharp / labelled) * 100 : null,
+    averageIntensity: intensityCount ? intensitySum / intensityCount : null,
+  };
+}
+
 /** Значения разреза у оценки без служебных и скрытых меток (J-27, J-32). */
 function shownCutValues(cut, reference, markup = null) {
   const cutValues = markup ? idCut(markup) : PROBLEM_CUTS[cut];
@@ -392,7 +553,11 @@ function shownCutValues(cut, reference, markup = null) {
 }
 
 /** Карточки выбранного разреза: доля — от кейсов с обратной связью и выявленной проблемой (J-133), у любого разреза (R-49); порядок — по числу жалоб. */
-export function buildProblemCards(previous, current, period, verbatim, mode = 'frequent', { cut = 'problem', limit = 5, reference = null, buckets = [] } = {}) {
+/*
+  `only` — сужение жалоб строк (J-348: зона накала): группы и их жалобы — только из подходящих оценок, а базы доли,
+  доли негатива и урона — от всего среза: доля и урон зоны сравнимы с обычными, а не пересчитаны от её подмножества
+*/
+export function buildProblemCards(previous, current, period, verbatim, mode = 'frequent', { cut = 'problem', limit = 5, reference = null, buckets = [], only = null } = {}) {
   const items = validateVerbatim(verbatim);
   const pair = PAIR_CUTS[cut];
   /* Выгрузка с ключом проблематики справочника группирует по нему; старая — по `problem` и `domain` */
@@ -411,8 +576,12 @@ export function buildProblemCards(previous, current, period, verbatim, mode = 'f
   const previousBase = previousBaseRows.size;
   /* Числитель — те же кейсы базы: жалоба недозвона или без текста в «Жалоб» остаётся, в долю не входит */
   const inBase = (rows, base) => rows.reduce((count, row) => count + (base.has(row) ? 1 : 0), 0);
-  const previousGroups = groupByCut(previous, valuesOf);
-  const currentGroups = groupByCut(current, valuesOf);
+  const narrowed = (rows) => (only ? rows.filter(only) : rows);
+  const previousLabelled = previous.some((row) => (row.emotion ?? null) !== null);
+  const previousGroups = groupByCut(narrowed(previous), valuesOf);
+  const currentGroups = groupByCut(narrowed(current), valuesOf);
+  /* База накала проблемы — все её комментарии: при зоне острые — жалобы зоны, база та же, что у доли и урона */
+  const fullGroups = only ? groupByCut(current, valuesOf) : currentGroups;
   /* J-128: урон за период и за каждый шаг — по всем оценкам этого отрезка среза */
   const positiveKey = (key) => (cut === 'domainProblem' && pairParts(key).group === POSITIVE_GROUP);
   const base = negativeBase(current, valuesOf, positiveKey);
@@ -428,7 +597,7 @@ export function buildProblemCards(previous, current, period, verbatim, mode = 'f
       Без прошлого периода изменения доли нет — не «выросла с нуля». J-132: и без значения в прошлом периоде —
       проблемы размечаются заново каждый месяц, «было 0» со стрелкой роста стояло бы почти у каждой строки
     */
-    const previousShare = previousBase && previousCount ? (inBase(previousGroups.get(key), previousBaseRows) / previousBase) * 100 : null;
+    const previousShare = previousBase && previousCount && (!only || previousLabelled) ? (inBase(previousGroups.get(key), previousBaseRows) / previousBase) * 100 : null;
     return {
       /* J-113: лента комментариев проблемы — каждая оценка с текстом, свежие сверху; жалобы по сегментам */
       feed: feedOf(rows, items, reference, problemId),
@@ -453,11 +622,14 @@ export function buildProblemCards(previous, current, period, verbatim, mode = 'f
         return { count: inBucket.length, negativeShare: positiveKey(key) || !inBucket.length ? null : negativeShare(inBucket, bucketBases[index]) };
       }),
       /* J-51: частотность прошлого периода рядом с текущей; без прошлого периода — null */
-      previousCount: previous.length ? previousCount : null,
+      /* При зоне накала прошлый период без разметки эмоций — «нет данных», а не 0 жалоб зоны */
+      previousCount: previous.length && (!only || previousLabelled) ? previousCount : null,
       currentShare,
       previousShare,
       shareDelta: previousShare === null || currentShare === null ? null : currentShare - previousShare,
       lastSeen: latestDate(rows),
+      /* J-348: накал — доля накалённых жалоб среди размеченных комментариев проблемы */
+      heat: heatOf(rows, fullGroups.get(key) ?? rows),
     };
   }).filter(({ feed }) => feed.length);
 
@@ -503,6 +675,29 @@ export function buildVerbatimRows(rows, verbatim, reference = null) {
     .sort((left, right) => right.date.localeCompare(left.date) || left.vocCcode.localeCompare(right.vocCcode));
 }
 
+/*
+  Пара «группа + значение» — ключ групповых фильтров детализации: одна проблема под двумя ФО или одна категория
+  под двумя группами негатива — два разных выбора, выбор группы находит ровно её строки
+*/
+export const FILTER_PAIR_SEPARATOR = '\u001f';
+export const filterPair = (group, value) => `${group ?? ''}${FILTER_PAIR_SEPARATOR}${value}`;
+export function filterPairParts(key) {
+  const at = key.indexOf(FILTER_PAIR_SEPARATOR);
+  return at < 0 ? [null, key] : [key.slice(0, at) || null, key.slice(at + FILTER_PAIR_SEPARATOR.length)];
+}
+
+/* Пары «ФО + проблема» оценки — из каждой метки: проблема под несколькими ФО даёт несколько пар */
+function problemPairsOf(row) {
+  const pairs = new Map();
+  for (const annotation of (row.annotations?.length ? row.annotations : [row])) {
+    const problem = textOf(annotation.problem);
+    if (!problem) continue;
+    const domain = textOf(annotation.domain);
+    pairs.set(filterPair(domain, problem), [domain, problem]);
+  }
+  return [...pairs.values()];
+}
+
 function detailRow(row, items, reference) {
   const item = items[row.voc_ccode];
   const comment = textOf(item?.client_comment);
@@ -525,6 +720,8 @@ function detailRow(row, items, reference) {
     problemType: problemTypes.join(' · ') || null,
     problems,
     problem: problems.join(' · ') || null,
+    /* ФО каждой проблемы — из её метки: фильтр «Проблема» выбирает пары «ФО + проблема» */
+    problemPairs: problemPairsOf(row),
     role: row.role || null,
     categoryGroup: textOf(item.category_group),
     category: textOf(item.category),
@@ -533,8 +730,48 @@ function detailRow(row, items, reference) {
     rating: row.mark,
     comment,
     expertise,
+    /* J-348: точная эмоция, накал и признаки — только в детализации; цитата эмоции — текст клиента, из lazy verbatim */
+    emotion: row.emotion ?? null,
+    intensity: row.emotion_intensity ?? null,
+    signals: signalsOf(row),
+    emotionQuote: textOf(item?.emotion_quote),
+    /*
+      Пины клиента — персональные данные, только из lazy verbatim: колонки таблицы детализации и её Excel.
+      Не в ratings, не в URL, не в копировании отзыва с контекстом
+    */
+    uPin: textOf(item?.legalclientid),
+    xPin: textOf(item?.legclientauthorizedpersonid),
   };
 }
+
+/*
+  Признаки отзыва — тегами одной колонки: флаги разметки, надёжные в слепой проверке, — «Угроза уйти», «Повтор»
+  (повторяющееся событие — правило пересмотрено) и «Деньги под угрозой»; сарказм не проверен — поле в данных есть,
+  но не показывается.
+  «Скрытый негатив» — оценка 4–5 с накалённой жалобой (негативный тон, накал от «Выраженного»): клиент поставил
+  высокую оценку, но пишет резко. Фильтр, не метрика
+*/
+export const SIGNALS = [
+  ['churn_threat', 'Угроза уйти'],
+  ['repeat_issue', 'Повтор'],
+  ['money_at_risk', 'Деньги под угрозой'],
+];
+export const HIDDEN_NEGATIVE = 'Скрытый негатив';
+export const isHiddenNegative = (row) => row.mark >= 4 && isSharp(row);
+function signalsOf(row) {
+  const signals = SIGNALS.filter(([field]) => row[field] === true).map(([, name]) => name);
+  return isHiddenNegative(row) ? [...signals, HIDDEN_NEGATIVE] : signals;
+}
+
+/*
+  Три классификации жалобы — откуда каждая: одна формулировка для подсказок разреза, шапок «Топ проблем»,
+  колонок «Обратной связи» и «Как считаются данные». «ДКО» не расшифровывается: расшифровка не подтверждена
+*/
+export const CLASSIFICATION_HINTS = {
+  trigger: 'Операция, после которой клиент поставил оценку; из выгрузки',
+  dko: 'Категория недовольства, присвоенная оценке при разборе; из выгрузки',
+  labeling: 'Наша разметка комментария и экспертизы по справочнику проблематик: функциональная область и конкретная проблема',
+};
 
 /* Столбцы с фильтром по значению: у триггера и КП значений в строке может быть несколько */
 const VERBATIM_FILTERS = [
@@ -544,13 +781,17 @@ const VERBATIM_FILTERS = [
   { key: 'products', values: (row) => row.products ?? [] },
   { key: 'domain', values: (row) => row.domains ?? [row.domain] },
   { key: 'problemType', values: (row) => row.problemTypes ?? [row.problemType] },
-  { key: 'problem', values: (row) => row.problems ?? [row.problem] },
+  /* Проблема и категория — парой с группой (filterPair): фильтр с группами выбирает значение именно этой группы */
+  { key: 'problem', values: (row) => (row.problemPairs ?? []).map(([domain, problem]) => filterPair(domain, problem)) },
   { key: 'role', values: (row) => [row.role] },
   { key: 'categoryGroup', values: (row) => [row.categoryGroup] },
-  { key: 'category', values: (row) => [row.category] },
+  { key: 'category', values: (row) => (row.category ? [filterPair(row.categoryGroup, row.category)] : []) },
   { key: 'os', values: (row) => [row.os] },
   { key: 'appVersion', values: (row) => [row.appVersion] },
   { key: 'rating', values: (row) => [String(row.rating)] },
+  { key: 'emotion', values: (row) => [row.emotion] },
+  { key: 'intensity', values: (row) => [intensityLabel(row.intensity)] },
+  { key: 'signals', values: (row) => row.signals ?? [] },
 ];
 
 const byKey = new Map(VERBATIM_FILTERS.map((filter) => [filter.key, filter]));

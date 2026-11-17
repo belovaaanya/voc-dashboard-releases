@@ -11,12 +11,16 @@
 
 .tone--positive {
   --tone: var(--color-positive);
-  --tone-ink: var(--color-positive-ink);
+  /*
+    Исключение J-70 — решение пользователя по макету «VOC ролей»: блок может задать свой текст тона
+    (`--positive-ink` / `--negative-ink`) только для текста не мельче 14 px SemiBold — дельта VOC у числа плитки роли
+  */
+  --tone-ink: var(--positive-ink, var(--color-positive-ink));
 }
 
 .tone--negative {
   --tone: var(--color-negative);
-  --tone-ink: var(--color-negative-ink);
+  --tone-ink: var(--negative-ink, var(--color-negative-ink));
 }
 
 .tone--neutral {
@@ -34,6 +38,18 @@
 /* Третий серый текста: дельта, у которой ещё нет смысла, — оценки незаконченного месяца против целого прошлого */
 .tone--faint {
   --tone: var(--color-text-tertiary);
+}
+
+/*
+  Бейдж плана с силой (`badge(..., { strength })`) — тот же приём, что у плиток тепловой карты (heat-cell.css): тон
+  светится от края, радиус свечения — по `--badge-strength` (та же формула, что у `--heat-strength`), край — полным тоном, текст — цветом текста. «В плане» — слабый
+  зелёный, «Выше плана» — сильнее, «Ниже плана» — тот же приём красным: разница — насыщенностью одного вида
+*/
+.badge--heat {
+  --pill-rx: calc(267% - 1.89 * var(--badge-strength, 0%));
+  --pill-ry: calc(405% - 3 * var(--badge-strength, 0%));
+  --pill-edge: 100%;
+  color: var(--color-text-strong);
 }
 
 .tone--orange {
@@ -126,6 +142,24 @@
 /* J-136: без сравнения треугольник невидим, но держит место — доли строк в одну колонку */
 .delta--no-arrow .delta__arrow {
   visibility: hidden;
+}
+
+/*
+  Дельта VOC карточек метрик (редизайн пользователя): цвета макета — в светлой теме светлее ink (`--color-delta-*`), поэтому
+  текст не меньше 14 px SemiBold (общая роль `--type-text-bold`, `--weight-strong`) — решение пользователя, исключение из AA
+  описано в test/theme.test.js
+*/
+.delta--strong {
+  font: var(--type-text-bold);
+  letter-spacing: var(--tracking-text-bold);
+}
+
+.delta--strong.tone--positive {
+  --tone-ink: var(--color-delta-positive);
+}
+
+.delta--strong.tone--negative {
+  --tone-ink: var(--color-delta-negative);
 }
 
 .delta--lg .delta__arrow {
@@ -224,6 +258,31 @@
   font: var(--type-caption-strong);
   letter-spacing: var(--tracking-caption-strong);
   white-space: nowrap;
+}
+
+/* После .badge: та же специфичность, побеждает порядок. Статус по ширине текста: общая минимальная ширина — для бейджей плана, чтобы они не прыгали; заголовок узкой карточки она переносит */
+.badge--fit {
+  min-width: 0;
+}
+
+/* Бейдж отклонения (редизайн пользователя): край свечения — `--badge-heat-edge` (тёмная 80 %, светлая — как у бейджа).
+   После .badge: та же специфичность, иначе его `--pill-edge` побеждает */
+.badge.badge--heat {
+  --pill-edge: var(--badge-heat-edge);
+  background: radial-gradient(ellipse var(--pill-rx) var(--pill-ry) at 50% 50%,
+    color-mix(in srgb, var(--tone) var(--badge-heat-center), transparent),
+    color-mix(in srgb, var(--tone) var(--badge-heat-mid), transparent) 50%,
+    color-mix(in srgb, var(--tone) var(--badge-heat-edge), transparent));
+  color: var(--badge-heat-ink, var(--tone-ink, var(--tone)));
+}
+
+/*
+  Бейдж плана (`badgeNode`): все статусы — одна роль 12 px SemiBold в обеих темах, ширина и высота пилюли общие
+  (`--badge-min-width`, `--space-6`): бейджи не скачут. SemiBold держит белый текст на розовой плашке светлой темы
+*/
+.badge--plan {
+  font: var(--type-caption-bold);
+  letter-spacing: var(--tracking-caption-bold);
 }
 
 /*

@@ -3,14 +3,14 @@
   ДКО, стабильность и детализация темы месяца. Только расчёт; отрисовка — `blocks/digest.js`. Методика —
   docs/blocks-digest.md. Чисел здесь не округляет никто, кроме отрисовки.
 */
-import { complaintValues } from './analytical-causes.js';
+import { complaintAnnotations } from './analytical-causes.js';
 import { CATEGORY_CUT } from './antidrivers.js';
 import { dashboardRows } from './cashback.js';
 import { earliestDate, latestDate, shiftDay, weekdayOf } from './dates.js';
 import { periodFactors } from './conclusions.js';
 import { DIMENSIONS, MOBILE_CHANNEL, OS_ANDROID, OS_IOS, metricSegments, osCode, osName } from './dimensions.js';
 import { normalizeLabel } from './labels.js';
-import { voc } from './metrics.js';
+import { negativeFeedback, voc } from './metrics.js';
 import { calendarRange, equalDaysPeriod, previousPeriod } from './period.js';
 import { planFor } from './plan.js';
 import { roundImpact } from './round.js';
@@ -242,10 +242,17 @@ function digestGroups(nowShares, sharesBy, tableMonths) {
     }));
 }
 
-/* Жалоба — сниженная оценка 1–4 с размеченной проблемой: число жалоб по проблемам */
+/* Тип «Позитив» — похвала («Всё нравится»): разметка ставит её и оценкам 1–4, но жалобой она не считается */
+const isPraise = (annotation) => typeof annotation.problem_type === 'string' && normalizeLabel(annotation.problem_type) === 'позитив';
+
+/* Жалоба — сниженная оценка 1–4 с размеченной проблемой, кроме похвалы: число жалоб по проблемам */
 function problemCounts(list, reference) {
   const found = new Map();
-  for (const row of list.filter(({ mark }) => mark <= 4)) for (const problem of complaintValues(row, 'problem', reference)) found.set(problem, (found.get(problem) ?? 0) + 1);
+  for (const row of list.filter(({ mark }) => mark <= 4)) {
+    const problems = new Set(complaintAnnotations(row, reference).filter((annotation) => !isPraise(annotation))
+      .map(({ problem }) => problem).filter((problem) => typeof problem === 'string' && problem.trim()));
+    for (const problem of problems) found.set(problem, (found.get(problem) ?? 0) + 1);
+  }
   return found;
 }
 
@@ -313,7 +320,11 @@ function otherRoles(rows) {
   return { total: top.reduce((sum, { count }) => sum + count, 0), roles: top.length, top: top.slice(0, OTHER_ROLES_SHOWN) };
 }
 
-export function buildRoles({ rows, month, reference, channel }) {
+/*
+  `dataRange` — границы выгрузки канала до фильтров страницы (сегмент, ОС): незаконченный месяц и окно сравнения жалоб
+  определяет выгрузка, а не срез — в узком сегменте последняя оценка могла быть раньше конца месяца
+*/
+export function buildRoles({ rows, month, reference, channel, dataRange = null }) {
   const previousMonth = shiftMonth(month, -1);
   const current = inMonth(rows, month);
   const previous = inMonth(rows, previousMonth);
@@ -323,7 +334,7 @@ export function buildRoles({ rows, month, reference, channel }) {
     Пустого хвоста и будущих недель нет. Месяц, после которого данные есть, — его недели, как раньше. Так же — у
     линий сегментов дайджеста
   */
-  const lastDate = rows.reduce((latest, { appeal_date: date }) => (date > latest ? date : latest), '');
+  const lastDate = dataRange?.to ?? rows.reduce((latest, { appeal_date: date }) => (date > latest ? date : latest), '');
   const { from, to } = monthRange(month);
   const unfinished = lastDate >= from && lastDate < to;
   const monthWeeksRange = monthWeeks(month);
@@ -339,7 +350,7 @@ export function buildRoles({ rows, month, reference, channel }) {
     01.11–09.11 → 01.10–09.10, и цвет дельты сохраняет смысл. Законченный месяц — к прошлому целиком. Окно раньше начала
     выгрузки — сравнения нет
   */
-  const problemBase = equalDaysPeriod(period, previousPeriod(period), earliestDate(rows) || null);
+  const problemBase = equalDaysPeriod(period, previousPeriod(period), (dataRange?.from ?? earliestDate(rows)) || null);
   const problemPrevious = problemBase ? rows.filter(({ appeal_date: date }) => date >= problemBase.from && date <= problemBase.to) : [];
   /* Линия роли — по неделям месяца или по месяцам полугода, как линия итога дайджеста */
   const trendMonths = Array.from({ length: TREND_MONTHS }, (_, index) => shiftMonth(month, index - TREND_MONTHS + 1));
@@ -373,6 +384,10 @@ export function buildRoles({ rows, month, reference, channel }) {
         previousCount: was.count,
         /* Достаточность выборки месяца (D-25): линия роли с «Мало оценок» не задаёт общую шкалу плиток */
         sufficient: sampleSufficiency(pick(current)).sufficient,
+        /* Оценки роли за месяц — для общей пометки «Мало оценок» карточек метрик (sufficiencyNode) */
+        ratings: pick(current),
+        /* Оценки 1–3 роли с обратной связью (`has_feedback`) и их доля от 1–3 — как ступень «С ОС» конверсии */
+        feedback: negativeFeedback(pick(current)),
         weekly: weekBuckets.map(({ from: weekFrom, to: weekTo, ratings }) => ({ from: weekFrom, to: weekTo, ...vocPair(pick(ratings), reference) })),
         monthly: trendMonths.map((key) => ({ month: key, ...vocPair(pick(byMonth.get(key)), reference) })),
         problems: [...problemsNow].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0], 'ru')).slice(0, ROLE_PROBLEMS)

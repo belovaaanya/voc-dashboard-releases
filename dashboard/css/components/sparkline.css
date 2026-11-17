@@ -22,8 +22,9 @@
   position: absolute;
   left: var(--x);
   top: var(--y);
-  width: calc(var(--space-1) * 1.5);
-  height: calc(var(--space-1) * 1.5);
+  /* Размер точки блок задаёт своим --sparkline-dot (плитки ролей — 3×3 по макету пользователя) */
+  width: var(--sparkline-dot, calc(var(--space-1) * 1.5));
+  height: var(--sparkline-dot, calc(var(--space-1) * 1.5));
   border-radius: var(--radius-pill);
   background: var(--tone);
   transform: translate(-50%, -50%);
@@ -91,9 +92,15 @@
   letter-spacing: var(--tracking-text);
 }
 
+.sparkline-labels--dots-sm .sparkline__marker {
+  width: var(--sparkline-dot-sm);
+  height: var(--sparkline-dot-sm);
+}
+
+/* Точки линий дайджеста — 3 × 3 px по редизайну 16–22.11: общий токен точки графиков `--chart-dot` («Динамика», #233); до его слияния — 3 px */
 .sparkline-labels--glow .sparkline__marker {
-  width: var(--space-1);
-  height: var(--space-1);
+  width: var(--chart-dot, calc(var(--space-1) * 0.75));
+  height: var(--chart-dot, calc(var(--space-1) * 0.75));
 }
 
 /* J-160: линия с коридором плана — градиентом зон, как на графике динамики */
@@ -104,7 +111,8 @@
 /* J-153: коридор плана — тихой полосой за линией, как полоса плана на графике динамики */
 /* Коридор плана: градиент слева направо до тона «хорошо», края слегка размыты — полоса не режет сцену */
 .sparkline__band {
-  filter: blur(calc(var(--space-1) / 4));
+  /* Блок может снять размытие своим --sparkline-band-filter: none (плитки ролей — без свечения по макету) */
+  filter: var(--sparkline-band-filter, blur(calc(var(--space-1) / 4)));
 }
 
 .sparkline__band--crisp {
@@ -128,12 +136,19 @@
   vector-effect: non-scaling-stroke;
 }
 
+/* Ступени коридора 0 · 30 % · 75 % · 100 % — общие стопы: прозрачный → --color-plan-band-mid → --color-plan-band */
 .sparkline__band-stop {
   stop-color: var(--color-plan-band);
 }
 
+.sparkline__band-stop--mid {
+  stop-color: var(--color-plan-band-mid);
+}
+
+/* Прозрачный край — цветом середины с нулевой непрозрачностью: от «transparent» (чёрного) градиент сереет у левого края */
 .sparkline__band-stop--clear {
-  stop-color: transparent;
+  stop-color: var(--color-plan-band-mid);
+  stop-opacity: 0;
 }
 
 /* J-157: подписи значений над точками широкой линии; сверху — место под подпись самой высокой точки */

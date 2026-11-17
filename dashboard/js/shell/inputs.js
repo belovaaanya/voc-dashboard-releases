@@ -1,8 +1,8 @@
 /* Входы блока записываются при чтении контекста: забыть зависимость нельзя (docs/ui-shell.md#обновление-на-месте) */
 
 const SLICE = ['channel', 'preset', 'from', 'to', 'filters', 'includeCashback'];
-const SLICED = new Set(['slice', 'previousSlice', 'select', 'period', 'previousPeriod', 'periodControl', 'previewPeriod']);
-const DERIVED = { rows: ['includeCashback'], dimensions: ['channel', 'includeCashback'], channelRows: ['channel'], analyst: ['page'] };
+const SLICED = new Set(['slice', 'previousSlice', 'select', 'period', 'previousPeriod', 'periodControl', 'previewPeriod', 'step', 'stepIsAuto']);
+const DERIVED = { rows: ['includeCashback'], dimensions: ['channel', 'includeCashback'], channelRows: ['channel'], analyst: ['page'], step: ['step', 'page'], stepIsAuto: ['step'] };
 const KEY_SET = '#keys';
 const STALE = { values: new Map() };
 

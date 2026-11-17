@@ -7,6 +7,8 @@
 import { ANOMALY_WINDOW_DAYS, MIN_EVENT_RATINGS } from './anomalies.js';
 import { INCIDENT_MIN_DAYS, INCIDENT_PLAN_GAP, INCIDENT_TOP_TRIGGERS } from './calendar-analysis.js';
 import { CRITICAL_DROP_ALPHA, CRITICAL_DROP_MIN, CRITICAL_DROP_MIN_WINDOW_RATINGS } from './critical-drop.js';
+/* Тексты классификаций — общие с подсказками колонок «Топ проблем»: правятся в одном месте */
+import { CLASSIFICATION_HINTS } from './verbatim.js';
 import { formatCount, formatNumber, plural } from './format.js';
 import { MINIMUM_RATINGS } from './sufficiency.js';
 
@@ -20,6 +22,10 @@ export function methodologyItems() {
     ['План', 'Коридор плана канала из выгрузки, один на все сегменты и фильтры канала. «В плане» — VOC внутри коридора, «Ниже плана» и «Выше плана» — за его границами.'],
     ['Дни относительно плана', 'Сколько дней периода VOC дня был ниже, в коридоре и выше плана — по тому же правилу, что плашка плана: сравниваются значения, округлённые до двух знаков. День без оценок или без плана не считается ни в какую сторону.'],
     ['Мало оценок', `В срезе меньше ${formatCount(MINIMUM_RATINGS)} оценок за период. Значение показано, но опираться на него стоит осторожно.`],
+    /* Три классификации оценки (неделя 16–22.11): тексты — CLASSIFICATION_HINTS «Топ проблем», без расхождений */
+    ['Триггер', `${CLASSIFICATION_HINTS.trigger}.`],
+    ['Категория негатива ДКО', `${CLASSIFICATION_HINTS.dko}.`],
+    ['Функ. область и проблема', `${CLASSIFICATION_HINTS.labeling}.`],
     ['Вклад', 'Насколько элемент изменил VOC к прошлому периоду — своими оценками и своей долей в срезе. Сумма вкладов всех элементов равна изменению VOC.'],
     ['Влияние', 'Как изменится VOC без оценок с элементом: VOC периода минус VOC того же периода без них. Оценка с несколькими элементами уходит целиком. Плюс — без элемента VOC был бы ниже, минус — выше.'],
     ['Урон', 'Сколько VOC теряет из-за оценок с элементом: доля оценок с элементом × (VOC элемента − 5). Чем дальше от нуля, тем сильнее элемент тянет VOC вниз.'],

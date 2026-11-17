@@ -30,6 +30,17 @@ export function negativeFeedbackShare(ratings) {
   return negative.filter(({ has_feedback }) => has_feedback === true).length * 100 / negative.length;
 }
 
+/**
+ * Оценки 1–3 с ОС числом и долей от оценок 1–3 (плитка роли): `count` и `share` null, если признак у сниженной оценки
+ * не вычислен; `share` null и без оценок 1–3. Недозвон и отказ от ОС без комментария — false уже при импорте (J-134).
+ */
+export function negativeFeedback(ratings) {
+  const negative = ratings.filter(({ mark }) => mark >= 1 && mark <= 3);
+  if (negative.some(({ has_feedback }) => typeof has_feedback !== 'boolean')) return { count: null, negative: negative.length, share: null };
+  const count = negative.filter(({ has_feedback }) => has_feedback === true).length;
+  return { count, negative: negative.length, share: negative.length ? (count * 100) / negative.length : null };
+}
+
 export function markDistribution(ratings) {
   const total = ratings.length;
 

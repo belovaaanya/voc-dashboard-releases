@@ -23,14 +23,15 @@ import {
   formatDelta,
   formatDeltaCount,
   formatDeltaShare,
+  formatDeltaShareFine,
   formatPeriodDative,
   formatVoc,
 } from '../core/format.js';
 import { ratingsForecast } from '../core/forecast.js';
 import { clampToDomain } from '../core/segment-trend.js';
 import { trendOf } from '../core/metrics.js';
-import { ABOVE_PLAN, BELOW_PLAN, GLOW_ABOVE_STRONG, GLOW_BELOW_STRONG, IN_PLAN, planGlow, planStatus } from '../core/plan.js';
-import { roundCount, roundDelta, roundShare } from '../core/round.js';
+import { ABOVE_PLAN, BELOW_PLAN, GLOW_ABOVE, GLOW_ABOVE_STRONG, GLOW_BELOW, GLOW_BELOW_STRONG, GLOW_IN, IN_PLAN, planGlow, planStatus } from '../core/plan.js';
+import { roundCount, roundDelta, roundShare, roundShareFine } from '../core/round.js';
 import { sampleSufficiency } from '../core/sufficiency.js';
 
 /*
@@ -42,6 +43,8 @@ export const DELTA_SHAPES = {
   voc: { round: roundDelta, format: formatDelta },
   count: { round: roundCount, format: formatDeltaCount },
   share: { round: roundShare, format: formatDeltaShare },
+  /* Малые доли (конверсия от MAU) — два знака */
+  shareFine: { round: roundShareFine, format: formatDeltaShareFine },
 };
 
 /* Тон дельты — по смыслу роста: рост низких оценок плох, спад числа оценок плох, а его рост ни хорош, ни плох (D-49) */
@@ -65,8 +68,9 @@ const TREND_CAPTION = {
   flat: 'без изменений к предыдущему периоду',
 };
 
-/* «В плане» — нейтральный: в коридоре нечему радоваться или тревожиться; цвет — у отклонений, слово называет любое состояние (D-26) */
+/* «В плане» — бледный зелёный, «Выше плана» — насыщенный: для руководителей «выше плана» — премия, разница читается сразу; слово называет любое состояние (D-26) */
 const PLAN_BADGE = {
+  /* Редизайн пользователя: «В плане» — нейтральный бейдж цветом второстепенного текста, цвет — только у отклонений */
   [IN_PLAN]: { caption: 'В плане', tone: 'quiet' },
   [ABOVE_PLAN]: { caption: 'Выше плана', tone: 'positive' },
   [BELOW_PLAN]: { caption: 'Ниже плана', tone: 'negative' },
@@ -88,11 +92,15 @@ export function deltaNode(value, { shape = DELTA_SHAPES.voc, growth = GROWTH.goo
   return delta({ text: shape.format(shown), direction, tone: growth[direction], caption: TREND_CAPTION[direction], className, large, arrow });
 }
 
-/** Дельта стоит рядом с числом; без сравнения слот пуст и скрыт — карточка не меняет высоту (B-07). */
-export function leadNode(value, { shape = DELTA_SHAPES.voc, growth = GROWTH.good, large = false } = {}) {
-  const node = deltaNode(value, { shape, growth, className: 'metric__lead', large });
+/**
+ * Дельта стоит рядом с числом; без сравнения слот пуст и скрыт — карточка не меняет высоту (B-07).
+ * `strong` — дельта VOC карточек метрик по редизайну: 14 px SemiBold и цвета макета (`delta--strong`).
+ */
+export function leadNode(value, { shape = DELTA_SHAPES.voc, growth = GROWTH.good, large = false, strong = false } = {}) {
+  const className = strong ? 'metric__lead delta--strong' : 'metric__lead';
+  const node = deltaNode(value, { shape, growth, className, large });
   if (node) return node;
-  const empty = delta({ text: '\u00a0', direction: 'flat', large, className: 'metric__lead metric__lead--empty' });
+  const empty = delta({ text: '\u00a0', direction: 'flat', large, className: `${className} metric__lead--empty` });
   empty.setAttribute('aria-hidden', 'true');
   return empty;
 }
@@ -110,8 +118,9 @@ const TREND_STEP = { month: 'по месяцам', quarter: 'по квартал
  * Подписи — только у крайних точек: VOC над точкой, шаг под линией («сен … ноя»); средняя точка без подписи —
  * три подписи в остаток строки не помещаются. В узкой карточке подписи гаснут (metrics.css). Все шаги и значения —
  * в подсказке и доступном имени. Шаг без оценок — разрыв; меньше двух точек с оценками — тренда нет.
+ * Редизайн пользователя: без свечения линии, пунктира плана и вертикали последней точки; точки 3 × 3 px (`dots: 'sm'`).
  */
-export function trendNode(values, steps, step, { direction = null, tone = null, level = null, domain = null } = {}) {
+export function trendNode(values, steps, step, { direction = null, tone = null, domain = null } = {}) {
   if (values.filter((value) => value !== null).length < 2) return null;
   const trend = element('span', 'metric__trend');
   const caption = `VOC ${TREND_STEP[step] ?? ''}: ${steps.map(({ label }, index) => `${label} ${values[index] === null ? 'нет оценок' : formatVoc(values[index])}`).join(', ')}`;
@@ -122,7 +131,7 @@ export function trendNode(values, steps, step, { direction = null, tone = null, 
   /* Цвет — `trendTone`: направление, мало оценок — серый; без `tone` — направление */
   /* Общая шкала сегментов (`domain`): точки за её краем прижаты к краю, подписи — настоящие значения */
   trend.append(sparkline(clampToDomain(values, domain), {
-    tone: tone ?? GROWTH.good[direction] ?? 'neutral', wide: true, fill: true, halo: true, endRule: true, level,
+    tone: tone ?? GROWTH.good[direction] ?? 'neutral', wide: true, fill: true, dots: 'sm',
     ...(domain ? { domain } : {}),
     label: (_value, index) => (end(index) ? formatVoc(values[index]) : null),
     axis: steps.map(({ label }, index) => (end(index) ? label : '')),
@@ -149,13 +158,36 @@ export function trendDotNode(value, { shape = DELTA_SHAPES.voc, growth = GROWTH.
 export function badgeNode(value, plan) {
   const status = planStatus(value, plan);
   if (!status) return null;
-  const node = badge(PLAN_BADGE[status].caption, PLAN_BADGE[status].tone);
-  const strong = STRONG_CAPTION[planGlow(value, plan)];
+  const glow = planGlow(value, plan);
+  /* Свечение по силе — только у отклонений: нейтральный «В плане» — обычный бейдж тона */
+  /* Все бейджи плана — одной ролью и одного размера (`plan`): «В плане» и «Ниже плана» не скачут по кеглю и начертанию */
+  const node = badge(PLAN_BADGE[status].caption, PLAN_BADGE[status].tone, { strength: status === IN_PLAN ? null : PLAN_STRENGTH[glow], plan: true });
+  const strong = STRONG_CAPTION[glow];
   if (strong) {
-    node.title = strong;
     node.setAttribute('aria-label', strong);
+    /* Подсказка — своя, а не `title`: у сегмента бейдж под слоем нажатия, наведение до него доводит `hoverThrough` */
+    hoverTooltip(node, [strong]);
   }
   return node;
+}
+
+/**
+ * Наведение сквозь слой нажатия карточки (сегмент: слой кнопки поверх шапки): пока указатель над областью `target`,
+ * ему приходят `pointerenter` и `pointerleave` — его подсказка открывается, а нажатие остаётся у кнопки.
+ */
+export function hoverThrough(layer, target) {
+  if (!target) return;
+  let inside = false;
+  const set = (next) => {
+    if (next === inside) return;
+    inside = next;
+    target.dispatchEvent(new PointerEvent(next ? 'pointerenter' : 'pointerleave'));
+  };
+  layer.addEventListener('pointermove', (event) => {
+    const box = target.getBoundingClientRect();
+    set(event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom);
+  });
+  layer.addEventListener('pointerleave', () => set(false));
 }
 
 /**
@@ -184,6 +216,18 @@ export function setPlanGlow(block, glow) {
   else delete card.dataset.planGlow;
 }
 
+/*
+  Сила свечения бейджа — как у плиток тепловой карты (решение пользователя): «В плане» — слабый зелёный, но явно зелёный,
+  отклонение — сильнее, сильное отклонение — в полную силу; «Ниже плана» — так же красным
+*/
+const PLAN_STRENGTH = {
+  [GLOW_IN]: 0.45,
+  [GLOW_ABOVE]: 0.75,
+  [GLOW_ABOVE_STRONG]: 1,
+  [GLOW_BELOW]: 0.75,
+  [GLOW_BELOW_STRONG]: 1,
+};
+
 /* J-67: сила отклонения — словом, а не только плотностью свечения (D-26) */
 const STRONG_CAPTION = {
   [GLOW_BELOW_STRONG]: 'Сильно ниже плана',
@@ -195,8 +239,8 @@ export function planDotNode(value, plan) {
   const status = planStatus(value, plan);
   if (!status) return null;
   const caption = STRONG_CAPTION[planGlow(value, plan)] ?? PLAN_BADGE[status].caption;
-  /* Точка дайджеста — прежнего тона: «В плане» нейтрален только у бейджа шапки */
-  const dot = statusDot(status === IN_PLAN ? 'positive' : PLAN_BADGE[status].tone);
+  /* Редизайн: «В плане» — нейтральная точка, как бейдж шапки (#218); цвет — только у «Выше» и «Ниже плана» */
+  const dot = statusDot(status === IN_PLAN ? 'quiet' : PLAN_BADGE[status].tone);
   dot.title = caption;
   dot.removeAttribute('aria-hidden');
   dot.setAttribute('role', 'img');
@@ -233,7 +277,7 @@ export function countGroupNode(count, previousCount, period = null) {
   Прогноз двумя строками: подсказка не переносит строки и не шире 440 px, а «к концу квартала … к III кварталу»
   одной строкой в неё не помещается
 */
-function forecastLines(count, previousCount, period) {
+export function forecastLines(count, previousCount, period) {
   const forecast = ratingsForecast(count, period, previousCount);
   if (!forecast) return null;
   const total = roundCount(forecast.forecast);

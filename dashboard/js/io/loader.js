@@ -82,11 +82,14 @@ function loadRatings(source) {
   return fetchJson(fileUrl(source, 'ratings'), 'default');
 }
 
-/* Листы раскаток и аварий необязательны (R-39): нет ключа — пустой массив, не массив — ошибка контракта */
+/*
+  Листы раскаток, аварий (R-39) и аудитории (неделя 16–22.11, воронка «Конверсии опроса») необязательны:
+  нет ключа — пустой массив, не массив — ошибка контракта
+*/
 export function normalizeReference(reference, url = 'reference') {
   if (!reference || typeof reference !== 'object') throw new Error(`${url}: справочник не является объектом`);
   const events = {};
-  for (const key of ['rollouts', 'incidents']) {
+  for (const key of ['rollouts', 'incidents', 'audience']) {
     const value = reference[key] ?? [];
     if (!Array.isArray(value)) throw new Error(`${url}: ${key} не является массивом (data-model §7)`);
     events[key] = value;

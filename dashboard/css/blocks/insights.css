@@ -17,16 +17,18 @@
   выбранный чип — яркая рамка и подложка, как выбранная строка. Узкий рейл переносит чипы
 */
 .insight-kinds {
-  display: grid;
-  gap: var(--space-2);
-}
-
-/* Ревью 13.11: группа типов — подпись и чипы одной строкой с переносом */
-.insight-kinds__group {
+  /*
+    Неделя 16–22.11: над лентой — не больше двух строк чипов: обе группы одним потоком с переносом, подписи групп —
+    только для screen reader (порядок тот же: сначала из оценок, потом внешние), тип без событий не показан
+  */
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
   gap: var(--space-1);
+}
+
+/* Группа типов — часть общего потока чипов; роль группы и её имя остаются для screen reader */
+.insight-kinds__group {
+  display: contents;
 }
 
 .insight-kinds__caption {
@@ -39,6 +41,14 @@
 .insight-help__group {
   margin: var(--space-3) 0 var(--space-2);
   color: var(--color-text-tertiary);
+  font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
+}
+
+.insight-help__note {
+  max-width: 48ch;
+  margin: 0;
+  color: var(--color-text-secondary);
   font: var(--type-caption);
   letter-spacing: var(--tracking-caption);
 }
@@ -117,6 +127,14 @@
   margin: 0;
 }
 
+.insight-help__purpose {
+  max-width: 48ch;
+  margin: 0;
+  color: var(--color-text-secondary);
+  font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
+}
+
 .insight-help__term {
   display: flex;
   flex-wrap: wrap;
@@ -182,8 +200,13 @@
   display: flex;
   flex: 1 1 0;
   flex-direction: column;
-  /* J-131: событие — двухстрочный блок; между блоками заметно больше, чем между строками внутри (36 против 4) */
-  gap: var(--space-5);
+  /*
+    Неделя 16–22.11: при 1440 в ленте было видно 2–3 события. Между событиями 8 (поле самой строки по вертикали 4), край
+    списка гаснет: строка не режется ровной кромкой под поиском. Группировка по типу отменена — плоский список
+  */
+  gap: var(--space-2);
+  padding-block: var(--space-2);
+  mask-image: var(--scroll-edge-fade);
   min-height: 0;
   overflow-y: auto;
   /* Место под полосу есть всегда: правый край строк не прыгает, когда список начинает прокручиваться */
@@ -203,7 +226,8 @@
   flex-shrink: 0;
   width: 100%;
   min-height: var(--space-10);
-  padding: var(--space-2);
+  /* Неделя 16–22.11: по вертикали поле 4, а не 8 — при 1440 в ленте видно 5–6 событий; плашка наведения та же по ширине */
+  padding: var(--space-1) var(--space-2);
   background: transparent;
   color: var(--color-text-secondary);
   font: inherit;

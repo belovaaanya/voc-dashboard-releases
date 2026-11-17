@@ -1,0 +1,82 @@
+/*
+  Блок «Эмоции» (J-348): раскладка таблица + лента — общие классы «Топ проблем» (verbatim-problems), контейнер
+  тела — тот же, чтобы на узкой странице лента уходила под таблицу. Числа простым текстом, без заливки: цветом на
+  дашборде — только средний VOC и урон. Выбранная строка или ячейка — подложкой выбора, как строка «Топ проблем»
+*/
+.card--emotions .card__body {
+  container: verbatim-problems / inline-size;
+}
+
+.emotions__note,
+.emotions__hint {
+  margin: 0;
+  color: var(--color-text-tertiary);
+  font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
+}
+
+.emotions-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.emotions-table th,
+.emotions-table td {
+  padding: var(--space-3);
+  border-block-end: var(--hairline) solid var(--color-card-border);
+  color: var(--color-text-strong);
+  font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
+  text-align: end;
+  white-space: nowrap;
+}
+
+.emotions-table thead th {
+  color: var(--color-text-tertiary);
+}
+
+.emotions-table thead th:first-child,
+.emotions-table .emotions-table__name {
+  text-align: start;
+}
+
+.emotions-table__pick {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
+}
+
+.emotions-table__pick:disabled {
+  color: var(--color-text-tertiary);
+  cursor: default;
+}
+
+/* Заголовок группы тона — строка без отступа, названия эмоций под ним — с отступом */
+.emotions-table__row--group .emotions-table__name {
+  color: var(--color-text-secondary);
+}
+
+.emotions-table__row--emotion .emotions-table__name {
+  padding-inline-start: var(--space-6);
+}
+
+.emotions-table__pick:hover,
+.emotions-table__pick:focus-visible {
+  text-decoration: underline;
+}
+
+.emotions-table__row.is-selected th,
+.emotions-table__row.is-selected td,
+.emotions-table td.is-selected {
+  background: var(--row-selected);
+}
+
+.emotions-table .is-selected .emotions-table__pick,
+.emotions-table .emotions-table__pick[aria-pressed='true'] {
+  font: var(--type-caption-strong);
+  letter-spacing: var(--tracking-caption-strong);
+}

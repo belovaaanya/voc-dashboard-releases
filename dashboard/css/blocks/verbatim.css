@@ -227,7 +227,8 @@
   gap: var(--space-4);
 }
 
-.verbatim-detail__status {
+.verbatim-detail__status,
+.verbatim-detail__since {
   margin: 0;
   color: var(--color-text-tertiary);
   font: var(--type-caption);
@@ -236,7 +237,8 @@
 
 .verbatim-table {
   width: 100%;
-  min-width: 2724px;
+  /* J-348: + эмоция 152, накал 96 и признаки 280; + U-pin и X-pin по 136 */
+  min-width: 3524px;
   border-collapse: collapse;
   table-layout: fixed;
 }
@@ -267,6 +269,9 @@
 .verbatim-table__col--products { width: 160px; }
 .verbatim-table__col--domain { width: 144px; }
 .verbatim-table__col--role { width: 112px; }
+/* Пин клиента — строка до ~14 знаков в одну строку */
+.verbatim-table__col--uPin,
+.verbatim-table__col--xPin { width: 136px; }
 .verbatim-table__col--categoryGroup { width: 196px; }
 .verbatim-table__col--category { width: 216px; }
 .verbatim-table__col--os { width: 84px; }
@@ -277,6 +282,10 @@
 .verbatim-table__col--expertise { width: 280px; }
 .verbatim-table__col--problemType { width: 180px; }
 .verbatim-table__col--problem { width: 220px; }
+/* J-348: эмоция и накал — короткие значения; признаки — до двух тегов в строку, остальные — в подсказке ячейки */
+.verbatim-table__col--emotion { width: 152px; }
+.verbatim-table__col--intensity { width: 96px; }
+.verbatim-table__col--signals { width: 280px; }
 
 /* Popover фильтра колонки — вне scroll-контейнера, под своим заголовком (координаты ставит скрипт) */
 .verbatim-popover {
@@ -284,8 +293,15 @@
   inset-inline-start: var(--popover-x);
 }
 
-/* Строчный, а не flex: длинная подпись переносится, а стрелка идёт за последним словом */
-/* Подпись переносится внутри себя: счётчик и стрелка держатся справа от неё и не уходят на строку одни */
+/* Заголовок колонки — две кнопки: имя сортирует, стрелка со счётчиком открывает фильтр */
+.verbatim-head {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  gap: var(--space-1);
+}
+
+.verbatim-head__sort,
 .verbatim-head__trigger {
   display: inline-flex;
   align-items: center;
@@ -299,11 +315,26 @@
   cursor: pointer;
 }
 
+.verbatim-head__sort {
+  min-width: 0;
+}
+
+.verbatim-head__sort:hover,
+.verbatim-head__sort:focus-visible,
+.verbatim-head__sort[data-direction],
 .verbatim-head__trigger:hover,
 .verbatim-head__trigger:focus-visible,
 .verbatim-head__trigger[aria-expanded='true'],
 .verbatim-head__trigger[data-active='true'] {
   color: var(--color-text-strong);
+}
+
+/* Направление активной сортировки — стрелка после имени; без сортировки места не занимает */
+.verbatim-head__direction {
+  flex: 0 0 auto;
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
+  margin-inline-start: var(--space-1);
 }
 
 /* Применённый фильтр отличается не только цветом: подпись подчёркнута, как в шапке (D-26) */
@@ -313,7 +344,7 @@
   white-space: nowrap;
 }
 
-.verbatim-head__trigger[data-active='true'] .verbatim-head__label {
+.verbatim-head:has(.verbatim-head__trigger[data-active='true']) .verbatim-head__label {
   text-decoration: underline;
   text-decoration-thickness: var(--divider-width);
   text-underline-offset: var(--hairline);
@@ -325,9 +356,8 @@
   letter-spacing: var(--tracking-caption-strong);
 }
 
-.verbatim-head__count,
-.verbatim-head__icon {
-  margin-inline-start: var(--space-1);
+.verbatim-head__count {
+  margin-inline-end: var(--space-1);
 }
 
 .verbatim-head__icon {
@@ -344,13 +374,22 @@
   transform: rotate(180deg);
 }
 
-.verbatim-table tbody tr:hover td {
+/*
+  Наведение — подложка строки: у детализации — строка, у топа проблем — колонка шага под курсором (шапка и ячейки),
+  чтобы сверить значение с периодом; подпись шапки шага при этом ярче
+*/
+.verbatim-table tbody tr:hover td,
+.problem-table .problem-table__step.is-column-hover {
   background: var(--row-hover);
   color: var(--color-text-strong);
 }
 
+/*
+  Комментарии — длинный список: цвет списка (--color-text-list, в тёмной теме приглушённый основной), как названия
+  проблематик и антидрайверов. Белый — только у строки под курсором (правило наведения выше по специфичности)
+*/
 .verbatim-table .verbatim-table__text--comment {
-  color: var(--color-text-strong);
+  color: var(--color-text-list);
   white-space: normal;
 }
 
@@ -459,7 +498,7 @@
   padding: 0;
   border: 0;
   background: none;
-  color: var(--color-text-strong);
+  color: var(--color-text-list);
   font: var(--type-caption);
   letter-spacing: var(--tracking-caption);
   text-align: start;
@@ -475,8 +514,9 @@
   line-clamp: 2;
 }
 
-/* Выбранная проблема — жирнее и подложкой строки, а не только цветом (D-26) */
+/* Выбранная проблема — жирнее, белым и подложкой строки, а не только цветом (D-26) */
 .problem-table__name[aria-pressed='true'] {
+  color: var(--color-text-strong);
   font: var(--type-caption-strong);
   letter-spacing: var(--tracking-caption-strong);
 }
@@ -557,21 +597,10 @@
   text-align: start;
 }
 
-/* Текст строк — с тем же межбуквенным, что у таблиц «Ролей» и дайджеста (--tracking-caption) */
 /*
-  Названия и группы — роль --type-table-name (в тёмной теме тоньше, текст не тяжелеет) и разрядка --tracking-table;
-  группа — той же роли и тише цветом, не сильнее названия. Выбранное название — по-прежнему жирнее (D-26)
+  J-?: названия и группы — та же роль и цвет списка, что у названий антидрайверов (--type-caption, --color-text-list);
+  тёмная тема тоньше на уровне токенов. Группа — той же роли и тише цветом. Выбранное название — жирнее (D-26)
 */
-.problem-table__name:not([aria-pressed='true']) .problem-table__name-text,
-.problem-table__group-name span {
-  font: var(--type-table-name);
-  letter-spacing: var(--tracking-table-name);
-}
-
-.problem-table__name-text,
-.problem-table__group-name span {
-  letter-spacing: var(--tracking-table);
-}
 
 /* Ручка ширины колонки названий — у правого края шапки, как у тепловой карты (J-68): видна при наведении и фокусе */
 .problem-table thead tr:not(.problem-table__parts) th:first-child {
@@ -580,7 +609,7 @@
 
 .problem-table__resizer {
   position: absolute;
-  z-index: 2;
+  z-index: 3;
   inset-block: 0;
   inset-inline-end: calc(-1 * var(--space-2));
   width: var(--space-4);
@@ -657,38 +686,107 @@
   text-align: start;
 }
 
+/*
+  Закреплённая колонка названий — непрозрачная, цветом поверхности карточки, во всех трёх строках: ячейка над шапкой,
+  шапка и строки. Слои: ячейки тела — 1, шапка колонки и ячейка над ней — 2 (выше тела и прокручиваемых подписей),
+  ручка ширины — 3
+*/
 .problem-table .problem-table__part--lead {
-  /* Пустая ячейка над названием и ФО — без фона и не закреплена: плашка закреплённой колонки не выступает над шапкой */
-  background: none;
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 2;
+  background: var(--color-surface);
+}
+
+.problem-table thead tr:not(.problem-table__parts) th:first-child {
+  z-index: 2;
+}
+
+/*
+  Затухание при горизонтальной прокрутке рисует блок (hScroll fade: 'none'): левый край гаснет не у края таблицы,
+  а сразу за закреплённой колонкой — названия не гаснут, данные уходят под колонку. Цвет маски — любой непрозрачный
+  токен: маска берёт только прозрачность
+*/
+.problem-table-scroll {
+  --sticky-edge: var(--problem-name-width, var(--problem-name-flat));
+}
+
+.problem-table-scroll[data-fade-start='true'] {
+  -webkit-mask-image: linear-gradient(to right, var(--color-text-strong) var(--sticky-edge), transparent var(--sticky-edge), var(--color-text-strong) calc(var(--sticky-edge) + var(--h-scroll-fade)));
+  mask-image: linear-gradient(to right, var(--color-text-strong) var(--sticky-edge), transparent var(--sticky-edge), var(--color-text-strong) calc(var(--sticky-edge) + var(--h-scroll-fade)));
+}
+
+.problem-table-scroll[data-fade-end='true'] {
+  -webkit-mask-image: linear-gradient(to left, transparent, var(--color-text-strong) var(--h-scroll-fade));
+  mask-image: linear-gradient(to left, transparent, var(--color-text-strong) var(--h-scroll-fade));
+}
+
+.problem-table-scroll[data-fade-start='true'][data-fade-end='true'] {
+  -webkit-mask-image: linear-gradient(to right, var(--color-text-strong) var(--sticky-edge), transparent var(--sticky-edge), var(--color-text-strong) calc(var(--sticky-edge) + var(--h-scroll-fade)), var(--color-text-strong) calc(100% - var(--h-scroll-fade)), transparent);
+  mask-image: linear-gradient(to right, var(--color-text-strong) var(--sticky-edge), transparent var(--sticky-edge), var(--color-text-strong) calc(var(--sticky-edge) + var(--h-scroll-fade)), var(--color-text-strong) calc(100% - var(--h-scroll-fade)), transparent);
+}
+
+.problem-table-scroll[tabindex]:focus-visible {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+/* Колонка шага под курсором: подложка тиха (как у строки), края колонки — тонкими линиями, их видно в обеих темах */
+.problem-table .problem-table__step.is-column-hover {
+  box-shadow: inset var(--hairline) 0 var(--color-border-strong), inset calc(var(--hairline) * -1) 0 var(--color-border-strong);
 }
 
 .problem-table .problem-table__step--first,
 .problem-table .problem-table__part--steps {
   border-inline-start: var(--hairline) solid var(--color-card-border);
+}
+
+/* Подпись группы шагов переносится по словам: при двух-трёх шагах (месяцы) она не раздвигает колонки шагов */
+.problem-table .problem-table__part--steps {
   padding-inline-start: var(--space-3);
+  white-space: normal;
 }
 
 /*
-  Шаг — пилюля тепловой карты (heatCell), а не заливка всей ячейки: ячейка без фона,
-  между пилюлями 2 px — поля ячеек, как в карте; пилюля во всю ширину колонки шага
+  Шаг — пилюля тепловой карты (heatCell), а не заливка всей ячейки: ячейка без фона.
+  Сетка шагов жёсткая: все колонки одной фиксированной ширины (72 px) в любом периоде — длинная подпись, неполный
+  последний шаг и первая колонка её не меняют; пилюли одной ширины по центру колонки, промежутки равные.
+  Подпись шага — по центру над пилюлей; неделя через границу месяцев («26.10–01.11») шире колонки и переносится
+  после тире в две строки, а не расширяет колонку. Месяц по неделям на главной при 1440 — без прокрутки
 */
-.problem-table .problem-table__step {
-  /* По 1 px с каждой стороны — 2 px между пилюлями, как в карте антидрайверов */
-  padding-inline: calc(var(--space-1) / 4);
-  text-align: center;
+.problem-table {
+  --problem-step-width: calc(var(--space-6) * 3);
+  /* Пилюля — во всю колонку шага, соседние почти касаются: зазор между ними — --space-1 */
+  --problem-pill-width: calc(var(--problem-step-width) - var(--space-1));
 }
 
-.problem-table .problem-table__step--first {
-  padding-inline-start: var(--space-3);
+/* «Доля» и «Урон» (раздел «Для аналитика») — под значением «123 жалобы» (~66 px): колонка и пилюля шире, воздух тот же */
+.problem-table.problem-table--with-count {
+  --problem-step-width: calc(var(--space-6) * 3 + var(--space-3));
+}
+
+.problem-table .problem-table__step {
+  width: var(--problem-step-width);
+  min-width: var(--problem-step-width);
+  max-width: var(--problem-step-width);
+  padding-inline: 0;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* Подпись шага переносится только после тире: ширина колонки не зависит от длины подписи */
+.problem-table thead .problem-table__step {
+  white-space: normal;
 }
 
 .problem-step-pill.heatmap-cell {
   /*
-    Пилюля одной ширины во всех шагах и периодах — как ячейка тепловой карты, а не во всю колонку. 64, а не 80 карты:
-    месяц по неделям (5 шагов) помещается на главной при 1440 без прокрутки; «−0,024» и «157 жалоб» входят
+    Пилюля одной ширины во всех шагах и периодах — во всю колонку шага, соседние почти касаются (зазор --space-1):
+    в «Частотности» 68 px, в «Доле» и «Уроне» с числом жалоб — 80 px
   */
-  width: calc(var(--space-8) * 2);
-  padding: var(--space-1);
+  box-sizing: border-box;
+  width: var(--problem-pill-width);
+  padding: var(--space-1) calc(var(--space-1) / 2);
   white-space: nowrap;
 }
 
@@ -701,8 +799,57 @@
   background: var(--tone-pill), linear-gradient(color-mix(in srgb, var(--tone) var(--pill-fill, 0%), transparent), color-mix(in srgb, var(--tone) var(--pill-fill, 0%), transparent));
 }
 
-.problem-table thead .problem-table__step {
-  text-align: center;
+/*
+  Горячая пилюля (макет 5366:8325, ступени — токены --pill-hot-*): у всех ступеней рамка тона прежняя, к краю — 9 %
+  тона. Тема включает вид --pill-hot-on: в тёмной (0) горячий слой прозрачен, а край и заливка обычной пилюли —
+  базовые; в светлой (1) — наоборот. Ступени 1–4 — число белым и полужирным, 5 — как у обычной пилюли
+*/
+.problem-step-pill.problem-step-pill--hot {
+  --pill-edge: calc(var(--pill-edge-base) * (1 - var(--pill-hot-on)));
+  --pill-fill: calc(var(--pill-fill-base) * (1 - var(--pill-hot-on)));
+  --hot-edge: color-mix(in srgb, var(--tone) calc(var(--pill-hot-edge) * var(--pill-hot-on)), transparent);
+  --hot-under: var(--tone-pill), linear-gradient(color-mix(in srgb, var(--tone) var(--pill-fill), transparent), color-mix(in srgb, var(--tone) var(--pill-fill), transparent));
+}
+
+.problem-step-pill.problem-step-pill--hot-1,
+.problem-step-pill.problem-step-pill--hot-2,
+.problem-step-pill.problem-step-pill--hot-3,
+.problem-step-pill.problem-step-pill--hot-4 {
+  color: color-mix(in srgb, var(--color-on-accent) calc(var(--pill-hot-on) * 100%), var(--color-text-strong));
+  font: var(--type-pill-hot);
+  letter-spacing: var(--tracking-pill-hot);
+}
+
+.problem-step-pill.problem-step-pill--hot-1 { --hot-center: var(--pill-hot-center-1); }
+.problem-step-pill.problem-step-pill--hot-2 { --hot-center: var(--pill-hot-center-2); }
+.problem-step-pill.problem-step-pill--hot-3 { --hot-center: var(--pill-hot-center-3); }
+
+/* Ступени 1–3: тон в центре 100 / 80 / 50 % к 9 % у края */
+.problem-step-pill.problem-step-pill--hot-1.heatmap-cell--bad,
+.problem-step-pill.problem-step-pill--hot-2.heatmap-cell--bad,
+.problem-step-pill.problem-step-pill--hot-3.heatmap-cell--bad {
+  background:
+    radial-gradient(ellipse var(--pill-hot-rx) var(--pill-hot-ry) at 50% 50%,
+      color-mix(in srgb, var(--tone) calc(var(--hot-center) * var(--pill-hot-on)), transparent), var(--hot-edge)),
+    var(--hot-under);
+}
+
+/* Ступень 4: светлое ядро, на середине — ядро пополам с тоном 55 %, к краю — 9 % тона */
+.problem-step-pill.problem-step-pill--hot-4.heatmap-cell--bad {
+  background:
+    radial-gradient(ellipse var(--pill-hot-soft-rx) var(--pill-hot-soft-ry) at 50% 50%,
+      color-mix(in srgb, var(--pill-hot-core) calc(var(--pill-hot-center-1) * var(--pill-hot-on)), transparent),
+      color-mix(in srgb, color-mix(in srgb, var(--pill-hot-core), var(--tone)) calc(var(--pill-hot-mid) * var(--pill-hot-on)), transparent) var(--pill-hot-mid-stop),
+      var(--hot-edge)),
+    var(--hot-under);
+}
+
+/* Ступень 5 — мягкая: светлое ядро 60 % к 9 % тона, число как у обычной пилюли */
+.problem-step-pill.problem-step-pill--hot-5.heatmap-cell--bad {
+  background:
+    radial-gradient(ellipse var(--pill-hot-soft-rx) var(--pill-hot-soft-ry) at 50% 50%,
+      color-mix(in srgb, var(--pill-hot-core) calc(var(--pill-hot-soft-core) * var(--pill-hot-on)), transparent), var(--hot-edge)),
+    var(--hot-under);
 }
 
 /* Шаг доли и урона — значение крупно, число жалоб строкой ниже, тише */
@@ -716,4 +863,237 @@
   color: var(--color-text-tertiary);
   font: var(--type-axis);
   letter-spacing: var(--tracking-axis);
+}
+
+/*
+  J-348: ряд плиток-сводок над таблицей «Топ проблем» («Для аналитика»): три равные плитки — «Накал», «Обзвон»,
+  «Эмоции». Нейтральные, одним приглушённым тоном (цветом на дашборде — только VOC и урон); негатив в кольце —
+  приглушённым тоном негатива. Выбранный столбик или тон — рамкой цвета текста
+*/
+.problem-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.problem-tile {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: var(--hairline) solid var(--color-card-border);
+  border-radius: var(--radius-popover);
+}
+
+.problem-tile__title,
+.problem-tile__caption,
+.problem-tile__top {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
+}
+
+.problem-tile__value {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.problem-tile__value strong {
+  color: var(--color-text-strong);
+  font: var(--type-text-strong);
+  letter-spacing: var(--tracking-text-strong);
+}
+
+/* «Накал»: столбики 0–3 высотой по числу */
+.problem-tile__bars {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-1);
+  align-items: end;
+  height: calc(var(--space-10) + var(--space-4));
+}
+
+.problem-tile__bar {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: calc(var(--space-1) / 2);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  font: var(--type-axis);
+  letter-spacing: var(--tracking-axis);
+}
+
+.problem-tile__bar-fill {
+  height: calc(var(--space-10) * var(--bar-level, 0));
+  min-height: var(--hairline);
+  border-radius: var(--radius-tag);
+  background: var(--tile-fill);
+}
+
+.problem-tiles-wrap {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.problem-tiles__since {
+  margin: 0;
+  color: var(--color-text-tertiary);
+  font: var(--type-axis);
+  letter-spacing: var(--tracking-axis);
+}
+
+.problem-tiles__since,
+.problem-tile__bars {
+  min-width: 0;
+}
+
+.problem-tile__bar[aria-pressed='true'] .problem-tile__bar-fill {
+  box-shadow: 0 0 0 var(--focus-ring) var(--color-text-strong);
+}
+
+.problem-tile__bar[aria-pressed='true'],
+.problem-tile__bar:hover:not(:disabled) {
+  color: var(--color-text-strong);
+}
+
+.problem-tile__bar:disabled {
+  cursor: default;
+}
+
+/* «Обзвон»: мини-воронка — подпись, полоса долей от 1–3, значение */
+.problem-tile__funnel {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.problem-tile__step {
+  display: grid;
+  grid-template-columns: calc(var(--space-10) + var(--space-6)) minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  align-items: center;
+  color: var(--color-text-secondary);
+  font: var(--type-axis);
+  letter-spacing: var(--tracking-axis);
+}
+
+.problem-tile__step-bar {
+  width: calc(100% * var(--bar-level, 0));
+  height: var(--space-2);
+  border-radius: var(--radius-tag);
+  background: var(--tile-fill);
+}
+
+.problem-tile__step-value {
+  color: var(--color-text-strong);
+}
+
+.problem-tile__details {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
+  text-decoration: underline;
+}
+
+.problem-tile__details:hover {
+  color: var(--color-text-strong);
+}
+
+/* «Эмоции»: кольцо по тону и подписи-кнопки */
+.problem-tile__donut-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.problem-tile__donut-box {
+  position: relative;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: calc(var(--space-8) * 2);
+  height: calc(var(--space-8) * 2);
+}
+
+.problem-tile__donut {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.problem-tile__arc {
+  fill: none;
+  stroke-width: 10;
+}
+
+.problem-tile__arc--negative { stroke: var(--tile-tone-negative); }
+.problem-tile__arc--neutral { stroke: var(--tile-tone-neutral); }
+.problem-tile__arc--positive { stroke: var(--tile-tone-positive); }
+
+.problem-tile__donut-center {
+  position: absolute;
+  color: var(--color-text-strong);
+  font: var(--type-caption-strong);
+  letter-spacing: var(--tracking-caption-strong);
+}
+
+.problem-tile__legend {
+  display: grid;
+  gap: calc(var(--space-1) / 2);
+}
+
+.problem-tile__tone {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-1);
+  align-items: center;
+  padding: calc(var(--space-1) / 2) var(--space-1);
+  border: var(--hairline) solid transparent;
+  border-radius: var(--radius-tag);
+  background: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font: var(--type-axis);
+  letter-spacing: var(--tracking-axis);
+  text-align: start;
+}
+
+.problem-tile__tone-dot {
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: var(--radius-pill);
+}
+
+.problem-tile__tone--negative .problem-tile__tone-dot { background: var(--tile-tone-negative); }
+.problem-tile__tone--neutral .problem-tile__tone-dot { background: var(--tile-tone-neutral); }
+.problem-tile__tone--positive .problem-tile__tone-dot { background: var(--tile-tone-positive); }
+
+.problem-tile__tone-share {
+  color: var(--color-text-strong);
+}
+
+.problem-tile__tone:hover,
+.problem-tile__tone[aria-pressed='true'] {
+  border-color: var(--color-text-strong);
+  color: var(--color-text-strong);
+}
+
+/* Узкий блок — плитки одна под другой */
+@container verbatim-problems (max-width: 960px) {
+  .problem-tiles {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

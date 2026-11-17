@@ -2,13 +2,15 @@ import { EMPTY, ERROR, LOADING } from '../shell/block.js';
 import { detailEventChip } from '../components/detail-event-chip.js';
 import { driverChip } from '../components/driver-chip.js';
 import { driverRows } from '../state/driver-pick.js';
-import { triggerChoices } from '../components/trigger-choices.js';
+import { groupedChoices, triggerChoices } from '../components/trigger-choices.js';
 import { tag } from '../components/tag.js';
 import { emptyValue } from '../components/empty-value.js';
 import { element, withFullLabel } from '../ui/dom.js';
 import { copyButton } from '../components/copy-button.js';
 import { detailRows } from '../state/detail-event.js';
 import { formatCount, formatDate, quoted } from '../core/format.js';
+import { detailSheets, exportFileName } from '../core/export.js';
+import { downloadAction } from '../ui/download.js';
 import { icon } from '../ui/icons.js';
 import { filterPopover } from '../components/filter-popover.js';
 import { pagingButtons } from '../components/paging.js';
@@ -17,7 +19,13 @@ import { hScroll } from '../components/h-scroll.js';
 import { emptyTableRow, statusPanel } from '../components/status-panel.js';
 import {
   buildVerbatimRows,
+  CLASSIFICATION_HINTS,
+  emotionsNoteFor,
+  INTENSITY_HINTS,
+  INTENSITY_LABELS,
+  intensityLabel,
   filterVerbatimRows,
+  filterPairParts,
   searchVerbatimRows,
   verbatimFilterOptions,
 } from '../core/verbatim.js';
@@ -26,31 +34,73 @@ const NONE = '—';
 const PAGE_SIZE = 20;
 let tableQuery = '';
 let tableFilters = {};
+/*
+  Сортировка по колонке — одна активная, как фильтры колонок живёт до закрытия страницы. По умолчанию — дата, новые
+  сверху; новая колонка — по возрастанию (оценка — единицы первыми, текст — по алфавиту), повторный клик — обратно
+*/
+const DEFAULT_SORT = { key: 'date', direction: 'desc' };
+const sortState = { current: DEFAULT_SORT };
+
+export function nextSort(current, key) {
+  if (current.key === key) return { key, direction: current.direction === 'asc' ? 'desc' : 'asc' };
+  return { key, direction: key === 'date' ? 'desc' : 'asc' };
+}
+
+/** Строки по колонке: дата — по дню, оценка — числом, остальное — текстом ячейки по алфавиту; пустые — в конце. */
+export function sortVerbatimRows(rows, sort, columns = COLUMNS) {
+  const column = columns.find(({ key }) => key === sort.key) ?? columns[0];
+  const sign = sort.direction === 'desc' ? -1 : 1;
+  const valueOf = (row) => {
+    if (column.key === 'date') return row.date ?? null;
+    if (column.key === 'rating') return Number.isFinite(row.rating) ? row.rating : null;
+    const text = column.text(row);
+    return text === NONE ? null : text;
+  };
+  return rows.map((row, index) => ({ row, index, value: valueOf(row) }))
+    .sort((left, right) => {
+      if (left.value === null || right.value === null) return (left.value === null) - (right.value === null) || left.index - right.index;
+      const order = typeof left.value === 'number' ? left.value - right.value : String(left.value).localeCompare(String(right.value), 'ru', { numeric: true });
+      return sign * order || left.index - right.index;
+    })
+    .map(({ row }) => row);
+}
 
 const joined = (values = []) => values.length ? values.join(' · ') : NONE;
 
 /* Порядок и состав — J-21; `filter` — ключ фильтра по значению из verbatim.js. */
 /*
-  Порядок колонок: дата, оценка и комментарий — первыми, чтобы главное было видно без прокрутки при 1440; разрезы —
-  за ними; разметка (ФО, тип проблемы, проблема) и экспертиза УИУКО — в конце
+  Порядок колонок: дата, оценка, комментарий и экспертиза УИУКО — первыми, чтобы главное было видно без прокрутки
+  при 1440; разрезы — за ними; разметка (ФО, тип проблемы, проблема) — в конце
 */
+/* Подсказка колонки — «Имя — расшифровка»: после тире со строчной */
+const afterDash = (text) => text.charAt(0).toLocaleLowerCase('ru') + text.slice(1);
 const COLUMNS = [
   { key: 'date', label: 'Дата', text: (row) => formatDate(row.date) },
   { key: 'rating', label: 'Оценка', filter: 'rating', text: (row) => String(row.rating) },
   { key: 'comment', label: 'Комментарий', text: (row) => row.comment ?? NONE },
+  { key: 'expertise', label: 'Экспертиза УИУКО', full: 'Разбор обращения сотрудником банка, не слова клиента', text: (row) => row.expertise ?? NONE },
   { key: 'segment', label: 'Сегмент', filter: 'segment', text: (row) => row.segment ?? NONE },
   { key: 'role', label: 'Роль', filter: 'role', text: (row) => row.role ?? NONE },
+  /* Пины клиента — `private`: в таблице и её Excel, но не в копировании отзыва с контекстом */
+  { key: 'uPin', label: 'U-pin', full: 'идентификатор клиента — юрлица; из выгрузки', private: true, text: (row) => row.uPin ?? NONE },
+  { key: 'xPin', label: 'X-pin', full: 'идентификатор уполномоченного лица клиента; из выгрузки', private: true, text: (row) => row.xPin ?? NONE },
   { key: 'cps', label: 'Дирекция', filter: 'cps', text: (row) => joined(row.cps) },
   { key: 'products', label: 'Продукт', filter: 'products', text: (row) => joined(row.products) },
-  { key: 'triggers', label: 'Триггер', filter: 'triggers', text: (row) => joined(row.triggers) },
-  { key: 'categoryGroup', label: 'ДКО: группа негатива', full: 'Группа категорий основного негатива', filter: 'categoryGroup', text: (row) => row.categoryGroup ?? NONE },
-  { key: 'category', label: 'ДКО: категория негатива', full: 'Категория основного негатива', filter: 'category', text: (row) => row.category ?? NONE },
+  { key: 'triggers', label: 'Триггер', full: afterDash(CLASSIFICATION_HINTS.trigger), filter: 'triggers', text: (row) => joined(row.triggers) },
+  { key: 'categoryGroup', label: 'ДКО: группа негатива', full: `Группа категорий основного негатива. ${CLASSIFICATION_HINTS.dko}`, text: (row) => row.categoryGroup ?? NONE },
+  { key: 'category', label: 'ДКО: категория негатива', full: `Категория основного негатива. ${CLASSIFICATION_HINTS.dko}`, filter: 'category', text: (row) => row.category ?? NONE },
   { key: 'os', label: 'ОС', full: 'Операционная система', filter: 'os', text: (row) => row.os ?? NONE },
   { key: 'appVersion', label: 'Версия приложения', filter: 'appVersion', text: (row) => row.appVersion ?? NONE },
-  { key: 'domain', label: 'ФО', full: 'Функциональная область', filter: 'domain', text: (row) => row.domain ?? NONE },
-  { key: 'problemType', label: 'Тип проблемы', filter: 'problemType', text: (row) => row.problemType ?? NONE },
-  { key: 'problem', label: 'Проблема', filter: 'problem', text: (row) => row.problem ?? NONE },
-  { key: 'expertise', label: 'Экспертиза УИУКО', full: 'Разбор обращения сотрудником банка, не слова клиента', text: (row) => row.expertise ?? NONE },
+  { key: 'domain', label: 'Функ. область', full: `Функциональная область. ${CLASSIFICATION_HINTS.labeling}`, text: (row) => row.domain ?? NONE },
+  { key: 'problemType', label: 'Тип проблемы', full: afterDash(CLASSIFICATION_HINTS.labeling), filter: 'problemType', text: (row) => row.problemType ?? NONE },
+  { key: 'problem', label: 'Проблема', full: afterDash(CLASSIFICATION_HINTS.labeling), filter: 'problem', text: (row) => row.problem ?? NONE },
+  /*
+    J-348: эмоция, накал и признаки — автоматическая разметка комментария; точная эмоция только здесь, в «Топ проблем»
+    накал считается по тону. Цитата эмоции — в подсказке комментария
+  */
+  { key: 'emotion', label: 'Эмоция', full: 'автоматическая разметка комментария; соседние эмоции разметка может путать', filter: 'emotion', text: (row) => row.emotion ?? NONE },
+  { key: 'intensity', label: 'Накал', full: `накал эмоции: ${INTENSITY_LABELS.map((label, index) => `${label.toLowerCase()} — ${INTENSITY_HINTS[index]}`).join('; ')}; автоматическая разметка комментария`, filter: 'intensity', text: (row) => intensityLabel(row.intensity) ?? NONE },
+  { key: 'signals', label: 'Признаки', full: 'угроза уйти, повтор (повторяющееся событие), деньги под угрозой — из разметки; скрытый негатив — оценка 4–5 с негативным тоном и накалом от «Выраженного»', filter: 'signals', text: (row) => joined(row.signals ?? []) },
 ];
 
 export const COLUMN_LABELS = COLUMNS.map(({ label }) => label);
@@ -89,7 +139,74 @@ function keepFocusAround(panel, trigger) {
 }
 
 /* Заголовок колонки — сам фильтр (как фильтры шапки): подпись, число выбранных и стрелка; выбор — чекбоксами */
-function filterHeader(column, options, host, onChange, context) {
+/*
+  Категория ДКО — с группой негатива над ней, как триггеры с продуктом в шапке: группа — верхний уровень ДКО, тот же,
+  что в разрезе ДКО «Топ проблем». Группа категории — из строк выборки; без группы — «Без группы», последней
+*/
+const NO_GROUP = 'Без группы';
+const NO_DOMAIN = 'Без функ. области';
+
+/*
+  Значения фильтра с группами — пары «группа + значение» (filterPair ядра): группа — из самой пары, без группы — `none`,
+  последней. Значение под двумя группами стоит в обеих, и выбор каждой группы находит ровно её строки
+*/
+function groupValues(options, none) {
+  const groups = new Map();
+  for (const option of options) {
+    const key = filterPairParts(option)[0] ?? none;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(option);
+  }
+  return [...groups].sort(([left], [right]) => (left === none) - (right === none) || left.localeCompare(right, 'ru'))
+    .map(([key, values]) => ({ key, values }));
+}
+
+export const categoryGroups = (options) => groupValues(options, NO_GROUP);
+
+/* Проблема — под своей ФО, как в разрезе «ФО и проблематика»; проблема под несколькими ФО — в каждой из них */
+export const problemGroups = (options) => groupValues(options, NO_DOMAIN);
+const pairValue = (key) => filterPairParts(key)[1];
+
+function columnChoices(column, options, selected, rows, context) {
+  if (column.filter === 'triggers') {
+    return (onDraft) => triggerChoices({ options, selected, label: context.label, reference: context.reference, channel: context.state.channel ?? context.slice[0]?.channel, onChange: onDraft });
+  }
+  if (column.filter === 'problem') {
+    return (onDraft) => groupedChoices({
+      groups: problemGroups(options), selected, legend: 'Проблемы по функ. областям', valueLabel: pairValue,
+      toggleLabel: (caption) => `Проблемы функ. области ${quoted(caption)}`,
+      search: { label: 'Поиск по функ. области и проблеме', placeholder: 'Поиск…' },
+      onChange: onDraft,
+    });
+  }
+  if (column.filter === 'category') {
+    return (onDraft) => groupedChoices({
+      groups: categoryGroups(options), selected, legend: 'Категории негатива по группам', valueLabel: pairValue,
+      toggleLabel: (caption) => `Категории группы ${quoted(caption)}`,
+      search: { label: 'Поиск по группе и категории', placeholder: 'Поиск…' },
+      onChange: onDraft,
+    });
+  }
+  return null;
+}
+
+function sortButton(column, onSort) {
+  const active = sortState.current.key === column.key;
+  const button = element('button', 'verbatim-head__sort');
+  button.type = 'button';
+  button.dataset.sort = column.key;
+  if (active) button.dataset.direction = sortState.current.direction;
+  const named = column.full ? `${column.label} — ${column.full}` : column.label;
+  if (column.full) button.title = named;
+  const next = nextSort(sortState.current, column.key).direction === 'asc' ? 'по возрастанию' : 'по убыванию';
+  button.setAttribute('aria-label', `Сортировать: ${named}, ${next}`);
+  button.append(element('span', 'verbatim-head__label', column.label));
+  if (active) button.append(icon(sortState.current.direction === 'asc' ? 'triangle-up' : 'triangle-down', 'verbatim-head__direction'));
+  button.addEventListener('click', () => onSort(column.key));
+  return button;
+}
+
+function filterHeader(column, options, host, onChange, context, rows = [], onSort = () => {}) {
   const selected = tableFilters[column.filter] ?? [];
   const trigger = element('button', 'verbatim-head__trigger');
   trigger.type = 'button';
@@ -97,14 +214,14 @@ function filterHeader(column, options, host, onChange, context) {
   trigger.dataset.active = String(selected.length > 0);
   /* J-43: сокращение в заголовке — расшифровка в подсказке и в имени кнопки */
   const named = column.full ? `${column.label} — ${column.full}` : column.label;
-  if (column.full) trigger.title = named;
   trigger.setAttribute('aria-label', `Фильтр: ${named}${selected.length ? `, выбрано ${formatCount(selected.length)}` : ''}`);
-  trigger.append(element('span', 'verbatim-head__label', column.label));
+  trigger.title = `Фильтр: ${named}`;
   if (selected.length) trigger.append(element('span', 'verbatim-head__count', formatCount(selected.length)));
   trigger.append(icon('chevron-down', 'verbatim-head__icon'));
 
+  /* Имя колонки сортирует, кнопка со стрелкой и счётчиком открывает фильтр: два действия — две кнопки */
   const cell = element('span', 'verbatim-head');
-  cell.append(trigger);
+  cell.append(sortButton(column, onSort), trigger);
   /* Panel — вне ячейки: таблица прокручивается по горизонтали; фокус после выбора ставит перерисовка заголовка */
   const { panel, close } = filterPopover({
     item: cell,
@@ -113,9 +230,7 @@ function filterHeader(column, options, host, onChange, context) {
     title: column.label,
     options,
     selected,
-    choices: column.filter === 'triggers'
-      ? (onDraft) => triggerChoices({ options, selected, label: context.label, reference: context.reference, channel: context.state.channel ?? context.slice[0]?.channel, onChange: onDraft })
-      : null,
+    choices: columnChoices(column, options, selected, rows, context),
     className: 'verbatim-popover',
     inline: false,
     onApply: (values) => onChange(column.filter, values),
@@ -131,7 +246,7 @@ function filterHeader(column, options, host, onChange, context) {
   return { cell, panel, trigger, close };
 }
 
-function tableHead(columns, rows, host, onFilter, context) {
+function tableHead(columns, rows, host, onFilter, context, onSort = () => {}) {
   const head = element('thead');
   const titles = element('tr');
   const panels = [];
@@ -139,13 +254,19 @@ function tableHead(columns, rows, host, onFilter, context) {
   const triggers = new Map();
   for (const column of columns) {
     const th = element('th', `verbatim-table__col--${column.key}`);
+    /* aria-sort — только у колонки активной сортировки */
+    if (sortState.current.key === column.key) th.setAttribute('aria-sort', sortState.current.direction === 'asc' ? 'ascending' : 'descending');
     if (column.filter) {
-      const { cell, panel, trigger, close } = filterHeader(column, verbatimFilterOptions(rows, column.filter), host, onFilter, context);
+      const { cell, panel, trigger, close } = filterHeader(column, verbatimFilterOptions(rows, column.filter), host, onFilter, context, rows, onSort);
       th.append(cell);
       panels.push(panel);
       closers.push(close);
       triggers.set(column.filter, trigger);
-    } else th.append(withFullLabel(element('span', null, column.label), column.full));
+    } else {
+      const cell = element('span', 'verbatim-head');
+      cell.append(sortButton(column, onSort));
+      th.append(cell);
+    }
     titles.append(th);
   }
   head.append(titles);
@@ -162,7 +283,7 @@ export function reviewText(item, label, columns = COLUMNS) {
     return column.key === 'segment' && item.segment ? `${text} (${label('segment', item.segment)})` : text;
   };
   const context = columns
-    .filter(({ key }) => key !== 'comment' && key !== 'expertise')
+    .filter(({ key, private: hidden }) => key !== 'comment' && key !== 'expertise' && !hidden)
     .map((column) => [column.label, value(column)])
     .filter(([, text]) => text && text !== NONE)
     .map(([name, text]) => `${name}: ${text}`);
@@ -178,9 +299,14 @@ export function tableRow(item, label, columns = COLUMNS) {
   for (const column of columns) {
     const cell = row.appendChild(element('td'));
     const text = column.text(item);
-    const tagged = column.key === 'category' && item.category;
+    const signals = column.key === 'signals' && item.signals?.length ? item.signals : null;
+    const tagged = (column.key === 'category' && item.category) || Boolean(signals);
     /* Тон тега — у карточки по изменению доли; у строки его нет, поэтому нейтральный */
-    if (tagged) cell.append(tag(text, 'neutral'));
+    if (signals) {
+      cell.append(...signals.map((name) => tag(name, 'neutral')));
+      cell.title = text;
+    }
+    else if (tagged) cell.append(tag(text, 'neutral'));
     else if (text === NONE) cell.append(emptyValue());
     else cell.textContent = text;
     if (column.key === 'segment' && item.segment) withFullLabel(cell, label('segment', item.segment));
@@ -189,6 +315,8 @@ export function tableRow(item, label, columns = COLUMNS) {
     if (column.key === 'comment' || column.key === 'expertise') {
       cell.className = `verbatim-table__text verbatim-table__text--${column.key}`;
       if (text !== NONE) cell.title = text;
+      /* J-348: цитата эмоции — слова комментария, по которым разметка определила эмоцию */
+      if (column.key === 'comment' && item.emotionQuote) cell.title = `${cell.title ? `${cell.title}\n` : ''}Эмоция ${quoted(item.emotion ?? 'нет данных')}: ${quoted(item.emotionQuote)}`;
     }
     if (column.key === 'comment') {
       cell.append(copyButton({
@@ -201,6 +329,22 @@ export function tableRow(item, label, columns = COLUMNS) {
     }
   }
   return row;
+}
+
+/* Ячейка Excel: оценка — числом, пустое — пустой ячейкой, остальное — текстом колонки, как на экране */
+function exportCell(item, column) {
+  if (column.key === 'rating') return item.rating ?? null;
+  const text = column.text(item);
+  return text === NONE ? null : text;
+}
+
+/* Лист параметров Excel: фильтры колонок таблицы и поиск — подписями, как в заголовках; значения пар — без группы */
+function tableParameters(columns) {
+  const byFilter = new Map(columns.filter(({ filter }) => filter).map((column) => [column.filter, column]));
+  const shown = (key, value) => (key === 'problem' || key === 'category' ? filterPairParts(value)[1] : value);
+  const filters = Object.entries(tableFilters).filter(([key, values]) => values.length && byFilter.has(key))
+    .map(([key, values]) => [`Фильтр колонки: ${byFilter.get(key).label}`, values.map((value) => shown(key, value)).join('; ')]);
+  return [...filters, ...(tableQuery.trim() ? [['Поиск по прямой речи', tableQuery.trim()]] : [])];
 }
 
 export function tableCounter(shown, total) {
@@ -256,7 +400,19 @@ export function renderVerbatimTable(block, context) {
       paint();
     },
   });
-  block.setHead({ controls: [...chips(), search] });
+  /* Excel таблицы — все найденные строки (фильтры колонок, поиск, сортировка), видимые колонки */
+  const found = () => sortVerbatimRows(searchVerbatimRows(filterVerbatimRows(allRows, tableFilters), tableQuery, context.label), sortState.current, columns);
+  block.setHead({
+    controls: [...chips(), search],
+    actions: downloadAction(
+      () => exportFileName('Прямая речь', context),
+      () => detailSheets(context, {
+        header: columns.map(({ label }) => label),
+        rows: found().map((item) => columns.map((column) => exportCell(item, column))),
+        extra: tableParameters(columns),
+      }),
+    ),
+  });
 
   const wrap = element('div', 'verbatim-detail');
   const bar = element('div', 'verbatim-detail__bar');
@@ -265,6 +421,9 @@ export function renderVerbatimTable(block, context) {
   const reset = element('button', 'verbatim-detail__reset', 'Сбросить фильтры');
   reset.type = 'button';
   bar.append(status, reset);
+  /* Период шапки раньше разметки эмоций — подпись рядом со статусом, пока колонки эмоций видны */
+  const sinceNote = columns.some((column) => column.key === 'emotion') ? emotionsNoteFor(context) : null;
+  if (sinceNote) bar.append(element('p', 'verbatim-detail__since', sinceNote));
   const popovers = element('div', 'verbatim-detail__popovers');
   const table = element('table', 'verbatim-table');
   const scroll = hScroll(table, { label: 'Таблица детализации' });
@@ -279,7 +438,13 @@ export function renderVerbatimTable(block, context) {
       shown = PAGE_SIZE;
       paintHead().get(key)?.focus();
       paint();
-    }, context);
+    }, context, (key) => {
+      sortState.current = nextSort(sortState.current, key);
+      shown = PAGE_SIZE;
+      paintHead();
+      table.querySelector(`.verbatim-head__sort[data-sort="${key}"]`)?.focus();
+      paint();
+    });
     table.replaceChildren(head, body);
     popovers.replaceChildren(...panels);
     closeAll = () => closers.forEach((close) => close());
@@ -287,13 +452,13 @@ export function renderVerbatimTable(block, context) {
   }
 
   function paint() {
-    const found = searchVerbatimRows(filterVerbatimRows(allRows, tableFilters), tableQuery, context.label);
-    body.replaceChildren(...found.slice(0, shown).map((item) => tableRow(item, context.label, columns)));
-    status.textContent = tableCounter(shown, found.length);
+    const rowsFound = found();
+    body.replaceChildren(...rowsFound.slice(0, shown).map((item) => tableRow(item, context.label, columns)));
+    status.textContent = tableCounter(shown, rowsFound.length);
     reset.hidden = !Object.values(tableFilters).some((values) => values.length);
     /* Последняя порция прячет кнопку под фокусом: фокус — на счётчик строк, как у антидрайверов */
     paging.replaceChildren(...pagingButtons({
-      shown, total: found.length, page: PAGE_SIZE, collapsible: false,
+      shown, total: rowsFound.length, page: PAGE_SIZE, collapsible: false,
       onMore: () => {
         shown += PAGE_SIZE;
         paint();
@@ -301,7 +466,7 @@ export function renderVerbatimTable(block, context) {
       },
     }));
     paging.hidden = !paging.children.length;
-    if (!found.length) body.append(emptyTableRow(columns.length, 'Нет строк по поиску и фильтрам', 'verbatim-table__empty'));
+    if (!rowsFound.length) body.append(emptyTableRow(columns.length, 'Нет строк по поиску и фильтрам', 'verbatim-table__empty'));
   }
 
   reset.addEventListener('click', () => {

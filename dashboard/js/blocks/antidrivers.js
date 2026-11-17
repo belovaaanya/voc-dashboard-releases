@@ -12,6 +12,8 @@ import {
   isBlankCell,
   frequentElements,
   mergeVersionHeatmaps,
+  quarterPlan,
+  withFrequency,
   offersVersions,
   splitVersionKey,
   versionRowKey,
@@ -25,7 +27,7 @@ import { chartTooltip, showChartTooltip } from '../components/chart-tooltip.js';
 import { icon } from '../ui/icons.js';
 import { DIMENSIONS, OS_ANDROID, OS_IOS, osName } from '../core/dimensions.js';
 import { element, withOverflowTitle } from '../ui/dom.js';
-import { bindShortWords, formatCount, formatDate, formatDelta, formatInterval, formatImpact, formatNumber, formatShare, formatVoc, plural } from '../core/format.js';
+import { bindShortWords, formatBucket, formatCount, formatDate, formatDelta, formatInterval, formatImpact, formatNumber, formatShare, formatVoc, plural } from '../core/format.js';
 import { focusChip } from '../components/focus-chip.js';
 import { focusedContext } from '../state/focus.js';
 import { withFilter } from '../state/url-state.js';
@@ -36,9 +38,8 @@ import { pagingButtons } from '../components/paging.js';
 import { hScroll, rememberScroll } from '../components/h-scroll.js';
 import { emptyValue } from '../components/empty-value.js';
 import { heatCell } from '../components/heat-cell.js';
-import { periodScaleMemory, scaleTabs } from '../components/scale-tabs.js';
 import { statusPanel } from '../components/status-panel.js';
-import { recommendedScale, SCALE_OPTIONS } from '../core/timeseries.js';
+import { groupStep } from '../state/group-step.js';
 import { dayCount } from '../core/dates.js';
 
 /* J-31: дирекция скрыта. J-128: `ДКО` переехал в «Топ проблем» — у всех разрезов одни режимы «План» и «Урон» */
@@ -61,13 +62,6 @@ const VERSION_OS_OPTIONS = [
 ];
 /* Короткая метка платформы у номера версии, когда в списке обе ОС */
 const OS_TAGS = { iOS: 'iOS', Android: 'And' };
-/* Ручной масштаб — для периода блока, в котором его выбрали; выбранный день его не сбрасывает */
-const heatmapScales = periodScaleMemory();
-function heatmapScale(blockPeriod, viewPeriod) {
-  const recommended = recommendedScale(viewPeriod);
-  return heatmapScales.scaleFor(blockPeriod, recommended === 'quarter' ? 'month' : recommended);
-}
-const SCALE_CHOICES = SCALE_OPTIONS.filter(({ value }) => value !== 'quarter');
 
 const PAGE_SIZE = 10;
 const pagination = new WeakMap();
@@ -148,7 +142,11 @@ function titleResizer(view, frame) {
   let shown = TITLE_WIDTH_MIN;
   const autoWidth = (width) => {
     applyTitleWidth(view, resizer, TITLE_WIDTH_MIN, width);
-    return contentTitleWidth(view.querySelectorAll?.('.heatmap__row-label') ?? [], TITLE_WIDTH_MIN);
+    /* Подпись переносится на две строки только за пределом ручки: меряется в одну строку, иначе перенос прячет переполнение */
+    view.dataset.measureTitles = '';
+    const measured = contentTitleWidth(view.querySelectorAll?.('.heatmap__row-label') ?? [], TITLE_WIDTH_MIN);
+    delete view.dataset.measureTitles;
+    return measured;
   };
   const fit = () => {
     const width = frameWidth();
@@ -227,23 +225,25 @@ const HIGHLIGHT_OPTIONS = {
 
 const isVersionCut = () => selectedAntidriverDimension === VERSION_CUT.key;
 
-/* J-117: гранулярность — справа в шапке, как у динамики; разрез — в строке под шапкой рядом с режимом подсветки */
-function heatmapScaleTabs(blockPeriod, scale, rerender) {
-  return scaleTabs({
-    label: 'Гранулярность антидрайверов',
-    options: SCALE_CHOICES,
-    selected: scale,
-    onSelect: (value) => {
-      heatmapScales.choose(value, blockPeriod);
-      rerender();
-    },
-  });
+/*
+  Квартал: коридор плана — среднее месячных, взвешенное по оценкам строки в каждом месяце (quarterPlan).
+  Месячный коридор — обычное правило planFor; неполный квартал — только месяцы периода. Колонка в пределах
+  одного месяца (выбранный день, период внутри месяца) остаётся с коридором колонки: «плана квартала» там нет
+*/
+function withQuarterPlans(heatmap, context) {
+  const planOfMonth = ({ from, to }) => planFor(context.reference?.plan, { channel: context.state.channel, from, to });
+  for (const { cells } of heatmap.rows) {
+    for (const cell of cells) {
+      if (cell.months?.length > 1) cell.plan = quarterPlan(cell.months, planOfMonth);
+    }
+  }
 }
 
-function controls(block, context, scale) {
+/* Шаг карты — общий шаг группы аналитики в строке её периода; своего переключателя у карты нет */
+function controls(context) {
+  if (!context.state.focus) return null;
   const wrap = element('span', 'antidriver-controls');
-  if (context.state.focus) wrap.append(focusChip(context));
-  wrap.append(heatmapScaleTabs(context.period, scale, () => renderAntidrivers(block, context)));
+  wrap.append(focusChip(context));
   return wrap;
 }
 
@@ -292,12 +292,23 @@ function showTooltip(tooltip, view, cell, lines) {
 
 const counted = (count, forms) => `${formatCount(count)} ${plural(count, forms)}`;
 
+/* План квартала у ячейки свой — коридор и как он получен, в подсказке под дельтой */
+function quarterPlanLine(mode, cell) {
+  if (mode !== HIGHLIGHT_PLAN || cell.voc === null || !cell.plan?.weighted) return { line: null, spoken: null };
+  const corridor = `${formatVoc(cell.plan.min)}–${formatVoc(cell.plan.max)}`;
+  return {
+    line: `План квартала ${corridor} — среднее месячных, взвешено по оценкам`,
+    spoken: `план квартала ${corridor}: среднее месячных, взвешено по оценкам`,
+  };
+}
+
 function elementCellFacts(mode, cell, highlight) {
   const value = formatVoc(cell.voc);
   const caption = cell.voc === null ? { line: null, spoken: null } : highlightCaption(mode, highlight, cell);
+  const plan = quarterPlanLine(mode, cell);
   /* Оценка с упоминанием элемента считается один раз: группа дедуплицирована по voc_ccode (D-09) */
   const ratings = `${counted(cell.mentions, ['оценка', 'оценки', 'оценок'])} с упоминанием`;
-  return { value, lines: [`VOC ${value}`, ratings, caption.line], spoken: [`VOC ${value}`, ratings, caption.spoken] };
+  return { value, lines: [`VOC ${value}`, ratings, caption.line, plan.line], spoken: [`VOC ${value}`, ratings, caption.spoken, plan.spoken] };
 }
 
 /* J-128: выбор антидрайвера — строка целиком или ячейка (строка × интервал); повторный клик снимает выбор */
@@ -326,6 +337,20 @@ function togglePick(context, pick, node) {
     ?.focus({ preventScroll: true });
 }
 
+/*
+  Порог «горячей» ячейки — один для красной и зелёной, как начало горячих ступеней пилюль «Топ проблем»: в макете
+  пользователь отметила 4,56 (сила 58 %) горячей, а 4,64 (32 %) — мягкой
+*/
+const HOT_LEVEL = 0.5;
+
+/* Выбранный день карты: колонка выбранной ячейки (J-128) или день, выбранный на графике (focus) */
+function selectedDay(context, column) {
+  const driver = normalizeDriver(context.state.driver);
+  if (driver?.from) return driver.from === column.from && driver.to === column.to;
+  const { focus } = context.state;
+  return Boolean(focus && column.from <= focus && focus <= column.to);
+}
+
 function heatmapCell(context, heatmap, row, column, cell, highlight, tooltip, view) {
   const label = rowLabel(context, row.key);
   const interval = formatInterval(column);
@@ -334,7 +359,14 @@ function heatmapCell(context, heatmap, row, column, cell, highlight, tooltip, vi
   /* Интервал без оценок — общий прочерк «нет значения» (emptyValue); имя ячейки для screen reader — у кнопки */
   const value = element('span', 'heatmap-cell__value', cell.voc === null ? null : facts.value);
   if (cell.voc === null) value.append(emptyValue());
-  const node = heatCell({ clickable: true, tone, muted: highlight.muted, strength: highlight.tone ? highlight.strength : null, content: value });
+  /*
+    Горячая ячейка — в светлой теме насыщенная заливка от центра и белое число, по макету (antidrivers.css).
+    Красная — от HOT_LEVEL силы; зелёная — только в выбранном дне: в макете салатовые обе стоят в выбранной колонке
+  */
+  const hotBad = highlight.tone === 'bad' && !highlight.muted && highlight.strength >= HOT_LEVEL;
+  const hotGood = highlight.tone === 'good' && !highlight.muted && selectedDay(context, column);
+  const hot = hotBad || hotGood ? 'antidriver-cell--hot' : null;
+  const node = heatCell({ clickable: true, tone, muted: highlight.muted, strength: highlight.tone ? highlight.strength : null, className: hot, content: value });
   const pick = pickOf(row.key, column);
   const picked = samePick(context.state.driver, pick);
   node.setAttribute('aria-pressed', String(picked));
@@ -386,11 +418,12 @@ function heatmapLegend(items, note, title) {
 function intervalOf(columns) {
   const widest = Math.max(0, ...columns.map(dayCount));
   if (widest <= 1) return 'дня';
-  return widest <= 7 ? 'недели' : 'месяца';
+  if (widest <= 7) return 'недели';
+  return widest <= 31 ? 'месяца' : 'квартала';
 }
 
 /* J-188: легенды «Влияния» и «Урона» говорят, что значит цвет, а не как он посчитан: расчёт — в подсказке ячейки и в «Как считается» */
-function legendFor(mode, columnPlans, columns) {
+function legendFor(mode, columnPlans, columns, { quarter = false, gaps: rowGaps = false } = {}) {
   const interval = intervalOf(columns);
   if (mode === HIGHLIGHT_INFLUENCE) {
     /* J-144: тянет вверх — драйвер, вниз — антидрайвер; «около нуля» не подписывается — серая ячейка понятна и так */
@@ -411,8 +444,10 @@ function legendFor(mode, columnPlans, columns) {
   const plans = columnPlans.filter(Boolean);
   if (!plans.length) return heatmapLegend([], 'Для среза нет планового коридора — подсветка по плану недоступна');
   const corridor = sameCorridor(plans);
-  const target = corridor ? `коридора плана ${formatVoc(corridor.min)}–${formatVoc(corridor.max)}` : 'коридора плана интервала';
-  const gaps = plans.length < columnPlans.length ? '; интервалы без плана не подсвечены' : '';
+  /* Квартал: коридор у каждой строки свой — общего числа в легенде нет */
+  const target = quarter ? 'плана квартала — среднего месячных коридоров, взвешенного по оценкам строки'
+    : corridor ? `коридора плана ${formatVoc(corridor.min)}–${formatVoc(corridor.max)}` : 'коридора плана интервала';
+  const gaps = plans.length < columnPlans.length || rowGaps ? '; интервалы без плана не подсвечены' : '';
   return heatmapLegend(
     [legendItem('Ниже плана', 'heat-bad'), legendItem('В плане', 'heat-neutral'), legendItem('Выше плана', 'heat-good')],
     `VOC элемента против ${target}: чем выше плана, тем зеленее; чем ниже плана, тем краснее${gaps}`,
@@ -420,9 +455,9 @@ function legendFor(mode, columnPlans, columns) {
   );
 }
 
-function heatmapToolbar(context, columnPlans, columns, rerender, cutTabs, lead) {
+function heatmapToolbar(context, columnPlans, columns, rerender, cutTabs, lead, quarterLegend = {}) {
   const toolbar = element('div', 'heatmap-toolbar');
-  const legend = legendFor(highlightOf(context), columnPlans, columns);
+  const legend = legendFor(highlightOf(context), columnPlans, columns, quarterLegend);
   /* На главной режим один — «План»: переключатель цвета только в разделе «Для аналитика» */
   if (!context.analyst) {
     toolbar.append(...[cutTabs, ...lead, legend].filter(Boolean));
@@ -445,14 +480,18 @@ function heatmapToolbar(context, columnPlans, columns, rerender, cutTabs, lead) 
   return toolbar;
 }
 
-function heatmapHead(columns) {
+/* Квартал — «II кв. 26»: по дате начала квартал не узнать; остальные шаги — дата начала интервала */
+const columnLabel = (column, scale) => (scale === 'quarter' ? formatBucket(column.from, scale) : formatDate(column.from));
+
+function heatmapHead(columns, scale) {
   const head = element('thead');
   const headRow = element('tr');
   /* Колонка подписей без заголовка, как в макете; имя колонки — для screen reader */
   const corner = element('th', 'heatmap__row-title');
   corner.append(element('span', 'visually-hidden', isVersionCut() ? 'Версия' : 'Элемент'));
   headRow.append(corner);
-  for (const column of columns) headRow.append(element('th', 'heatmap__date', formatDate(column.from)));
+  for (const column of columns) headRow.append(element('th', 'heatmap__date', columnLabel(column, scale)));
+  headRow.append(element('th', 'heatmap__freq', 'Упоминаний'));
   head.append(headRow);
   return head;
 }
@@ -476,6 +515,20 @@ function rowPickButton(context, row, driver, tagged) {
   return button;
 }
 
+/*
+  Частотность строки за период — простым текстом справа от колонок, без пилюли и заливки: оценки с упоминанием
+  (по ним идёт порядок «По частотности») и доля от всех оценок среза. Колонка закреплена справа (antidrivers.css)
+*/
+function frequencyCell(frequency) {
+  const td = element('td', 'heatmap__freq');
+  if (!frequency) return td;
+  const count = formatCount(frequency.mentions);
+  const share = formatShare(frequency.share);
+  td.textContent = `${count} · ${share}`;
+  td.title = `Оценок с упоминанием за период: ${count} — ${share} от всех оценок среза`;
+  return td;
+}
+
 function heatmapRow(context, heatmap, row, highlights, { tooltip, view, tagged }) {
   const driver = normalizeDriver(context.state.driver);
   const rowPicked = Boolean(driver && driver.cut === selectedAntidriverDimension && driver.key === row.key);
@@ -489,6 +542,7 @@ function heatmapRow(context, heatmap, row, highlights, { tooltip, view, tagged }
     td.append(heatmapCell(context, heatmap, row, heatmap.columns[index], cell, highlights[index], tooltip, view));
     tr.append(td);
   });
+  tr.append(frequencyCell(row.frequency));
   return tr;
 }
 
@@ -531,11 +585,21 @@ function heatmapView(context, shown, rerender, cutTabs, lead) {
   const columnPlans = columns.map(({ from, to }) =>
     planFor(context.reference?.plan, { channel: context.state.channel, from, to }),
   );
-  view.append(heatmapToolbar(context, columnPlans, columns, rerender, cutTabs, lead));
+  /*
+    Квартал: план — у ячеек (cell.plan), колонка «с планом», если он есть хоть у одной её строки; строка с
+    оценками без плана квартала — тоже «интервал без плана». Колонка в пределах месяца плана ячеек не имеет
+  */
+  const own = (index) => shown.calibration.rows.map(({ cells }) => cells[index]).filter((cell) => cell.plan !== undefined);
+  const quarter = columns.some((_, index) => own(index).length > 0);
+  const legendPlans = quarter
+    ? columns.map((_, index) => (own(index).length ? own(index).map(({ plan }) => plan).find(Boolean) ?? null : columnPlans[index]))
+    : columnPlans;
+  const gaps = quarter && columns.some((_, index) => own(index).some((cell) => cell.plan === null && cell.voc !== null));
+  view.append(heatmapToolbar(context, legendPlans, columns, rerender, cutTabs, lead, { quarter, gaps }));
   /* Подсказка — вне прокрутки карты: иначе у верхней строки её срезал бы край области прокрутки */
   const tooltip = chartTooltip({ centered: true });
   const table = element('table', 'heatmap');
-  table.append(heatmapHead(columns), heatmapBody(context, shown, columnPlans, { tooltip, view, tagged: shown.tagged }));
+  table.append(heatmapHead(columns, shown.scale), heatmapBody(context, shown, columnPlans, { tooltip, view, tagged: shown.tagged }));
   const scroll = heatmapScroll(table, tooltip);
   const frame = element('div', 'heatmap-frame');
   const resizer = titleResizer(view, frame);
@@ -654,12 +718,13 @@ export function renderAntidrivers(block, context) {
   if (selectedVersionOs !== VERSION_OS_BOTH && !found.includes(selectedVersionOs)) selectedVersionOs = VERSION_OS_BOTH;
   const shownOs = selectedVersionOs === VERSION_OS_BOTH ? found : [selectedVersionOs];
   const page = pageFor(block, context, isVersion ? shownOs : null);
-  const scale = heatmapScale(context.period, viewContext.period);
+  /* Шаг группы аналитики, «Кварталы» — тоже кварталами, даже при двух-трёх колонках; без группы — автоматический по периоду */
+  const scale = context.step ?? groupStep(null, viewContext.period, context.analyst);
   const versionParameters = isVersion && shownOs.length ? [['ОС версий', shownOs.map(osName).join(', ')]] : [];
   /* В шапке — период блока; выбранный день и окно его сравнения — на кнопке сброса даты */
   const head = (heatmap = null) => block.setHead({
     ...(period ? { period } : {}),
-    controls: controls(block, context, scale),
+    controls: controls(context),
     actions: heatmap ? downloadAction(
       () => exportFileName('Антидрайверы', viewContext),
       () => antidriverSheets(viewContext, heatmap, {
@@ -695,10 +760,13 @@ export function renderAntidrivers(block, context) {
       : viewContext.slice;
     const ranked = frequentElements(slice, project, viewContext.label, dimension.key);
     /* J-11: наиболее частотные элементы текущего периода, сначала десять. */
-    return { ranked, heatmap: buildHeatmap(slice, viewContext.period, scale, project, ranked.map(({ key }) => key)) };
+    /* Частотность строки — те же упоминания, по которым идёт порядок, и доля от оценок среза (у версии — своей ОС) */
+    const heatmap = withFrequency(buildHeatmap(slice, viewContext.period, scale, project, ranked.map(({ key }) => key)), ranked, slice.length);
+    return { ranked, heatmap };
   };
   const { heatmap } = isVersion ? mergeVersionHeatmaps(shownOs.map(partOf)) : partOf(null);
-  const part = { heatmap, total: heatmap.rows.length, tagged: isVersion && shownOs.length > 1 };
+  if (scale === 'quarter') withQuarterPlans(heatmap, context);
+  const part = { heatmap, scale, total: heatmap.rows.length, tagged: isVersion && shownOs.length > 1 };
   if (part.total === 0) {
     head();
     block.setContent(withCut(noElements(), cutTabs));

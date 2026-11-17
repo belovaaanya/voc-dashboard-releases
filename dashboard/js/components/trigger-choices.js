@@ -2,6 +2,7 @@
    в выбранные значения попадают сами доступные триггеры (J-21). */
 import { element } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
+import { searchField } from './search-field.js';
 
 const UNGROUPED = 'Без продукта';
 let nextInstance = 0;
@@ -21,15 +22,22 @@ export function triggerGroups(options, reference, channel) {
   }).map(([key, values]) => ({ key, values }));
 }
 
-export function triggerChoices({ options, selected = [], label = (_, value) => value, reference, channel, onChange }) {
-  const available = [...new Set(options)];
+/*
+  Список с группами: чекбокс группы выбирает все её значения, частичный выбор — indeterminate; группы раскрываются.
+  `search` — поле поиска над списком: находит и по группе (группа видна целиком), и по значению (видны совпавшие,
+  группа раскрыта); скрытые поиском значения выбор сохраняют. Шапка и фильтры колонок — триггеры по продуктам
+  (triggerChoices), детализация — ещё категории ДКО по группам негатива
+*/
+export function groupedChoices({ groups, selected = [], legend, groupLabel = (key) => key, valueLabel = (value) => value, toggleLabel = (caption) => caption, search = null, onChange }) {
+  const available = groups.flatMap(({ values }) => values);
   const chosen = new Set(selected.filter((value) => available.includes(value)));
   const choices = element('fieldset', 'control-popover__choices trigger-choices');
-  choices.append(element('legend', 'visually-hidden', 'Триггеры по продуктам'));
+  choices.append(element('legend', 'visually-hidden', legend));
   const instance = ++nextInstance;
+  const rows = [];
 
-  for (const [index, { key, values }] of triggerGroups(available, reference, channel).entries()) {
-    const caption = key === UNGROUPED ? key : label('product', key);
+  for (const [index, { key, values }] of groups.entries()) {
+    const caption = groupLabel(key);
     const group = element('div', 'trigger-choices__group');
     const head = element('div', 'trigger-choices__head');
     const productLabel = element('label', 'control-popover__option trigger-choices__product');
@@ -39,7 +47,7 @@ export function triggerChoices({ options, selected = [], label = (_, value) => v
 
     const toggle = element('button', 'trigger-choices__toggle');
     toggle.type = 'button';
-    toggle.setAttribute('aria-label', `Триггеры продукта «${caption}»`);
+    toggle.setAttribute('aria-label', toggleLabel(caption));
     toggle.setAttribute('aria-expanded', 'false');
     toggle.append(icon('chevron-down', 'trigger-choices__arrow'));
     const list = element('div', 'trigger-choices__values');
@@ -47,12 +55,14 @@ export function triggerChoices({ options, selected = [], label = (_, value) => v
     list.id = listId;
     list.hidden = true;
     toggle.setAttribute('aria-controls', listId);
-    toggle.addEventListener('click', () => {
-      list.hidden = !list.hidden;
-      toggle.setAttribute('aria-expanded', String(!list.hidden));
-    });
+    const expand = (open) => {
+      list.hidden = !open;
+      toggle.setAttribute('aria-expanded', String(open));
+    };
+    toggle.addEventListener('click', () => expand(list.hidden));
 
     const inputs = new Map();
+    const options = new Map();
     const sync = () => {
       let count = 0;
       for (const [value, input] of inputs) {
@@ -77,7 +87,8 @@ export function triggerChoices({ options, selected = [], label = (_, value) => v
         notify();
       });
       inputs.set(value, input);
-      option.append(input, element('span', null, label('trigger', value)));
+      options.set(value, option);
+      option.append(input, element('span', null, valueLabel(value)));
       list.append(option);
     }
     product.addEventListener('change', () => {
@@ -91,6 +102,41 @@ export function triggerChoices({ options, selected = [], label = (_, value) => v
     head.append(productLabel, toggle);
     group.append(head, list);
     choices.append(group);
+    rows.push({ group, caption, values, options, expand });
+  }
+
+  if (search) {
+    const needle = (text) => String(text ?? '').trim().toLocaleLowerCase('ru');
+    const { field } = searchField({
+      className: 'trigger-choices__search', inputClass: 'verbatim-search__input',
+      label: search.label, placeholder: search.placeholder,
+      onInput: (query) => {
+        const found = needle(query);
+        for (const { group, caption, values, options, expand } of rows) {
+          const byGroup = !found || needle(caption).includes(found);
+          const matched = values.filter((value) => byGroup || needle(valueLabel(value)).includes(found));
+          group.hidden = matched.length === 0;
+          for (const [value, option] of options) option.hidden = !byGroup && !matched.includes(value);
+          /* Совпадение по значению раскрывает группу: иначе найденное не видно; пустой запрос — всё свёрнуто */
+          expand(Boolean(found) && !byGroup && matched.length > 0);
+        }
+      },
+    });
+    /* Поле — сразу за legend: она остаётся первым потомком fieldset */
+    choices.querySelector('legend').after(field);
   }
   return choices;
+}
+
+export function triggerChoices({ options, selected = [], label = (_, value) => value, reference, channel, onChange }) {
+  const available = [...new Set(options)];
+  return groupedChoices({
+    groups: triggerGroups(available, reference, channel),
+    selected,
+    legend: 'Триггеры по продуктам',
+    groupLabel: (key) => (key === UNGROUPED ? key : label('product', key)),
+    valueLabel: (value) => label('trigger', value),
+    toggleLabel: (caption) => `Триггеры продукта «${caption}»`,
+    onChange,
+  });
 }

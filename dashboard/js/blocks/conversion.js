@@ -1,14 +1,17 @@
 /*
-  «Конверсия опроса» — карточка второй строки шапки за целый месяц, на месте «Дней относительно плана».
+  «Конверсия опроса» — карточка второй строки шапки за полный месяц, на месте «Дней относительно плана». Доли — от MAU
+  канала или сегмента за месяц (решение руководителей); без MAU, за неполный месяц и при узком фильтре — пустое состояние
+  с причиной, ступени не пересчитываются.
   Вид — «тонкий луч» из стратегии VoC: поток сужается от аудитории к оценке с понятной причиной.
   Расчёт — core/conversion.js; здесь только представление (docs/blocks-metrics.md).
 */
 
 import { EMPTY } from '../shell/block.js';
+import { badge } from '../components/badge.js';
 import { emptyValue } from '../components/empty-value.js';
 import { element, svgNode } from '../ui/dom.js';
-import { formatCount, formatDayRange, formatShare, plural } from '../core/format.js';
-import { isWholeMonth, surveyConversion } from '../core/conversion.js';
+import { formatCount, formatShare, formatShareFine, monthName, plural } from '../core/format.js';
+import { audienceFor, conversionMonth, conversionScope, isWholeMonth, previousMonth, surveyConversion } from '../core/conversion.js';
 import { DELTA_SHAPES, GROWTH, deltaNode } from './metric-card.js';
 
 export const CONVERSION_TITLE = 'Конверсия опроса';
@@ -22,6 +25,8 @@ const THREAD = 0.03;
 const VIEW = { width: 500, height: 100 };
 /* Запас рамки над и под полосой в единицах VIEW: в нём размытые слои гаснут, а не срезаются краем рамки */
 export const HEADROOM = 160;
+/** Запас рамки луча долей строки полосы — `--beam-headroom` у контейнера луча. */
+export const BEAM_HEADROOM = HEADROOM / VIEW.height;
 /*
   Доли ширины колонок ступеней — те же, что `grid-template-columns` у `.conversion` (metrics.css); по ним же стоят
   центры полосы. У неизвестных ступеней только «—» — узкие колонки; у остальных крупное значение с изменением в строку
@@ -35,13 +40,15 @@ const COLUMNS = [0.45, 0.5, 1.2, 1.2, 1.2];
 */
 const COMPACT_COLUMNS = [1.2, 1, 1];
 
+/** Ширина полосы ступени от базы `base` (оценок): по корню доли, не тоньше нити. Её же берёт воронка обзвона. */
+export function flowHeight(count, base) {
+  if (!base) return THREAD;
+  return Math.max(THREAD, RATED * Math.sqrt(count / base));
+}
+
 function bandHeights(steps) {
   const rated = steps.find(({ key }) => key === 'rated').count;
-  return steps.map(({ key, count }) => {
-    if (key in WIDE) return WIDE[key];
-    if (!rated) return THREAD;
-    return Math.max(THREAD, RATED * Math.sqrt(count / rated));
-  });
+  return steps.map(({ key, count }) => (key in WIDE ? WIDE[key] : flowHeight(count, rated)));
 }
 
 /* Контур полосы: плавные переходы между центрами колонок, после последней — ровный хвост до края */
@@ -103,13 +110,14 @@ function streamOpacity(offset, keys) {
 }
 const BLUR = [['near', 6], ['mid', 12], ['far', 22]];
 
-function beamNode(steps, compact) {
-  const columns = compact ? COMPACT_COLUMNS : COLUMNS;
-  const keys = compact ? COMPACT_KEYS : KEYS;
+/**
+ * Луч воронки. Параметры по умолчанию — «Конверсия опроса»; воронка обзвона («Для аналитика») передаёт свои колонки,
+ * ширины полосы, ступень начала нити и `id` (две карточки с лучом не делят ссылки градиента и фильтров).
+ */
+export function beamNode(steps, compact, { heights = bandHeights(steps), columns = compact ? COMPACT_COLUMNS : COLUMNS, keys = compact ? COMPACT_KEYS : KEYS, threadFrom = 'negative', id = 'conversion-beam' } = {}) {
   const centers = columnCenters(columns);
   const at = (key) => centers[steps.findIndex((step) => step.key === key)];
-  /* Карточка одна на странице, контент перерисовывается целиком: ссылки градиента и фильтров не пересекаются */
-  const id = 'conversion-beam';
+  /* Контент карточки перерисовывается целиком: в пределах `id` ссылки градиента и фильтров не пересекаются */
   const svg = svgNode('svg', 'conversion__beam', { viewBox: `0 ${-HEADROOM} ${VIEW.width} ${VIEW.height + 2 * HEADROOM}`, preserveAspectRatio: 'none', 'aria-hidden': 'true', focusable: 'false' });
   const defs = svgNode('defs');
   const gradient = svgNode('linearGradient', null, { id: `${id}-flow`, x1: 0, y1: 0, x2: 1, y2: 0 });
@@ -134,7 +142,6 @@ function beamNode(steps, compact) {
   defs.append(grain);
   svg.append(defs);
 
-  const heights = bandHeights(steps);
   for (const [scale, opacity, blur] of LAYERS) {
     svg.append(svgNode('path', 'conversion__band', { d: bandPath(heights, scale, columns), fill: `url(#${id}-flow)`, 'fill-opacity': opacity, filter: `url(#${id}-${blur})` }));
   }
@@ -143,7 +150,7 @@ function beamNode(steps, compact) {
   /* Светлое ядро вдоль оси — от аудитории к причине, размыто, как сердцевина потока */
   svg.append(svgNode('line', 'conversion__core', { x1: centers[0], x2: VIEW.width, y1: mid, y2: mid, filter: `url(#${id}-near)`, 'vector-effect': 'non-scaling-stroke' }));
   /* Нить — от сниженных к причине и дальше до края: тонкий луч хвоста с мягким ореолом потока */
-  svg.append(svgNode('line', 'conversion__thread', { x1: at('negative'), x2: VIEW.width, y1: mid, y2: mid, 'vector-effect': 'non-scaling-stroke' }));
+  svg.append(svgNode('line', 'conversion__thread', { x1: at(threadFrom), x2: VIEW.width, y1: mid, y2: mid, 'vector-effect': 'non-scaling-stroke' }));
   return svg;
 }
 
@@ -159,17 +166,22 @@ function changeNode(change, compact) {
     slot.setAttribute('aria-hidden', 'true');
     return slot;
   }
-  const node = deltaNode(change.value, { shape: DELTA_SHAPES.share, growth: GROWTH[change.growth], arrow });
+  /* Малые доли от MAU — два знака и у изменения: иначе «0,0 п. п.» у любой ступени ниже процента */
+  const node = deltaNode(change.value, { shape: change.fine ? DELTA_SHAPES.shareFine : DELTA_SHAPES.share, growth: GROWTH[change.growth], arrow });
   if (node) slot.append(node);
   return slot;
 }
 
 /*
-  Ступень (решение пользователя, исправляет J-299): подпись капсом сверху; ниже крупно доля от оценивших и в той же
-  строке её изменение в п.п.; под ними мелко серым — число. Первая известная ступень — «Оценки» — база: «100 %» без
-  изменения, мелко — число оценок. Не помещаясь, изменение уходит под долю, а не наезжает на соседнюю ступень.
-  Полное название — в доступном имени
+  Ступень (иерархия J-314, база — MAU): подпись капсом сверху; ниже крупно доля от MAU и в той же строке её изменение в
+  п.п.; под ними мелко серым — число. MAU — база: «100 %» без изменения, мелко — число пользователей. Доля меньше 1 % —
+  с двумя знаками. Не помещаясь, изменение уходит под долю, а не наезжает на соседнюю ступень. Полное название — в
+  доступном имени
 */
+const UNITS = { mau: ['пользователь', 'пользователя', 'пользователей'], sent: ['клиент', 'клиента', 'клиентов'] };
+const RATINGS = ['оценка', 'оценки', 'оценок'];
+const isFine = (share) => share !== null && share < 1;
+const shareText = (share) => (isFine(share) ? formatShareFine(share) : formatShare(share));
 function stepNode({ key, label, short, count, share, change }, compact) {
   const item = element('li', `conversion__step conversion__step--${key}`);
   item.title = label;
@@ -182,33 +194,91 @@ function stepNode({ key, label, short, count, share, change }, compact) {
     line.append(emptyValue('нет в выгрузке'));
     small.setAttribute('aria-hidden', 'true');
   } else {
-    line.append(share === null ? emptyValue() : element('span', 'conversion__value', formatShare(share)), changeNode(change, compact));
-    small.append(formatCount(count), element('span', 'visually-hidden', ` ${plural(count, ['оценка', 'оценки', 'оценок'])}`));
+    /* Два знака и у изменения, если доля или само изменение меньше процента: «0,04 п. п.» при доле 1,2 % не станет «0,0» */
+    const delta = change && { ...change, fine: isFine(share) || Math.abs(change.value) < 0.1 };
+    line.append(share === null ? emptyValue() : element('span', 'conversion__value', shareText(share)), changeNode(delta, compact));
+    small.append(formatCount(count), element('span', 'visually-hidden', ` ${plural(count, UNITS[key] ?? RATINGS)}`));
   }
   item.append(caption, name, line, small);
   return item;
 }
 
-/* Подпись: за целый месяц — только база долей; за другой период — ещё и сам период, иначе неясно, о чём ступени */
-export function conversionNote(period, rows) {
-  if (!period?.from || isWholeMonth(period, rows)) return 'от оценивших';
-  return `за ${formatDayRange(period.from, period.to)}, от оценивших`;
+/* Подпись: база долей и месяц — «от MAU за май»; выбран незаконченный период — явно: «за октябрь — последний полный месяц» */
+export function conversionNote(month, shifted = false) {
+  if (!month?.from) return 'от MAU';
+  return shifted ? `за ${monthName(month.from)} — последний полный месяц, от MAU` : `от MAU за ${monthName(month.from)}`;
 }
 
-/** `compact` — узкая карточка («Для аналитика»): только ступени с данными, дельты без стрелок. */
-export function renderConversion(block, { slice, previousSlice, period, rows, compact = false }) {
+/* Заглушка, пока MAU и рассылка не подключены: без сроков и без «in progress» */
+export const PENDING = { badge: 'В работе', text: 'Подключаем данные MAU и рассылки опроса' };
+
+/* Пустые состояния с причиной: ступени не пересчитываются (решение руководителей — без «у вас не сходится») */
+export const CONVERSION_STATES = {
+  month: 'В выгрузке нет полного месяца для конверсии',
+  filters: 'Конверсия считается для всего канала или одного сегмента — снимите фильтры по триггеру, ОС и другим',
+  segments: 'Конверсия считается для всего канала или одного сегмента',
+  cashback: 'Конверсия считается по всем оценкам канала — включите «С кэшбеком»',
+  audience: 'Нет данных о MAU и рассылке опроса за месяц',
+};
+
+/** Почему конверсия не считается для среза за месяц `month` — ключ `CONVERSION_STATES` — или null, если считается. */
+export function conversionBlocker({ state, audience }, month) {
+  if (!month) return 'month';
+  const scope = conversionScope(state?.filters, state);
+  if (scope.reason) return scope.reason;
+  if (!audienceFor(audience, { channel: state?.channel, segment: scope.segment, month: month.from.slice(0, 7) })) return 'audience';
+  return null;
+}
+
+/*
+  База изменения — прошлый календарный месяц со своим срезом и своей строкой `audience`, и только если выгрузка покрывает
+  его целиком: часть сентября против полного сентябрьского MAU показала бы ложный рост
+*/
+function previousMonthBase({ rows, select, audience, state }, month, segment) {
+  const before = previousMonth(month);
+  if (!select || !isWholeMonth(before, rows)) return {};
+  const previousAudience = audienceFor(audience, { channel: state.channel, segment, month: before.from.slice(0, 7) });
+  return previousAudience ? { previous: select({ from: before.from, to: before.to }).rows, previousAudience } : {};
+}
+
+/**
+ * `compact` — узкая карточка («Для аналитика»): без ступеней MAU и опроса (их доли — в подписи шапки), дельты без стрелок.
+ * Незаконченный период — конверсия за последний полный месяц со своим срезом (J-331), а не пустая карточка.
+ */
+export function renderConversion(block, context) {
+  const { slice, period, rows, state, select, audience: sheet, compact = false } = context;
   block.setTitle?.(CONVERSION_TITLE);
-  block.setHead({ note: conversionNote(period, rows) });
-  if (slice.length === 0) {
-    block.setState(EMPTY);
+  /*
+    Листа MAU и рассылки ещё нет совсем — заглушка «В работе», а не пустое состояние: данные подключаются.
+    Прочерк на месте числа (J-65) у заглушки снят: числа здесь ещё нет, и строка в две строки с ним выше вывода
+  */
+  const pending = !context.audience?.length;
+  block.element?.classList.toggle('card--conversion-pending', pending);
+  if (pending) {
+    block.setHead({ note: badge(PENDING.badge, 'quiet', { fit: true }) });
+    block.setState(EMPTY, PENDING.text);
     return;
   }
-  const all = surveyConversion(slice, previousSlice);
-  /* Узкая карточка — без MAU и опроса (их в выгрузке нет); «С ОС» без признака в старой выгрузке остаётся «—»: колонок всегда три */
+  const chosen = conversionMonth(period, rows);
+  /* Срез другого месяца берётся тем же селектором с его границами: без селектора считать не по чему */
+  const resolved = chosen && (!chosen.shifted || select) ? chosen : null;
+  /* Полного месяца нет — подпись без месяца: «от MAU за ноябрь» над «нет полного месяца» противоречила бы себе */
+  block.setHead({ note: conversionNote(resolved?.month, resolved?.shifted) });
+  const blocker = conversionBlocker(context, resolved?.month);
+  if (blocker) {
+    block.setState(EMPTY, CONVERSION_STATES[blocker]);
+    return;
+  }
+  const { month, shifted } = resolved;
+  const { segment } = conversionScope(state.filters, state);
+  const audience = audienceFor(sheet, { channel: state.channel, segment, month: month.from.slice(0, 7) });
+  const ratings = shifted ? select({ from: month.from, to: month.to }).rows : slice;
+  const all = surveyConversion(ratings, audience, previousMonthBase(context, month, segment));
+  /* Узкая карточка — оценки, 1–3 и «с ОС» от MAU: колонок три */
   const narrow = compact;
   const shown = narrow ? all.filter(({ key }) => !(key in WIDE)) : all;
   const layout = element('div', narrow ? 'conversion conversion--compact' : 'conversion');
-  layout.style.setProperty('--beam-headroom', HEADROOM / VIEW.height);
+  layout.style.setProperty('--beam-headroom', BEAM_HEADROOM);
   const list = element('ol', 'conversion__steps');
   list.setAttribute('role', 'list');
   list.append(...shown.map((step) => stepNode(step, narrow)));

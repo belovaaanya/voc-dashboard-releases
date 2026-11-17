@@ -56,15 +56,17 @@ function legendNode(days) {
 }
 
 /*
-  На главной на этом месте всегда «Конверсия опроса» на две колонки (решение пользователя); в разделе «Для аналитика» —
+  На главной на этом месте всегда «Конверсия опроса» (решение пользователя); в разделе «Для аналитика» —
   конверсия за целый месяц, за другой период — дни плана
 */
 export function renderPlanDays(block, context) {
   const conversion = !context.analyst || isWholeMonth(context.period, context.rows);
   block.element?.classList.toggle('card--conversion', conversion);
+  /* Пометку заглушки ставит сама конверсия; дни плана её снимают, иначе их «Нет плана» осталось бы без прочерка */
+  if (!conversion) block.element?.classList.remove('card--conversion-pending');
   if (conversion) {
-    /* «Для аналитика» карточка узкая (≈280 px): компактная конверсия без ступеней «—» */
-    renderConversion(block, { ...context, compact: Boolean(context.analyst) });
+    /* Карточка узкая (≈280 px) и на главной, и у аналитика: компактная конверсия; ширину воронки решат, когда придёт MAU */
+    renderConversion(block, { ...context, compact: true });
     return;
   }
   block.setTitle?.(PLAN_DAYS_TITLE);

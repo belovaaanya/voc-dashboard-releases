@@ -133,10 +133,11 @@
   box-shadow: var(--control-raised-edge);
 }
 
+/* Выбранный канал — на инвертированной плашке: акцент другой темы; ::after держит ширину под то же начертание — вкладки не прыгают */
 .segmented--lg .segmented__tab::after,
 .segmented--lg .segmented__tab[aria-selected='true'] {
-  font: var(--type-caption-bold);
-  letter-spacing: var(--tracking-caption-bold);
+  font: var(--type-caption-inverse);
+  letter-spacing: var(--tracking-caption-inverse);
 }
 
 /* Дорожка канала и в плотном варианте (R-50) */

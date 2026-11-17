@@ -362,17 +362,28 @@ function releaseEvent({ releaseDate, first, ratings, sum, dataEnd, fromHistorySt
 /*
   Порядок строк полосы (неделя 16–22.11): сверху то, что бьёт по VOC, — снижение, авария, инцидент; затем внешние
   изменения — релиз и раскатка рядом; новый срез; провал оценок — про сбор, а не про VOC, — внизу.
-  `sizeBy`: у снижения и аварии точка — сила события, у остальных — число событий интервала
+  `sizeBy`: у снижения и аварии точка — сила события, у остальных — число событий интервала. `hint` — что это и зачем,
+  простой фразой (неделя 16–22.11: руководителям было непонятно, что такое «Провал оценок» и точки под графиком)
 */
 export const EVENT_LANES = [
-  { kind: ANOMALY_EVENT, label: 'Крит. снижение VOC', tone: 'negative', sizeBy: 'strength' },
-  { kind: INCIDENT_EVENT, label: 'Авария', tone: 'orange', sizeBy: 'strength' },
-  { kind: SUSTAINED_EVENT, label: 'Инцидент', tone: 'incident', sizeBy: 'count' },
-  { kind: RELEASE_EVENT, label: 'Релизы АБМ', tone: 'positive', sizeBy: 'count' },
-  { kind: ROLLOUT_EVENT, label: 'Раскатка', tone: 'neutral', sizeBy: 'count' },
-  { kind: NEW_SLICE_EVENT, label: 'Новый срез', tone: 'purple', sizeBy: 'count' },
-  { kind: DATA_LOSS_EVENT, label: 'Провал оценок', tone: 'data-loss', sizeBy: 'count' },
+  { kind: ANOMALY_EVENT, label: 'Крит. снижение VOC', tone: 'negative', sizeBy: 'strength',
+    hint: 'VOC разреза за день резко ниже его обычного уровня — стоит проверить, что случилось в этот день' },
+  { kind: INCIDENT_EVENT, label: 'Авария', tone: 'orange', sizeBy: 'strength',
+    hint: 'Сбой сервиса из листа аварий — в эти дни он мог тянуть VOC вниз' },
+  { kind: SUSTAINED_EVENT, label: 'Инцидент', tone: 'incident', sizeBy: 'count',
+    hint: 'Частый триггер несколько рабочих дней ниже плана — затяжная проблема, а не разовый провал' },
+  { kind: RELEASE_EVENT, label: 'Релизы АБМ', tone: 'positive', sizeBy: 'count',
+    hint: 'Вышла версия приложения — видно, когда по ней пришли оценки; VOC до и после можно сравнить' },
+  { kind: ROLLOUT_EVENT, label: 'Раскатка', tone: 'neutral', sizeBy: 'count',
+    hint: 'Фича включена части пользователей — сравните VOC до и после' },
+  { kind: NEW_SLICE_EVENT, label: 'Новый срез', tone: 'purple', sizeBy: 'count',
+    hint: 'Появился триггер, роль, сегмент или продукт, которого раньше не было, — истории для сравнения у него нет' },
+  { kind: DATA_LOSS_EVENT, label: 'Провал оценок', tone: 'data-loss', sizeBy: 'count',
+    hint: 'Оценок пришло в разы меньше обычного — сбор мог оборваться, VOC в эти дни ненадёжен' },
 ];
+
+/** Что значит тип и зачем он на дашборде — одна фраза для подсказок чипа, группы ленты, полосы и окна «Типы событий». */
+export const eventHint = (kind) => EVENT_LANES.find((lane) => lane.kind === kind)?.hint ?? '';
 
 /* Событие одного дня — релиз, раскатка, новый срез: точка в день события; у серий и аварий — каждый их день */
 const POINT_KINDS = new Set([RELEASE_EVENT, ROLLOUT_EVENT, NEW_SLICE_EVENT]);

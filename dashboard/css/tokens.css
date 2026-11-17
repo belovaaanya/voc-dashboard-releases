@@ -9,7 +9,7 @@
 @font-face {
   font-family: "Manrope";
   src: url("../fonts/manrope-latin.woff2") format("woff2");
-  font-weight: 200 800;
+  font-weight: 300 700;
   font-display: swap;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
@@ -17,7 +17,7 @@
 @font-face {
   font-family: "Manrope";
   src: url("../fonts/manrope-cyrillic.woff2") format("woff2");
-  font-weight: 200 800;
+  font-weight: 300 700;
   font-display: swap;
   unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
 }
@@ -34,6 +34,13 @@
   font-weight: 300;
 }
 
+/* Числа карточек метрик — на шаг плотнее Light (по обратной связи): Styrene A Regular; где его нет — Manrope 400 */
+@font-face {
+  font-family: "Styrene Numbers";
+  src: local("Styrene A LC Regular"), local("StyreneALC-Regular");
+  font-weight: 400;
+}
+
 @font-face {
   font-family: "Styrene Headings";
   src: local("Styrene B LC Light"), local("StyreneBLC-Light");
@@ -45,6 +52,13 @@
   font-family: "Styrene Headings";
   src: local("Styrene B LC Regular"), local("StyreneBLC-Regular");
   font-weight: 400;
+}
+
+/* J-?: заголовок страницы по редизайну — Medium 500; где его нет — Manrope 500 */
+@font-face {
+  font-family: "Styrene Headings";
+  src: local("Styrene B LC Medium"), local("StyreneBLC-Medium");
+  font-weight: 500;
 }
 
 /* Ширина Manrope и Arial на тексте дашборда совпадает: запасной гарнитуре нужны только вертикальные метрики */
@@ -68,6 +82,9 @@
   /* Три уровня текста (R-36): основной, обычный и второстепенный — белый 40 % (R-37) */
   --color-text-strong: #FFFFFF;
   --color-text-secondary: #C3C3C3;
+  /* J-?: длинные списки (названия антидрайверов, проблематик) в тёмной теме — слегка приглушённый основной; чисто белый —
+     только выбранная или акцентная строка. В светлой — основной цвет текста */
+  --color-text-list: var(--color-text-secondary);
   --color-text-tertiary: rgba(255, 255, 255, 0.4);
 
   /* Акценты */
@@ -122,9 +139,16 @@
     текущей точке справа, как у линий дайджеста. Один источник: график VOC главной, ключ легенды «План», мини-линии.
     --color-plan-band — насыщенный конец полосы (стоп SVG-градиента), --plan-band-gradient — тот же градиент для CSS-фона
   */
-  --plan-band-strength: calc(var(--tone-rim) / 3);
-  --color-plan-band: color-mix(in srgb, var(--color-positive) var(--plan-band-strength), transparent);
-  --plan-band-gradient: linear-gradient(90deg, transparent, var(--color-plan-band));
+  /*
+    J-?: один коридор везде — по редизайну (Figma, плитки ролей): прозрачный → #C3F3CD к 30 % → #57D270 с 75 %.
+    В тёмной теме пара слабее (α 0,05 / 0,14), в светлой — α 0,2 / 0,2. Блоки (роли, мини-линии) ссылаются на эти токены
+  */
+  --color-plan-band-mid: rgba(195, 243, 205, 0.05);
+  --color-plan-band: rgba(87, 210, 112, 0.14);
+  --plan-band-gradient: linear-gradient(90deg, transparent, var(--color-plan-band-mid) 30%, var(--color-plan-band) 75%);
+  /* Дельта VOC у числа плитки роли: в тёмной — текст тона, как везде */
+  --role-delta-positive: var(--color-positive-ink);
+  --role-delta-negative: var(--color-negative-ink);
 
   /* Шкала отступов: только кратное 4 (V-02) */
   --space-1: 4px;
@@ -140,6 +164,19 @@
      читаются одной сеткой. Между плитками внутри карточки — тот же шаг */
   --gap-section: var(--space-2);
   --gap-tile: var(--space-2);
+  /*
+    Неделя 16–22.11, по обратной связи: на «Главной» и «Для аналитика» больше воздуха по вертикали — на экран входит
+    меньше, строки блоков не слипаются. Пересматривает 8 px между строками (J-242); между карточками в одной строке —
+    по-прежнему --gap-section. --gap-stack — между группами страницы (шапка метрик, аналитика, таблица; J-?: было 24),
+    --gap-row — между строками карточек внутри сетки метрик
+  */
+  --gap-stack: var(--space-8);
+  --gap-row: var(--space-4);
+  /* J-?: шапка страницы — фильтры → заголовок и заголовок → первый ряд карточек, на всех страницах одинаково
+     (по правке «по вертикали слиплось»: было 12 и 8) */
+  --gap-page-head: var(--space-6);
+  /* J-?: между карточками внутри группы и от строки-заголовка группы до них; зоны не переопределяют (было 32 — секции одной карточки) */
+  --gap-group: var(--space-4);
   /* Поле карточки — одно на все карточки */
   --card-padding: var(--space-5);
 
@@ -164,31 +201,49 @@
   --font-numbers: "Styrene Numbers", var(--font-sans);
   --font-headings: "Styrene Headings", var(--font-sans);
 
-  --type-display: 300 96px/1 var(--font-numbers);
+  /* Неделя 16–22.11, по обратной связи «числа жирнее»: все роли значений — одно начертание Regular 400 (было Light 300;
+     value и value-lg перевела «Шапка», #171) — уже подключённое начертание Styrene A, без новых */
+  --type-display: 400 96px/1 var(--font-numbers);
   /* Крупное значение карточки канала: до 96 px, пока справа помещается дельта (68 px с зазором); 100cqi — ширина карточки, «4,90» с запасом — 2,03 кегля */
-  --type-display-fit: 300 clamp(56px, calc((100cqi - 68px) / 2.03), 96px)/1 var(--font-numbers);
-  --type-value: 300 48px/1 var(--font-numbers);
+  --type-display-fit: 400 clamp(56px, calc((100cqi - 68px) / 2.03), 96px)/1 var(--font-numbers);
+  --type-value: 400 48px/1 var(--font-numbers);
   /* J-165: VOC карточки роли — между значением карточки (48) и итогом дайджеста (96) */
-  --type-value-lg: 300 72px/1 var(--font-numbers);
-  --type-value-sm: 300 28px/1.1 var(--font-numbers);
+  --type-value-lg: 400 72px/1 var(--font-numbers);
+  --type-value-sm: 400 28px/1.1 var(--font-numbers);
   --type-title: 300 14px/1.4 var(--font-headings);
   /* J-168: заголовок страницы в карточке-шапке (VOC ролей) — крупнее заголовка блока */
-  --type-page-title: 400 24px/1.3 var(--font-headings);
+  /* J-?: по редизайну — Medium 500, 24/31,2 (Figma 5362:768) */
+  --type-page-title: 500 24px/1.3 var(--font-headings);
   /* Причина главного вывода: обычная причина («Отправка рублевого платежа юридическому лицу») — в две строки на 1440 (≈235 px текста; в 18 px — три строки, в 24 px — четыре) */
   --type-cause: 400 16px/1.3 var(--font-headings);
-  --type-text: 400 14px/1.4 var(--font-sans);
-  --type-text-strong: 500 14px/1.4 var(--font-sans);
-  --type-caption: 400 12px/1.4 var(--font-sans);
-  --type-caption-strong: 500 12px/1.4 var(--font-sans);
-  /* Выбранный канал — светлая плашка: тёмный текст на ней жирнее, чтобы не тонуть (макет дизайнера 11.11) */
-  --type-caption-bold: 600 12px/1.4 var(--font-sans);
-  --type-quote: italic 500 12px/1.4 var(--font-sans);
-  --type-axis: 400 11px/1.2 var(--font-sans);
-  /* Названия в строке таблицы «Топ проблем»: в тёмной теме светлый текст на тёмном читается жирнее — начертание 300;
-     в светлой — как --type-caption */
-  --type-table-name: 300 12px/1.4 var(--font-sans);
-  /* Значения «Конверсии опроса» — тонкие, как в стратегии VoC: луч несёт форму, числа не спорят с ним */
-  --type-funnel-value: 200 18px/1 var(--font-sans);
+  /*
+    J-?: начертания Manrope — по ролям, а не по блокам: текст, акцент, логотип. Светлый текст на тёмном читается
+    жирнее, поэтому тёмная тема на шаг тоньше светлой: текст 300 / 400, акцент 400 / 500; логотип 700 в обеих.
+    Роли ссылаются на эти токены; в стилях блоков начертание не пишется (docs/ui-system.md, «Начертания»)
+  */
+  --weight-text: 300;
+  --weight-accent: 400;
+  --weight-logo: 700;
+  /* J-?: 600 — дельты у крупных чисел и плашки «Ниже плана» (14 px SemiBold при светлых цветах макета). Одинаков в обеих
+     темах: «тёмная на шаг тоньше» на него не распространяется — он компенсирует низкий контраст светлых тонов */
+  --weight-strong: 600;
+  /* Акцент на инвертированной плашке (выбранный канал: в тёмной теме — тёмный текст на белом, в светлой — белый на тёмном)
+     берёт начертание другой темы: то же правило «светлый на тёмном читается жирнее», только полярность плашки обратная */
+  --weight-accent-inverse: 500;
+  --type-text: var(--weight-text) 14px/1.4 var(--font-sans);
+  --type-text-strong: var(--weight-accent) 14px/1.4 var(--font-sans);
+  --type-caption: var(--weight-text) 12px/1.4 var(--font-sans);
+  --type-caption-strong: var(--weight-accent) 12px/1.4 var(--font-sans);
+  --type-text-bold: var(--weight-strong) 14px/1.4 var(--font-sans);
+  --type-caption-bold: var(--weight-strong) 12px/1.4 var(--font-sans);
+  --type-quote: italic var(--weight-accent) 12px/1.4 var(--font-sans);
+  --type-axis: var(--weight-text) 11px/1.2 var(--font-sans);
+  /* Значения «Конверсии опроса» — текстом: луч несёт форму, числа не спорят с ним (200 из набора убран) */
+  --type-funnel-value: var(--weight-text) 18px/1 var(--font-sans);
+  --type-logo: var(--weight-logo) 12px/1.4 var(--font-sans);
+  --type-caption-inverse: var(--weight-accent-inverse) 12px/1.4 var(--font-sans);
+  /* Число горячей пилюли «Топ проблем»: в тёмной теме — акцент роли, в светлой — strong (макет 5366:8325) */
+  --type-pill-hot: var(--weight-accent) 12px/1.4 var(--font-sans);
 
   /*
     Трекинг — у каждой роли свой, в em, по кеглю (docs/visual-style.md, «Трекинг»): чем крупнее, тем плотнее,
@@ -199,36 +254,41 @@
   --tracking-display: -0.083em;
   /* --type-display-fit: число ужимается целиком, при 56–96 px — та же доля кегля */
   --tracking-display-fit: -0.083em;
-  --tracking-value-lg: -0.056em;
+  /* J-?: VOC 72 px по редизайну плотнее: −5 px при 72 (Figma 5362:790) */
+  --tracking-value-lg: -0.069em;
   --tracking-value: -0.042em;
-  --tracking-value-sm: -0.02em;
-  --tracking-page-title: -0.01em;
+  --tracking-value-sm: -0.035em;
+  /* J-?: заголовок страницы (24) — заметно плотнее по правке «межбуквенное очень большое» (было −0,01em); значения 28 px сдвинуты вместе с ним — шкала монотонна */
+  --tracking-page-title: -0.025em;
   --tracking-funnel-value: 0em;
   --tracking-cause: 0em;
   /* J-59: заголовки блоков без разрядки — +0,02em читалась как широкий набор */
   --tracking-title: 0em;
   --tracking-text: 0.005em;
   --tracking-text-strong: 0.005em;
+  --tracking-text-bold: 0.005em;
   /* 12 px без разрядки читается сжатым */
   --tracking-caption: 0.02em;
   --tracking-caption-strong: 0.02em;
+  --tracking-logo: 0.02em;
   --tracking-caption-bold: 0.02em;
+  --tracking-caption-inverse: 0.02em;
   --tracking-quote: 0.02em;
-  /* Названия в «Топ проблем» — Light 300: тонкому начертанию нужно чуть больше воздуха, чем подписи */
-  --tracking-table-name: 0.025em;
+  --tracking-pill-hot: 0.02em;
   --tracking-axis: 0.03em;
   /* Подпись только из цифр и дат в тесном месте (концы линии сегмента) — без разрядки: у цифр свой шаг */
   --tracking-numeric: 0em;
   /* Подписи капсом — не роль по кеглю: капс слипается, разрядка больше любой строчной */
   --tracking-caps: 0.06em;
-  /* Прежние имена — псевдонимы ролей, пока их читают блоки */
-  --tracking-table: var(--tracking-table-name);
-  --tracking-airy: var(--tracking-caption);
 
   /* Поверхность карточки и её шапки — wireframe (V-32, Figma 3204:2724, 3204:2866) */
   --color-card-border: rgba(61, 63, 67, 0.5);
   /* Карточка — радиальный градиент макета от тёмного центра (J-15, Figma 3204:2724), полупрозрачный над подсветкой (R-50) */
   --card-gradient-shape: ellipse 62% 72% at 55% 46%;
+  /* J-?: толщина рамки карточки — токеном: в светлой теме по редизайну 1 px, в тёмной — прежняя волосяная (макет 5362:3908) */
+  --card-border-width: var(--hairline);
+  /* Внутреннее свечение подложки — только в светлой теме (Figma 5362:778) */
+  --card-glow: inset 0 0 0 transparent;
   --card-fill-opacity: 88%;
   --card-fill: radial-gradient(var(--card-gradient-shape), color-mix(in srgb, var(--color-bg) var(--card-fill-opacity), transparent), color-mix(in srgb, var(--color-surface) var(--card-fill-opacity), transparent));
   --card-surface: var(--card-fill);
@@ -364,13 +424,67 @@
   --tone-rim: 40%;
   --tone-ring-end: 8%;
   --tone-glow: 40%;
+  /* Край бейджа отклонения плана — по макету редизайна (5362:3962): 0 → 20 % → 80 % тона */
+  --badge-heat-edge: 80%;
+  /* Заливка бейджа отклонения от центра к краю (макет 5362:3962): тёмная — пустая середина, свечение у края */
+  --badge-heat-center: 0%;
+  --badge-heat-mid: 20%;
+  /* Без своего цвета текста бейджа отклонения (`--badge-heat-ink` не задан) — цвет тона */
+  --badge-heat-ink: initial;
+  /* Дельта VOC карточек метрик (редизайн): 14 px SemiBold; цвет — тон (в тёмной совпадает с макетом) */
+  --color-delta-positive: var(--color-positive);
+  --color-delta-negative: var(--color-negative);
+  /* J-348: полоса зон накала — ступени тона негатива от нейтрального (0) к полному (3) и приглушение невыбранных зон */
+  --heat-zone-tone-0: 0%;
+  --heat-zone-tone-1: 34%;
+  --heat-zone-tone-2: 67%;
+  --heat-zone-tone-3: 100%;
+  --heat-zone-muted-opacity: 0.45;
+  /*
+    J-348: плитки-сводки над «Топ проблем» — нейтральный приглушённый тон столбиков и воронки; в кольце эмоций негатив —
+    приглушённым тоном негатива, нейтрально и позитив — оттенками поверхности
+  */
+  --tile-fill: var(--color-border-strong);
+  --tile-tone-negative-share: 55%;
+  --tile-tone-negative: color-mix(in srgb, var(--color-negative) var(--tile-tone-negative-share), var(--color-border-strong));
+  --tile-tone-neutral: var(--color-border-strong);
+  --tile-tone-positive: var(--color-text-tertiary);
+  /*
+    Горячая пилюля шага «Топ проблем» — ступени, поправленные в макете светлой темы (5366:8325) руками, по силе:
+    5 — мягкая: светлое ядро 60 %, тёмное число; 4 — светлое ядро, середина ядро+тон 55 %, белое число; 3–1 — тон в
+    центре 50 / 80 / 100 %. К краю у всех — 9 % тона. Эллипс заливки: 50 × 52 px на 64 × 32 (78 % × 163 %), у мягких —
+    37 × 38 px (58 % × 120 %). Включатель --pill-hot-on: 0 — тёмная тема, её макет 5362:3817 совпадает с прежней пилюлей
+  */
+  --pill-hot-on: 0;
+  --pill-hot-rx: 78%;
+  --pill-hot-ry: 163%;
+  --pill-hot-soft-rx: 58%;
+  --pill-hot-soft-ry: 120%;
+  --pill-hot-edge: 9%;
+  --pill-hot-mid: 55%;
+  --pill-hot-mid-stop: 50%;
+  --pill-hot-soft-core: 60%;
+  --pill-hot-center-1: 100%;
+  --pill-hot-center-2: 80%;
+  --pill-hot-center-3: 50%;
+  --pill-hot-core: #F5739F;
   /*
     J-89: угол карточки сегмента у кольца светится тоном плана — доли тона, а не новые цвета; сильное отклонение плотнее.
     Плотность выше прежних 22/40 %: статус читается с первого взгляда, текст на свечении читается
   */
   --plan-glow-shape: ellipse 60% 70% at 100% 0;
-  /* «Главный вывод» — свечение куполом от нижней кромки: центр внизу посередине, ширина — вся карточка, высота ≈ 3/4 */
-  --summary-glow-shape: ellipse 100% 80% at 50% 100%;
+  /*
+    «Главный вывод» — свечение куполом из-под нижней кромки (макет редизайна 5362:4101): центр под карточкой посередине,
+    ширина 62 %, высота 89 %; стопы 0 → 22 → 44 % → прозрачный. Рост — цвета макета (`--summary-glow-positive-*`),
+    снижение и без изменений — тот же ход своим тоном: 76 % и 52 % тона (`--summary-glow-mid`, `--summary-glow-soft`)
+  */
+  --summary-glow-shape: ellipse 62% 89% at 50% 114%;
+  --summary-glow-positive-core: #3CF96C;
+  --summary-glow-positive-mid: rgba(52, 233, 128, 0.76);
+  --summary-glow-positive-soft: rgba(45, 218, 147, 0.52);
+  --summary-glow-mid: 76%;
+  --summary-glow-soft: 52%;
+  --summary-glow-blend: transparent;
   --plan-glow-rim-shape: ellipse 60% 80% at 100% 0;
   --plan-glow-soft: 34%;
   --plan-glow-strong: 52%;
@@ -388,6 +502,24 @@
   /* Нейтральная ячейка heatmap макета: едва заметный тон по диагонали (Figma 2601:551) */
   --heat-cell-rim: rgba(49, 49, 61, 0.5);
   --heat-cell-surface: linear-gradient(251deg, rgba(49, 49, 61, 0.2) 58%, rgba(49, 49, 61, 0));
+  /*
+    Ячейка карты антидрайверов по макету пользователя (Figma 5362:3817): подложка «в плане» и «только рамка» —
+    229,28° со стопами 56,66 / 91,60 % в макете, нормализовано к 229° и 57 / 92 %
+  */
+  --heatmap-cell-surface: linear-gradient(229deg, rgba(49, 49, 61, 0.2) 57%, rgba(49, 49, 61, 0) 92%);
+  /*
+    Заливка от центра — только светлая карта (antidrivers.css); здесь те же значения, светлая их не меняет.
+    «Ниже плана»: розовое ядро, непрозрачность растёт с силой от 60 до 80 % (antidrivers.css), к краю 9 % тона;
+    горячая — тон 80 %. «Выше плана», горячая — салатовое ядро #45CE65 → #6DD77C → #95DF93 → прозрачный #99F198
+  */
+  --heatmap-bad-core: #F5739F;
+  --heatmap-bad-share-min: 60%;
+  --heatmap-bad-share-max: 80%;
+  --heatmap-bad-edge: 9%;
+  --heatmap-bad-shape: ellipse 58% 120% at 50% 50%;
+  --heatmap-hot-shape: ellipse 73% 152% at 50% 50%;
+  --heatmap-good-hot: #45CE65;
+  --heatmap-good-hot-fill: radial-gradient(ellipse 84% 92% at 50% 50%, #45CE65, #6DD77C 22%, #95DF93 44%, rgba(153, 241, 152, 0));
   /* Рамка карточки прямой речи тише общей кромки тона: пять карточек подряд не сливаются в красную полосу */
   --verbatim-rim: 28%;
   /* J-73: основа плитки «Топ проблем» под заливкой тона; в светлой теме — белая, без серой подложки */
@@ -408,6 +540,9 @@
   --filter-dot-size: 2px;
   --status-dot-size: 10px;
   --status-dot-size-sm: 6px;
+  /* Точка мини-тренда карточек метрик (редизайн пользователя: 3 × 3 px) — общий размер точки графиков `--chart-dot` (#233);
+     до его слияния — те же 3 px запасным значением */
+  --sparkline-dot-sm: var(--chart-dot, 3px);
   --legend-marker-size: 20px;
   --sparkline-width: 91px;
   --sparkline-height: 28px;
@@ -432,14 +567,22 @@
   --radius-pill: 999px;
   /* J-167: портрет роли уходит в прозрачность к левому нижнему углу, как на макете заказчика */
   --portrait-fade: linear-gradient(to top right, transparent 8%, #000 62%);
+  /* Неделя 16–22.11: край прокручиваемого списка гаснет, а не режет строку ровной кромкой */
+  --scroll-edge-fade: linear-gradient(to bottom, transparent, #000 var(--space-2), #000 calc(100% - var(--space-2)), transparent);
   --scrollbar-size: 6px;
 
   /* График VOC — замеры Figma node 3204:2865 */
   /* Неделя 16–22.11: область графика выше на 18 % (168 → 198), блок растёт на 30 */
   --chart-plot-height: 252px;
   --chart-tooltip-max: 220px;
-  /* J-46: выбранная точка крупнее обычной (радиус 3 в dynamics.js) — выбор виден без поиска */
-  --chart-point-selected-radius: 5px;
+  /*
+    Неделя 16–22.11 (макет пользователя): точка графика — 3×3 px, общий токен графиков страницы (динамика, мини-тренды
+    шапки, роли, дайджест). Выбранная и наведённая — чуть крупнее; свечения у линий и точек нет
+  */
+  --chart-dot: 3px;
+  --chart-dot-active: 6px;
+  /* J-46: выбранная точка крупнее обычной — выбор виден без поиска (радиус — половина --chart-dot-active) */
+  --chart-point-selected-radius: calc(var(--chart-dot-active) / 2);
   /* Полоса выбранного дня ярче выбранной строки: на графике её ищут издалека, под линией и столбиками */
   --chart-selected-strength: 8%;
   --chart-selected-fill: color-mix(in srgb, var(--color-text-strong) var(--chart-selected-strength), transparent);
@@ -467,6 +610,8 @@
   /* J-68: стык подписей с плитками и правый край — затуханием; пределы ширины колонки — в antidrivers.js */
   --heatmap-fade: 24px;
   --heatmap-cell-width: 80px;
+  /* Колонка «Упоминаний» справа от карты: «12 345 · 100,0 %» подписью — без переноса */
+  --heatmap-freq-width: 112px;
   /* J-71: пустая плитка heatmap (интервал без оценок) */
   --heat-cell-empty: var(--color-surface-sunken);
   /* Липкие подписи строк — тон левой части градиента карточки (J-15): плоский --color-surface читался бы полосой */
@@ -512,9 +657,14 @@
   от 4,5 на любой из них; проверяет test/theme.test.js
 */
 :root[data-theme='light'] {
-  /* Тёмный текст на светлом не утолщается — названия таблицы обычного начертания */
-  --type-table-name: var(--type-caption);
+  /* J-?: тёмный текст на светлом не утолщается — начертания на шаг плотнее тёмной темы */
+  --weight-text: 400;
+  --weight-accent: 500;
+  --weight-accent-inverse: 400;
   --color-scheme: light;
+  /* Горячая пилюля шага «Топ проблем» — только в светлой теме, по её макету */
+  --pill-hot-on: 1;
+  --type-pill-hot: var(--weight-strong) 12px/1.4 var(--font-sans);
 
   --workspace-fill: rgba(245, 246, 249, 0.97);
   --workspace-solid: #F3F4F6;
@@ -542,6 +692,7 @@
 
   --color-text-strong: #16171A;
   --color-text-secondary: #454850;
+  --color-text-list: var(--color-text-strong);
   --color-text-tertiary: rgba(22, 23, 26, 0.63);
 
   /*
@@ -577,18 +728,27 @@
   --icon-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6.2 5 8.6 9.5 3.6' fill='none' stroke='%23FFFFFF' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 
   --color-heat-neutral: #EEF0F3;
-  /* На светлом фоне 13 % зелёного не видно: коридор насыщеннее, чтобы читался так же, как на тёмном */
-  --plan-band-strength: calc(var(--tone-rim) * 0.75);
+  /* Коридор плана — пара светлой темы (J-?, Figma) */
+  --color-plan-band-mid: rgba(195, 243, 205, 0.2);
+  --color-plan-band: rgba(87, 210, 112, 0.2);
 
-  /* Карточка — белая, к краю чуть серее: та же форма градиента, что в тёмной теме */
-  --color-card-border: rgba(22, 23, 26, 0.08);
-  --card-fill: radial-gradient(var(--card-gradient-shape), rgba(255, 255, 255, 0.92), rgba(250, 251, 252, 0.88));
+  /*
+    J-?: подложка карточки — по редизайну 1 в 1 (Figma 5362:778, плитка роли): рамка 1 px белая, заливка — радиальный
+    белый от прозрачного центра к краю (0,8), тень 0 14 18 rgba(51,51,89,.06), внутреннее свечение 8 px белого 32 %.
+    Центр градиента макета 301,66 × 179,52 на плитке 623 × 393 и радиусы ≈364 × 213 нормализованы в проценты
+  */
+  --color-card-border: #FFFFFF;
+  --card-border-width: 1px;
+  --card-gradient-shape: ellipse 58% 54% at 48% 46%;
+  --card-fill: radial-gradient(var(--card-gradient-shape), rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.8));
   --card-surface-solid: radial-gradient(var(--card-gradient-shape), #FFFFFF, #FAFBFC);
   --card-edge: inset 0 1px 0 rgba(255, 255, 255, 0.9);
 
   --shadow-contact: 0 1px 2px rgba(17, 24, 39, 0.06);
-  --card-shadow: var(--shadow-contact), 0 16px 40px -24px rgba(17, 24, 39, 0.18);
-  --card-shadow-hover: var(--shadow-contact), 0 20px 44px -22px rgba(17, 24, 39, 0.26);
+  --card-glow: inset 0 0 8px rgba(255, 255, 255, 0.32);
+  --card-shadow: var(--card-glow), 0 14px 18px rgba(51, 51, 89, 0.06);
+  /* Наведение — та же тень на шаг глубже: макет состояние не задаёт */
+  --card-shadow-hover: var(--card-glow), 0 18px 24px rgba(51, 51, 89, 0.1);
   --card-hover-edge: rgba(22, 23, 26, 0.22);
   --card-hover-wash: linear-gradient(rgba(22, 23, 26, 0.025), rgba(22, 23, 26, 0.025));
 
@@ -620,11 +780,40 @@
   /* J-71: нейтральные и пустые плитки — почти белые: серая заливка на белой карточке грязнит */
   --heat-cell-rim: rgba(22, 23, 26, 0.1);
   --heat-cell-surface: linear-gradient(251deg, #FFFFFF 58%, #F8F9FA);
+  /*
+    Карта антидрайверов, светлая (Figma 5366:8325, правки пользователя): подложка — от прозрачного к #F8F9FA;
+    красная — заливка от центра, а не свечение от края: обычная — розовый #F5739F 60 % к тону 9 %,
+    сильная — тон 80 % к 9 % и белое число. Радиусы — доли ячейки 80 × 32 (46 × 38 и 59 × 49 px в макете)
+  */
+  --heatmap-cell-surface: linear-gradient(229deg, rgba(255, 255, 255, 0) 57%, #F8F9FA 92%);
   --heat-cell-empty: #FAFBFC;
   --problem-card-surface: #FFFFFF;
   --label-halo-color: var(--color-surface);
   /* Край бейджа тона тише: текст тона на нём проходит AA (V-40) */
   --tone-glow: 18%;
+  /* Бейдж отклонения (макет 5366:8470): розовая плашка с белым SemiBold 12 px. Плотнее макета (80 → 44 → 9 %): под буквами
+     тон не реже 78 % — белый текст не ниже 3 : 1 и при сильном отклонении, когда свечение сжато (test/theme.test.js) */
+  --badge-heat-center: 90%;
+  --badge-heat-mid: 85%;
+  --badge-heat-edge: 9%;
+  --badge-heat-ink: #FFFFFF;
+  /* «Главный вывод» (макет 5366:8610): центр у нижней кромки, 76 × 83 %; непрозрачные стопы светлеют к белому */
+  --summary-glow-shape: ellipse 76% 83% at 50% 100%;
+  --summary-glow-positive-core: #45CE65;
+  --summary-glow-positive-mid: #6DD77C;
+  --summary-glow-positive-soft: #95DF93;
+  --summary-glow-mid: 79%;
+  --summary-glow-soft: 57%;
+  --summary-glow-blend: #FFFFFF;
+  /* Цвета дельт макета (5366:8432, 5366:8479) — светлее ink: решение пользователя, текст 14 px SemiBold */
+  --color-delta-positive: #45CE65;
+  --color-delta-negative: #F15D8F;
   --chart-grid: rgba(22, 23, 26, 0.08);
   --chart-line-neutral: #A9ADB6;
+  /*
+    Дельта VOC у числа плитки роли — цвета макета, решение пользователя (исключение J-70: контраст 2,0 и 3,1 на белом);
+    только для текста 14 px SemiBold (--type-text-bold). Дельты таблицы проблем (12 px) — ink темы
+  */
+  --role-delta-positive: #45CE65;
+  --role-delta-negative: #F15D8F;
 }

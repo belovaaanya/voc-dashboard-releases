@@ -9,6 +9,7 @@ import { normalizeDetailEvent } from './detail-event.js';
 import { normalizeDriver } from './driver-pick.js';
 import { PRESETS } from '../core/period.js';
 import { isIsoDate } from '../core/dates.js';
+import { isStep } from './group-step.js';
 
 const PARAM_CHANNEL = 'channel';
 const PARAM_PRESET = 'preset';
@@ -91,6 +92,8 @@ export function readState(search = window.location.search) {
     ...(detailEvent ? { detailEvent } : {}),
     ...(driver ? { driver } : {}),
     ...(params.has('days') ? { days: normalizedDays(params.get('days').split(',')) } : {}),
+    /* J-?: шаг группы аналитики — один на график, антидрайверы и «Топ проблем»; неизвестный — автоматический */
+    ...(isStep(params.get('step')) ? { step: params.get('step') } : {}),
     /* J-151: страница и месяц дайджеста; тема «Детализации» ушла вместе с карточкой */
     page: PAGES.includes(params.get('page')) ? params.get('page') : opensTable(search) ? ANALYST_PAGE : DEFAULT_PAGE,
     ...(MONTH.test(params.get('month') ?? '') ? { month: params.get('month') } : {}),
@@ -129,6 +132,7 @@ export function toSearch(state) {
   }
   const days = normalizedDays(state.days);
   if (days.length) params.set('days', days.join(','));
+  if (isStep(state.step)) params.set('step', state.step);
   for (const id of LOCAL_PERIOD_BLOCKS) {
     const local = state.local?.[id];
     if (!local?.from || !local?.to) continue;

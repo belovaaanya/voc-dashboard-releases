@@ -93,3 +93,15 @@ export function exportFileName(block, context) {
   const { from, to } = context.period;
   return safeFileName(`${block} ${context.label(CHANNEL_DIMENSION, context.state.channel)} ${from} — ${to}`);
 }
+
+/*
+  Таблица «Прямая речь: детализация» — все строки после фильтров колонок, поиска и сортировки, как на экране,
+  а не только показанная порция; колонки и их порядок — видимые колонки таблицы. Пины клиента здесь есть: таблица и
+  её Excel — единственные места, где они показываются
+*/
+export function detailSheets(context, { header, rows, extra = [] }) {
+  return [
+    parameterSheet(context, 'Прямая речь: детализация', extra),
+    { name: 'Детализация', rows: [header, ...rows] },
+  ];
+}

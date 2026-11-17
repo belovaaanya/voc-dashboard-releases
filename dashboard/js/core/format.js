@@ -48,6 +48,18 @@ export function formatDeltaCount(value) {
   return (value > 0 ? '+' : '') + formatNumber(value, 0);
 }
 
+/** Малая доля — два знака: «0,02 %» (конверсия от MAU). */
+export function formatShareFine(value) {
+  if (!Number.isFinite(value)) return '—';
+  return `${formatNumber(value, 2)}${NBSP}%`;
+}
+
+/** Изменение малой доли — два знака: «−0,01 п. п.». */
+export function formatDeltaShareFine(value) {
+  if (!Number.isFinite(value)) return '—';
+  return `${value > 0 ? '+' : ''}${formatNumber(value, 2)}${NBSP}п.${NBSP}п.`;
+}
+
 export function formatDeltaShare(value) {
   if (!Number.isFinite(value)) return '—';
   return `${value > 0 ? '+' : ''}${formatNumber(value, 1)}${NBSP}п.${NBSP}п.`;
@@ -122,6 +134,14 @@ const MONTHS_FULL = ['январь', 'февраль', 'март', 'апрель
 export function monthName(iso) {
   const month = Number(String(iso).slice(5, 7));
   return MONTHS_FULL[month - 1] ?? '—';
+}
+
+const MONTHS_GENITIVE = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+
+/** Месяц словом в родительном падеже: `2026-09` — «сентября» («размечены с сентября»). */
+export function monthGenitive(iso) {
+  const month = Number(String(iso).slice(5, 7));
+  return MONTHS_GENITIVE[month - 1] ?? '—';
 }
 
 const MONTHS_DATIVE = ['январю', 'февралю', 'марту', 'апрелю', 'маю', 'июню', 'июлю', 'августу', 'сентябрю', 'октябрю', 'ноябрю', 'декабрю'];

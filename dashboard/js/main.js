@@ -20,9 +20,11 @@ import { renderDistribution } from './blocks/distribution.js';
 import { conclusionPlaceholder, detachConclusion, renderConclusion } from './blocks/conclusion.js';
 import { renderVerbatimCards } from './blocks/verbatim-cards.js';
 import { renderVerbatimTable } from './blocks/verbatim-table.js';
+import { renderCallStats } from './blocks/call-stats.js';
 import { digestMonthControl, digestSegment, renderDigestDko, renderDigestPlatforms, renderDigestStability, renderDigestSummary, renderDigestTriggers, renderOtherRoles, renderRoles, digestRole } from './blocks/digest.js';
 import { vocSegment } from './blocks/voc-segment.js';
 import { renderPlanDays } from './blocks/plan-days.js';
+import { renderEmotions } from './blocks/emotions.js';
 import { channelsOf, metricSegments } from './core/dimensions.js';
 import { renderEmptyHeader, renderHeader } from './shell/header.js';
 import { SECTIONS, renderSideNav } from './shell/side-nav.js';
@@ -37,6 +39,8 @@ import { createSelector } from './state/selection.js';
 import { holdPageHeight as holdPage, releasePageHeight as releasePage } from './ui/page-height.js';
 import { sameInputs, staleInputs, watchInputs } from './shell/inputs.js';
 import { ROLE_SLOTS } from './core/digest.js';
+import { groupStep, isAutoStep, stepOptions } from './state/group-step.js';
+import { scaleTabs } from './components/scale-tabs.js';
 import { ANALYST_PAGE, DEFAULT_PAGE, LOCAL_PERIOD_BLOCKS, onStateChange, opensTable, readState, syncState, toSearch, viewOf, withFilter, writeState } from './state/url-state.js';
 import { SHARED_PERIOD, resolveState } from './state/resolve-state.js';
 import { validateVerbatim } from './core/verbatim.js';
@@ -57,6 +61,10 @@ const BLOCKS = [
   { id: 'insights', title: 'Календарь событий', host: 'rail-main', modifier: 'card--insights card--fill', render: renderInsights, ready: calendarReady },
   /* J-151: таблица прямой речи — на странице «Обратная связь» */
   /* Неделя 16–22.11: таблица прямой речи — внизу «Для аналитика», только в этом режиме; на главной её нет (цитаты — в «Топ проблем») */
+  /* Неделя 16–22.11: статистика обзвона по месяцам — над таблицей прямой речи, только «Для аналитика» */
+  { id: 'call-stats', title: 'Статистика обзвона', host: 'full', modifier: 'card--call-stats', page: ANALYST_PAGE, render: renderCallStats, verbatim: true },
+  /* J-348: эмоции — таблица и лента отзывов, только «Для аналитика», над таблицей прямой речи */
+  { id: 'emotions', title: 'Эмоции', host: 'full', modifier: 'card--emotions', page: ANALYST_PAGE, render: renderEmotions, verbatim: true },
   { id: 'verbatim-table', title: 'Прямая речь: детализация', host: 'full', modifier: 'card--verbatim-table', page: ANALYST_PAGE, render: renderVerbatimTable, verbatim: true },
   /* J-151: VOC-дайджест — месяц канала по макету */
   { id: 'digest-summary', title: 'VOC-дайджест', host: 'digest-top', modifier: 'card--digest-summary card--page-head card--bare', render: renderDigestSummary, page: 'digest' },
@@ -73,6 +81,18 @@ const BLOCKS = [
   /* Оценки ролей вне четырёх плиток — тихой строкой внизу страницы ролей */
   { id: 'roles-other', title: 'Другие роли', host: 'roles', modifier: 'card--roles-other card--bare', render: renderOtherRoles, page: 'roles' },
 ];
+/*
+  J-?: видимый заголовок главной — «Для продакта», в паре с «Для аналитика»: «Главная» на главной ничего не различала.
+  Пункт меню «Главная» и маршрут прежние; заголовок вкладки браузера — по заголовку страницы
+*/
+const PRODUCT_TITLE = 'Для продакта';
+const BASE_DOCUMENT_TITLE = 'Дашборд VOC для PO B2B';
+function pageTitleOf(page) {
+  const text = page === DEFAULT_PAGE ? PRODUCT_TITLE : SECTIONS.find(({ id }) => id === page)?.label ?? PRODUCT_TITLE;
+  if (typeof document !== 'undefined') document.title = `${text} · ${BASE_DOCUMENT_TITLE}`;
+  return text;
+}
+
 /* J-151: страница блока; без поля — «Главная» */
 /* Блок с `page: ANALYST_PAGE` — только в режиме «Для аналитика» (вид главной); остальные — на своей странице */
 const shownOn = (spec, page) => (spec.page === ANALYST_PAGE ? page === ANALYST_PAGE : (spec.page ?? DEFAULT_PAGE) === viewOf(page));
@@ -89,12 +109,13 @@ function channelRowsOf(rows, channel) {
 }
 
 /*
-  J-40: блок аналитики — одна карточка с общим периодом `dynamics` для графика, календаря и антидрайверов.
-  J-128: «Топ проблем» с лентой — в той же карточке под ними: выбор антидрайвера сужает его; день графика — нет (J-49)
+  J-40: группа аналитики с общим периодом `dynamics` для графика, календаря и антидрайверов; J-?: строка-заголовок
+  группы над тремя карточками — «Динамика и события», «Антидрайверы», «Топ проблем» с лентой.
+  J-128: выбор антидрайвера сужает «Топ проблем»; день графика — нет (J-49)
 */
-const ANALYSIS_TITLE = 'Динамика, события и антидрайверы';
+const ANALYSIS_TITLE = 'Динамика и проблемы';
 const ANALYSIS_BLOCKS = ['dynamics', 'insights', 'antidrivers', 'verbatim-cards'];
-/* Колонки внутри карточек-групп: заголовок блока там — h3 под заголовком группы */
+/* Колонки внутри группы: заголовок блока там — h3 под заголовком группы */
 const GROUPED_HOSTS = ['main', 'rail-main', 'drivers', 'problems'];
 
 const TEXT_BLOCKS = BLOCKS.filter((spec) => spec.verbatim);
@@ -123,8 +144,8 @@ function keepScrollClearOfHeader(header) {
 }
 
 /*
-  J-136: календарь событий справа можно скрыть, чтобы динамика и антидрайверы шли во всю ширину группы; кнопка — в
-  шапке группы, выбор живёт до закрытия страницы. Графики сами перерисовываются по новой ширине (ResizeObserver)
+  J-136: календарь событий справа можно скрыть, чтобы график шёл во всю ширину карточки; кнопка — в
+  строке графика, выбор живёт до закрытия страницы. Графики сами перерисовываются по новой ширине (ResizeObserver)
 */
 let eventsHidden = false;
 /* J-148: кнопка календаря — та же, что у ленты отзывов: круг в правом верхнем углу строки группы, свёрнутый календарь — полоса «События» */
@@ -162,7 +183,7 @@ function pageHosts() {
 
 /* Карточки групп и блоков в скелете; `setAll` ставит всем одно служебное состояние */
 function mountCards(hosts) {
-  /* J-40: график, календарь и антидрайверы — одна карточка; её шапка несёт общий период трёх блоков */
+  /* J-40: шапка группы аналитики несёт общий период графика, календаря и антидрайверов; карточки — под ней (J-?) */
   const analysis = groupFromSlot({ id: 'analysis', title: ANALYSIS_TITLE, modifier: 'card--group card--analysis' });
 
   const blocks = new Map();
@@ -230,6 +251,10 @@ function sliceContext(env, { state, period, eligible, dimensions }, { setState, 
     verbatim,
     requestVerbatim,
     channelRows: channelRowsOf(env.rows, state.channel),
+    /* Аудитория и опрос (лист audience) — воронка «Конверсии опроса»; без фильтров среза, нет листа — [] */
+    audience: env.reference?.audience ?? [],
+    /* J-?: с какого месяца канал размечен по эмоциям («YYYY-MM» или null) — блок подписывает, если период шире */
+    emotions: { labelledFrom: env.reference?.emotions?.labelled_from?.[state.channel] ?? null },
   };
   return context;
 }
@@ -255,7 +280,7 @@ function renderPageHeader(env, context) {
     /* J-168: на странице ролей фильтры, кэшбек и база дельт не действуют — в шапке только канал и период */
     slim: state.page === 'roles',
     /* Заголовок страницы — имя пункта меню; на экране — у вида главной, у остальных его называет первая карточка */
-    pageTitle: { text: SECTIONS.find(({ id }) => id === state.page)?.label ?? SECTIONS[0].label, visible: viewOf(state.page) === DEFAULT_PAGE },
+    pageTitle: { text: pageTitleOf(state.page), visible: viewOf(state.page) === DEFAULT_PAGE },
     /* Дайджест считается по всему каналу за календарный месяц: в шапке канал и «Месяц», без фильтров и периода */
     month: state.page === 'digest' ? digestMonthControl(context, (month) => setState({ ...state, month })) : null,
     channels,
@@ -273,7 +298,7 @@ function renderPageHeader(env, context) {
     onChannelChange: (channel) => setState({ ...state, channel, days: [], detailEvent: null, driver: null }),
     /* Новый общий период снимает local period блоков: иначе блок молча остаётся на старом */
     onPeriodChange: (nextPeriod) =>
-      setState({ ...state, preset: nextPeriod.preset, from: nextPeriod.from, to: nextPeriod.to, local: {}, days: [], detailEvent: null, driver: null }),
+      setState({ ...state, preset: nextPeriod.preset, from: nextPeriod.from, to: nextPeriod.to, local: {}, days: [], detailEvent: null, driver: null, step: null }),
     onFilterChange: (dimension, values) =>
       setState({ ...state, filters: withFilter(state.filters, dimension, values), detailEvent: null }),
     onCashbackChange: (includeCashback) => setState({ ...state, includeCashback, detailEvent: null }),
@@ -292,7 +317,8 @@ function localContext(env, { localPeriods, eligible, dimensions }, context, id) 
   const latest = env.latest;
   const local = localPeriods[id] ?? null;
   /* Период группы снимает событие из календаря, иначе таблица осталась бы на его днях */
-  const selectionReset = id === SHARED_PERIOD ? { days: [], focus: null, detailEvent: null, driver: null } : { detailEvent: null };
+  /* J-?: ручной шаг группы — для её периода (J-181): новый период снова получает автоматический */
+  const selectionReset = id === SHARED_PERIOD ? { days: [], focus: null, detailEvent: null, driver: null, step: null } : { detailEvent: null };
   const periodControl = {
     manifestPeriod: env.source.manifest.period,
     local: Boolean(local),
@@ -320,11 +346,26 @@ function groupContexts(env, resolved, context) {
     previewPeriod: (range) => env.cards.analysis.previewPeriod(range),
   }, SHARED_PERIOD);
   analysisContext.periodControl = { ...analysisContext.periodControl, shared: true };
+  /* J-?: один шаг на график, антидрайверы и «Топ проблем»; переключатель — в строке общего периода группы */
+  analysisContext.step = groupStep(context.state.step, analysisContext.period, context.analyst);
+  /* Автоматический шаг блоки подбирают себе молча; подпись замены — только у выбранного вручную */
+  analysisContext.stepIsAuto = isAutoStep(context.state.step);
+  analysisContext.setStep = (step) => context.setState({ ...env.latest(), step });
   const contextFor = (id) => {
     if (ANALYSIS_BLOCKS.includes(id)) return analysisContext;
     return LOCAL_PERIOD_BLOCKS.includes(id) ? localContext(env, resolved, context, id) : context;
   };
   return { analysisContext, contextFor };
+}
+
+/* J-?: шаг группы аналитики — один переключатель в строке общего периода; на главной без «Кварталов» (J-228) */
+function groupStepTabs(context) {
+  return scaleTabs({
+    label: 'Шаг графика, антидрайверов и «Топ проблем»',
+    options: stepOptions(context.analyst),
+    selected: context.step,
+    onSelect: (step) => context.setStep(step),
+  });
 }
 
 /*
@@ -338,7 +379,10 @@ function paintGroupHeads({ analysis }, { analysisContext }, basePaint, live) {
     basePaint.markLive(id);
   } : basePaint;
   const analysisRow = analysis.element.querySelector('.group-row');
-  paint('#analysis', analysisContext, (watched) => analysis.setHead({ period: { ...watched.period, picker: watched.periodControl } }), { local: periodIds.get(analysisContext) });
+  paint('#analysis', analysisContext, (watched) => analysis.setHead({
+    period: { ...watched.period, picker: watched.periodControl },
+    controls: [groupStepTabs(watched)],
+  }), { local: periodIds.get(analysisContext) });
   /* Кнопка календаря — в строке группы, одна на строку */
   if (analysisRow?.querySelector('#rail-main') && !analysisRow.querySelector(':scope > .side-toggle')) analysisRow.append(eventsToggle(analysisRow));
 }

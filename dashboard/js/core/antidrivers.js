@@ -116,6 +116,19 @@ export function frequentElements(ratings, project, label, dimension = 'trigger')
 }
 
 /**
+ * Частотность строк карты за период: упоминания — те же, по которым идёт порядок (`frequentElements`),
+ * доля — от всех оценок среза, в процентах. Пишется в строки карты (`row.frequency`).
+ */
+export function withFrequency(heatmap, ranked, total) {
+  const mentions = new Map(ranked.map(({ key, mentions: count }) => [key, count]));
+  for (const row of heatmap.rows) {
+    const count = mentions.get(row.key) ?? 0;
+    row.frequency = { mentions: count, share: total ? (count / total) * 100 : null };
+  }
+  return heatmap;
+}
+
+/**
   J-149 → один список: строки версий нескольких ОС — одной картой по частотности, как у одной ОС
   (больше оценок — выше, при равенстве — по ключу). Ячейки каждая ОС считает сама: урон и влияние —
   внутри своей платформы, номера версий iOS и Android независимы
@@ -136,6 +149,8 @@ export function buildHeatmap(ratings, period, scale, project, keys) {
   const groupsByColumn = columnRatings.map((rows) => new Map(breakdown(rows, project).map((group) => [group.key, group])));
 
   const columnVoc = columnRatings.map((rows) => voc(rows));
+  /* Квартал: оценки строки по месяцам, попавшим в период, — веса плана квартала (quarterPlan) */
+  const monthsByColumn = scale === 'quarter' ? columns.map((column, index) => monthMentions(columnRatings[index], column, project)) : null;
   const rows = keys.filter(key => !ignoredCauseKey('trigger', key)).map((key) => ({
     key,
     cells: groupsByColumn.map((groups, index) => {
@@ -145,11 +160,45 @@ export function buildHeatmap(ratings, period, scale, project, keys) {
         mentions: group?.mentions ?? 0,
         damage: elementDamage(group, columnRatings[index].length),
         ...influenceOf(group, columnRatings[index].length, columnVoc[index]),
+        ...(monthsByColumn ? { months: monthsByColumn[index].map(({ from, to, groups: month }) => ({ from, to, mentions: month.get(key)?.mentions ?? 0 })) } : {}),
       };
     }),
   }));
 
   return { columns, rows };
+}
+
+/*
+  Месяцы колонки, обрезанные её границами, и группы строк в каждом. Код оценки, повторённый в другом месяце,
+  ячейка считает один раз (D-09) — и вес он даёт один раз, месяцу первой встречи: сумма весов = оценки ячейки
+*/
+function monthMentions(ratings, column, project) {
+  const months = buildTimeSeries([], column, 'month').map(({ from, to }) => ({ from, to }));
+  const seen = new Set();
+  const unique = ratings.filter(({ voc_ccode: code }) => !seen.has(code) && seen.add(code));
+  return ratingsByColumn(unique, months).map((rows, index) => ({
+    ...months[index],
+    groups: new Map(breakdown(rows, project).map((group) => [group.key, group])),
+  }));
+}
+
+/**
+ * План квартала для строки: среднее месячных коридоров, взвешенное по оценкам строки в каждом месяце.
+ * Месяц без коридора или без оценок строки не участвует; не осталось ни одного — плана нет (null).
+ * `planOfMonth({ from, to })` — коридор месяца по обычному правилу planFor. Месяцы и дни так не считаются.
+ */
+export function quarterPlan(months = [], planOfMonth) {
+  let weight = 0;
+  let min = 0;
+  let max = 0;
+  for (const month of months) {
+    const plan = month.mentions > 0 ? planOfMonth(month) : null;
+    if (!Number.isFinite(plan?.min) || !Number.isFinite(plan?.max)) continue;
+    weight += month.mentions;
+    min += plan.min * month.mentions;
+    max += plan.max * month.mentions;
+  }
+  return weight ? { min: min / weight, max: max / weight, weighted: true } : null;
 }
 
 /* Один проход вместо фильтра на столбец: столбцы идут подряд по датам и не пересекаются */
@@ -288,8 +337,8 @@ function planColourScale(values, anchor) {
   };
 }
 
-function planAnchor(columnPlans, negative) {
-  const distances = columnPlans.flatMap(plan => {
+function planAnchor(plans, negative) {
+  const distances = plans.flatMap(plan => {
     if (!Number.isFinite(plan?.min) || !Number.isFinite(plan?.max)) return [];
     return [Math.max(0.01, negative ? roundVoc(plan.min) - 4 : 4.85 - roundVoc(plan.max))];
   });
@@ -297,10 +346,13 @@ function planAnchor(columnPlans, negative) {
   return distances.length ? Math.min(...distances) : 1;
 }
 
+/* План ячейки: свой у ячейки квартала (cell.plan, quarterPlan), иначе — коридор колонки */
+const cellPlan = (cell, columnPlans, index) => (cell.plan === undefined ? columnPlans[index] : cell.plan);
+
 function highlightValues(heatmap, mode, columnPlans) {
   return heatmap.rows.map(({ cells }) => cells.map((cell, index) => {
     if (isBlankCell(heatmap, cell)) return null;
-    if (mode === HIGHLIGHT_PLAN) return planDeviation(cell.voc, columnPlans[index]);
+    if (mode === HIGHLIGHT_PLAN) return planDeviation(cell.voc, cellPlan(cell, columnPlans, index));
     if (mode === HIGHLIGHT_DAMAGE) return roundImpact(cell.damage);
     if (mode === HIGHLIGHT_INFLUENCE) {
       if (cell.influence === null || cell.influence === undefined) return null;
@@ -317,11 +369,13 @@ export function highlightHeatmap(heatmap, mode, columnPlans = [], calibration = 
   const measured = highlightValues(heatmap, mode, columnPlans);
   const values = highlightValues(calibration, mode, columnPlans).flat().filter(value => value !== null);
   const positiveIsBad = mode === HIGHLIGHT_SHARE || mode === HIGHLIGHT_FREQUENCY || (mode === HIGHLIGHT_DAMAGE && heatmap.byCategory);
+  /* Anchor — по коридорам всех ячеек калибровки: у колонок без своих планов ячеек это и есть коридоры колонок */
+  const plans = mode === HIGHLIGHT_PLAN ? calibration.rows.flatMap(({ cells }) => cells.map((cell, index) => cellPlan(cell, columnPlans, index))) : [];
   const negative = mode === HIGHLIGHT_PLAN
-    ? planColourScale(values.map(value => -value), planAnchor(columnPlans, true))
+    ? planColourScale(values.map(value => -value), planAnchor(plans, true))
     : colourScale(values.map(value => -value));
   const positive = mode === HIGHLIGHT_PLAN
-    ? planColourScale(values, planAnchor(columnPlans, false))
+    ? planColourScale(values, planAnchor(plans, false))
     : colourScale(values);
   return measured.map(row => row.map(value => {
     if (value === null) return { tone: null, strength: 0, muted: false, value: null };

@@ -231,7 +231,8 @@
   position: absolute;
   inset-inline: calc(var(--space-2) / -2);
   bottom: calc(100% * var(--plan, 0));
-  border-top: var(--hairline) dashed var(--color-negative);
+  /* Редизайн 16–22.11: без пунктиров — порог плана сплошной волосяной линией */
+  border-top: var(--hairline) solid var(--color-negative);
 }
 
 /* Столбик сильнее плана — тоном «ниже плана»; число под ним дублирует цвет */
@@ -239,7 +240,7 @@
   background: linear-gradient(var(--color-negative), transparent);
 }
 
-.digest-bars__item--below /* Прогноз незаконченного месяца: над реальным столбиком — бледное пунктирное продолжение, под числом — «≈N» */
+/* Прогноз незаконченного месяца: над реальным столбиком — бледное пунктирное продолжение, под числом — «≈N» */
 .digest-bars__stack {
   display: flex;
   flex-direction: column;
@@ -251,7 +252,7 @@
   box-sizing: border-box;
   width: var(--space-2);
   height: calc(var(--space-10) * 1.5 * var(--bar, 0));
-  border: var(--hairline) dashed var(--color-text-tertiary);
+  border: var(--hairline) solid var(--color-text-tertiary);
   border-bottom: none;
   border-radius: var(--radius-pill) var(--radius-pill) 0 0;
 }
@@ -263,8 +264,9 @@
   letter-spacing: var(--tracking-axis);
 }
 
-.digest-bars__value {
-  color: var(--color-negative);
+/* Число под столбиком «ниже плана» — мелкое, поэтому ink тона (редизайн: мелкие дельты и числа — тёмными ink) */
+.digest-bars__item--below .digest-bars__value {
+  color: var(--color-negative-ink);
 }
 
 /* Антидрайверы ДКО — одна таблица: шапка месяцев сверху, группы — строками-подзаголовками */
@@ -378,11 +380,11 @@
 }
 
 .digest-subhead.digest-subhead--up {
-  color: var(--color-positive);
+  color: var(--color-positive-ink);
 }
 
 .digest-subhead.digest-subhead--down {
-  color: var(--color-negative);
+  color: var(--color-negative-ink);
 }
 
 /*
@@ -513,14 +515,16 @@
   background: linear-gradient(to right, transparent, currentColor);
 }
 
-.digest-hbars__row--up .digest-hbars__track,
+/*
+  Редизайн: заливкой подсвечиваются только средний VOC и урон. Полоса триггера — размер вклада, не урон и не средний
+  VOC, поэтому нейтральная (цвет дорожки); направление — в подзаголовке группы и в числе вклада, мелкое число — ink тона
+*/
 .digest-hbars__row--up .digest-hbars__impact {
-  color: var(--color-positive);
+  color: var(--color-positive-ink);
 }
 
-.digest-hbars__row--down .digest-hbars__track,
 .digest-hbars__row--down .digest-hbars__impact {
-  color: var(--color-negative);
+  color: var(--color-negative-ink);
 }
 
 /* Шапка колонок — одна над обеими группами, тише строк */
@@ -564,7 +568,12 @@
 */
 .card--role:not([hidden]) {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  /*
+    Левая колонка — 240 px у всех плиток: строка «N оценок ±N · N с ОС» помещается в одну строку при обычных числах,
+    линии соседних плиток начинаются на одной вертикали; длинная строка не раздвигает колонку — «· N с ОС» переносится
+    целиком (по содержимому колонка была 209–226 px и линии стояли вразнобой)
+  */
+  grid-template-columns: calc(var(--space-10) * 6) minmax(0, 1fr);
   grid-template-rows: auto 1fr;
   column-gap: var(--space-8);
 }
@@ -674,6 +683,18 @@
   white-space: nowrap;
 }
 
+/* Макет светлой темы: дельта VOC у числа 72 px — полужирным 14 px, а не подписью 12 px: пара с крупным числом не теряется */
+.role-card .metric__pair > .metric__lead {
+  font: var(--type-text-bold);
+  letter-spacing: var(--tracking-text-bold);
+}
+
+/* Дельта VOC у числа — цвета макета (исключение J-70, решение пользователя): только эта пара, текст 14 px SemiBold */
+.role-card .metric__pair {
+  --positive-ink: var(--role-delta-positive);
+  --negative-ink: var(--role-delta-negative);
+}
+
 /* Портрет роли — круг 120 px в левой колонке плитки над VOC (раньше 40 px в шапке, J-169); без портрета — тихая заглушка с иконкой */
 .role-card__avatar {
   display: grid;
@@ -740,6 +761,9 @@
 
 .role-card__problem-name {
   overflow-wrap: anywhere;
+  /* Макет светлой темы «VOC ролей»: название проблемы — акцентом строки, числа «Жалоб» — обычным */
+  font: var(--type-caption-strong);
+  letter-spacing: var(--tracking-caption-strong);
 }
 
 .role-card__lead--empty {
@@ -828,3 +852,19 @@
   visibility: hidden;
 }
 
+
+/* Одна строка под VOC роли: «· N с ОС» со знаком подсказки — одним элементом строки, переносится целиком */
+.role-card__feedback > .metric__hint,
+.role-card__feedback > .metric__warning {
+  margin-inline-start: var(--space-2);
+  vertical-align: middle;
+}
+
+/*
+  Мини-линия плитки роли по макету пользователя (неделя 16–22.11): без свечения — коридор без размытия, точки 3×3.
+  3 px — шагом шкалы до общего --chart-dot (#233): тогда ссылка на него
+*/
+.role-card__side {
+  --sparkline-dot: calc(var(--space-1) * 0.75);
+  --sparkline-band-filter: none;
+}

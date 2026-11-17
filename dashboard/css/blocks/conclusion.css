@@ -70,17 +70,23 @@
 }
 
 /*
-  Карточка светится тоном направления: купол от нижней кромки (рисунок пользователя), а не заливка всей карточки;
-  рост — позитив, снижение — негатив, без изменений — нейтральный. Пока загрузка или пусто — тона нет
+  Карточка светится тоном направления: купол из-под нижней кромки (макет редизайна), а не заливка всей карточки;
+  рост — цвета макета, снижение — негатив, без изменений — нейтральный тем же ходом стопов. Пока загрузка или пусто — тона нет
 */
 .card--summary[data-conclusion-tone]:not(:has(.state)) {
   --summary-tone: var(--color-neutral);
+  --summary-core: var(--summary-tone);
+  --summary-mid: color-mix(in srgb, var(--summary-tone) var(--summary-glow-mid), var(--summary-glow-blend));
+  --summary-soft: color-mix(in srgb, var(--summary-tone) var(--summary-glow-soft), var(--summary-glow-blend));
   position: relative;
   isolation: isolate;
 }
 
 .card--summary[data-conclusion-tone='positive']:not(:has(.state)) {
   --summary-tone: var(--color-positive);
+  --summary-core: var(--summary-glow-positive-core);
+  --summary-mid: var(--summary-glow-positive-mid);
+  --summary-soft: var(--summary-glow-positive-soft);
 }
 
 .card--summary[data-conclusion-tone='negative']:not(:has(.state)) {
@@ -93,7 +99,7 @@
   inset: 0;
   z-index: -1;
   border-radius: inherit;
-  background: radial-gradient(var(--summary-glow-shape), color-mix(in srgb, var(--summary-tone) var(--plan-glow-strong), transparent), transparent);
+  background: radial-gradient(var(--summary-glow-shape), var(--summary-core), var(--summary-mid) 22%, var(--summary-soft) 44%, transparent);
   pointer-events: none;
 }
 

@@ -92,8 +92,8 @@ export const DIMENSIONS = [
   },
   {
     key: 'domain',
-    title: 'ФО',
-    allCaption: 'Все ФО',
+    title: 'Функ. область',
+    allCaption: 'Все функ. области',
     values: (row) => annotationValues(row, 'domain'),
   },
   {

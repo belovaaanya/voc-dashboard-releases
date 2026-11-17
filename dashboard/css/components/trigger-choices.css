@@ -49,8 +49,16 @@
   padding-inline-start: calc(var(--icon-size-sm) + var(--space-2));
 }
 
-.trigger-choices__values[hidden] {
+.trigger-choices__values[hidden],
+.trigger-choices__group[hidden],
+.trigger-choices__values .control-popover__option[hidden] {
   display: none;
+}
+
+/* Поиск по группе и значению — над списком, отступ до первой группы как между группами */
+.trigger-choices__search {
+  display: block;
+  margin-block-end: var(--space-2);
 }
 
 .trigger-choices__product-checkbox:indeterminate {

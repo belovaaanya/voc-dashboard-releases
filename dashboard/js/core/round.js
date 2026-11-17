@@ -11,6 +11,7 @@ const DELTA_DIGITS = 2;
 const IMPACT_DIGITS = 3;
 const COUNT_DIGITS = 0;
 const SHARE_DIGITS = 1;
+const SHARE_FINE_DIGITS = 2;
 const FREQUENCY_DIGITS = 1;
 const DEVIATION_DIGITS = 1;
 const SUM_EPSILON = 1e-8;
@@ -35,6 +36,11 @@ export function roundCount(value) {
 /** Доли — один знак (`D-40`), и дельта доли показывается с той же точностью. */
 export function roundShare(value) {
   return round(value, SHARE_DIGITS);
+}
+
+/** Малые доли (меньше 1 %, конверсия от MAU) — два знака: 192 из миллиона с одним знаком читались бы «0,0 %». */
+export function roundShareFine(value) {
+  return round(value, SHARE_FINE_DIGITS);
 }
 
 /** Среднее и разброс числа упоминаний за окно аномалий (`D-47`). */

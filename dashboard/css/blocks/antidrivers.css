@@ -40,7 +40,8 @@
   position: absolute;
   z-index: 1;
   inset-block: 0 calc(var(--scrollbar-size) + var(--space-2));
-  inset-inline-end: 0;
+  /* Затухание — левее закреплённой колонки «Упоминаний»: под ней плитки уже закрыты её фоном */
+  inset-inline-end: var(--heatmap-freq-width);
   width: var(--heatmap-fade);
   background: linear-gradient(to right, transparent, var(--heatmap-sticky-fill));
   pointer-events: none;
@@ -73,7 +74,7 @@
   max-width: var(--heatmap-row-title-width);
   padding-inline-end: var(--heatmap-fade);
   background: linear-gradient(to right, var(--heatmap-sticky-fill) calc(100% - var(--heatmap-fade)), transparent);
-  color: var(--color-text-secondary);
+  color: var(--color-text-list);
   font: var(--type-caption);
   letter-spacing: var(--tracking-caption);
   text-align: start;
@@ -86,12 +87,21 @@
   }
 }
 
-/* Подпись строки — в одну строку с многоточием, полная — в подсказке (R-47) */
+/* Подпись строки — до двух строк, многоточие после второй, полная — в подсказке (R-47).
+   В одну строку длинные названия с общим началом обрезались одинаково и различались только наведением */
 .heatmap__row-label {
-  display: block;
+  display: -webkit-box;
   max-width: calc(var(--heatmap-row-title-width) - var(--heatmap-fade));
   overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+/* Замер ширины колонки по названиям (J-193) — в одну строку: перенос не даёт горизонтального переполнения */
+.antidriver-heatmap[data-measure-titles] .heatmap__row-label {
+  display: block;
   white-space: nowrap;
 }
 
@@ -248,6 +258,72 @@
   padding: 0 var(--space-1);
   border: var(--hairline) solid var(--color-card-border);
   border-radius: var(--radius-tag);
+  color: var(--color-text-tertiary);
+  font: var(--type-axis);
+  letter-spacing: var(--tracking-axis);
+}
+
+/*
+  Ячейки карты по макету пользователя (Figma 5366:8325 светлая, 5362:3817 тёмная). «В плане» и «только рамка» —
+  подложка макета. В тёмной теме и у обычной зелёной в светлой — свечение от края полным тоном (общая формула heat-cell).
+  В светлой «ниже плана» залита от центра розовым, непрозрачность растёт с силой; горячая (antidriver-cell--hot,
+  HOT_LEVEL) — насыщенный тон и белое полужирное число; горячая «выше плана» — салатовая заливка
+*/
+.antidriver-heatmap .heatmap-cell,
+.antidriver-heatmap .heatmap-cell--muted {
+  background: var(--heatmap-cell-surface);
+}
+
+.antidriver-heatmap .heatmap-cell--bad:not(.heatmap-cell--muted),
+.antidriver-heatmap .heatmap-cell--good:not(.heatmap-cell--muted) {
+  background: var(--tone-pill);
+}
+
+.antidriver-heatmap .heatmap-cell--empty {
+  background: var(--heat-cell-empty);
+}
+
+/* Сила 25 % → 60 % ядра, 50 % (порог горячей) → 80 %: при большем отклонении ячейка не бледнее */
+:root[data-theme='light'] .antidriver-heatmap .heatmap-cell--bad:not(.heatmap-cell--muted) {
+  --bad-share: clamp(var(--heatmap-bad-share-min), calc(var(--heatmap-bad-share-min) + (var(--heat-strength, 0%) - 25%) * 0.8), var(--heatmap-bad-share-max));
+  background: radial-gradient(var(--heatmap-bad-shape), color-mix(in srgb, var(--heatmap-bad-core) var(--bad-share), transparent), color-mix(in srgb, var(--color-negative) var(--heatmap-bad-edge), transparent));
+}
+
+:root[data-theme='light'] .antidriver-heatmap .heatmap-cell--bad.antidriver-cell--hot:not(.heatmap-cell--muted) {
+  background: radial-gradient(var(--heatmap-hot-shape), color-mix(in srgb, var(--color-negative) var(--heatmap-bad-share-max), transparent), color-mix(in srgb, var(--color-negative) var(--heatmap-bad-edge), transparent));
+}
+
+:root[data-theme='light'] .antidriver-heatmap .heatmap-cell--good.antidriver-cell--hot:not(.heatmap-cell--muted) {
+  --cell-rim: var(--heatmap-good-hot);
+  background: var(--heatmap-good-hot-fill);
+}
+
+:root[data-theme='light'] .antidriver-heatmap .antidriver-cell--hot:not(.heatmap-cell--muted) {
+  color: var(--color-on-accent);
+  font: var(--type-caption-bold);
+  letter-spacing: var(--tracking-caption-bold);
+}
+
+/*
+  Частотность строки — подписью, без пилюли и заливки; колонка закреплена справа и при прокрутке не уезжает.
+  Когда места хватает, стоит сразу за последней датой; на узкой карточке не сжимает плитки — их прокручивают под ней
+*/
+.heatmap .heatmap__freq {
+  position: sticky;
+  z-index: 1;
+  inset-inline-end: 0;
+  width: var(--heatmap-freq-width);
+  min-width: var(--heatmap-freq-width);
+  padding-inline: var(--space-3) 0;
+  background: var(--heatmap-sticky-fill);
+  color: var(--color-text-secondary);
+  font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
+  text-align: end;
+  white-space: nowrap;
+}
+
+.heatmap th.heatmap__freq {
   color: var(--color-text-tertiary);
   font: var(--type-axis);
   letter-spacing: var(--tracking-axis);

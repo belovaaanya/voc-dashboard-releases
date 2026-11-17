@@ -14,15 +14,17 @@ import { chartDomain } from '../core/chart-geometry.js';
 import { clampToDomain, sharedTrendDomain } from '../core/segment-trend.js';
 import { colourScale } from '../core/antidrivers.js';
 import { STABILITY_PLAN, buildDigest, filledFrom, buildPlatforms, buildRoles, buildTriggers, defaultMonth, monthsOf } from '../core/digest.js';
+import { earliestDate, latestDate } from '../core/dates.js';
 import { element } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { MONTHS, formatBucket, formatCount, formatInterval, formatImpact, formatRatings, formatShare, formatVoc, plural } from '../core/format.js';
 import { roundDelta, roundImpact, roundVoc } from '../core/round.js';
 import { MOBILE_CHANNEL } from '../core/dimensions.js';
-import { MINIMUM_RATINGS } from '../core/sufficiency.js';
-import { DELTA_SHAPES, GROWTH, countDeltaNode, countGroupNode, countNode, forecastNode, leadNode, metaRowNode, planCaptionNode, pairNode, planDotNode, valueNode } from './metric-card.js';
+import { MINIMUM_RATINGS, sampleSufficiency } from '../core/sufficiency.js';
+import { DELTA_SHAPES, GROWTH, countDeltaNode, countGroupNode, countNode, forecastLines, forecastNode, leadNode, metaRowNode, planCaptionNode, pairNode, planDotNode, valueNode } from './metric-card.js';
 import { ratingsForecast } from '../core/forecast.js';
 import { valueDelta } from '../components/value-delta.js';
+import { hoverTooltip } from '../components/hover-tooltip.js';
 import { monthTitle } from '../components/month-picker.js';
 
 const monthIndex = (month) => Number(month.slice(5, 7)) - 1;
@@ -101,10 +103,14 @@ function weeklyNode(weeks, plan) {
 /* J-153: антидрайверы ДКО — доля негатива или урон; живёт до закрытия страницы */
 let dkoMetric = 'share';
 
-/* Пилюля тепловой карты главной: ниже Q75 таблицы — только рамка, выше — заливка тем сильнее, чем ближе к Q95 */
+/*
+  Пилюля тепловой карты главной: ниже Q75 таблицы — только рамка, выше — заливка тем сильнее, чем ближе к Q95.
+  Редизайн: заливкой подсвечивается только урон; доля негатива — нейтральная пилюля (рамка, без тона), `highlight` null
+*/
 function heatPill(text, highlight) {
   /* Нет значения — общий прочерк второстепенного цвета (emptyValue), а не белое тире ячейки */
   const content = text === null ? emptyValue() : element('span', 'heatmap-cell__value', text);
+  if (!highlight) return heatCell({ muted: true, className: 'digest-pill', content });
   return heatCell({ tone: 'bad', muted: highlight.muted, strength: highlight.muted ? null : highlight.strength, className: 'digest-pill', content });
 }
 
@@ -152,7 +158,7 @@ export function renderDigestSummary(block, context) {
   const content = element('div', 'digest-summary');
 
   const main = element('div', 'metric digest-summary__voc');
-  main.append(pairNode(vocText(digest.voc.voc), leadNode(digest.voc.delta, { large: true }), 'metric__value--big', { wrap: true }),
+  main.append(pairNode(vocText(digest.voc.voc), leadNode(digest.voc.delta, { large: true, strong: true }), 'metric__value--big', { wrap: true }),
     metaRowNode(...(digest.voc.raw === null ? [] : [element('span', 'metric__meta', `${vocText(digest.voc.raw)} без учёта поправки на кэшбек`)]), planCaptionNode(digest.voc.plan)));
 
   /* J-176: оценки по месяцам — столбиками справа от числа, как урон стабильности, а не подписью строкой */
@@ -161,7 +167,7 @@ export function renderDigestSummary(block, context) {
   /* Число и дельта — неразрывной парой (valueDelta): «+557» не уходит под число */
   /*
     Месяц ещё идёт (J-280, как карточки метрик главной): дельта к прошлому месяцу целиком — третьим серым и «?» с прогнозом
-    по темпу; у столбика месяца — бледное пунктирное продолжение до прогноза и «≈N» под числом
+    по темпу; у столбика месяца — бледное контурное продолжение до прогноза и «≈N» под числом
   */
   const previousCount = digest.count.value - digest.count.delta;
   const forecast = ratingsForecast(digest.count.value, digest.period, previousCount);
@@ -192,7 +198,7 @@ export const digestSegment = (index) => (block, context) => {
   const content = element('div', 'digest-segment');
   const numbers = element('div', 'metric digest-segment__numbers');
   /* Анатомия карточки сегмента главной: число с дельтой, под ним «N оценок» с дельтой одним узлом (countGroupNode) */
-  numbers.append(pairNode(vocText(segment.voc), leadNode(segment.delta)),
+  numbers.append(pairNode(vocText(segment.voc), leadNode(segment.delta, { strong: true })),
     metaRowNode(countGroupNode(segment.count, segment.count - segment.countDelta, digest.period), forecastNode(segment.count, segment.count - segment.countDelta, digest.period)),
     ...(segment.raw !== null && roundVoc(segment.raw) !== roundVoc(segment.voc) ? [metaRowNode(element('span', 'metric__meta', `${vocText(segment.raw)} без поправки`))] : []));
   /* J-152: тезисов у сегментов пока нет — по просьбе заказчика; вывод считается и вернётся с архивом формулировок */
@@ -275,7 +281,7 @@ export function renderDigestDko(block, context) {
   })] });
   /* Подсветка — по силе показанного числа: шкала — максимум таблицы по модулю */
   const valuesOf = (category) => (damage ? category.damages : category.shares);
-  /* Шкала — как у тепловой карты главной (Q75 / Q95 по всем числам карточки): разница в доле видна заливкой */
+  /* Шкала урона — как у тепловой карты главной (Q75 / Q95 по всем числам карточки); у доли заливки нет (редизайн) */
   const scale = colourScale(digest.groups.flatMap(({ categories }) => categories.flatMap((category) => valuesOf(category).filter((value) => value !== null).map(Math.abs))));
   const text = (value) => (value === null ? null : damage ? formatImpact(roundImpact(value)) : percent(value));
   /* Одна шапка месяцев на всю карточку: группа — строкой-подзаголовком, категории — под ней; пустая ячейка — тихий прочерк */
@@ -283,7 +289,7 @@ export function renderDigestDko(block, context) {
     { name: `${damage ? formatImpact(roundImpact(group.damage)) : percent(group.share)} — ${group.name}`, className: 'digest-table__group', cells: [] },
     ...group.categories.map((category) => ({
       name: category.name,
-      cells: valuesOf(category).map((value) => (value === null ? emptyValue() : heatPill(text(value), scale(Math.abs(value))))),
+      cells: valuesOf(category).map((value) => (value === null ? emptyValue() : heatPill(text(value), damage ? scale(Math.abs(value)) : null))),
     })),
   ]);
   const content = element('div', 'digest-dko');
@@ -299,7 +305,7 @@ function barsNode(points, className = '') {
     const item = element('div', 'digest-bars__item');
     const bar = element('span', 'digest-bars__bar');
     bar.style.setProperty('--bar', String(Math.round((size / peak) * 100) / 100));
-    /* Незаконченный месяц: над реальной частью — бледное пунктирное продолжение до прогноза по темпу */
+    /* Незаконченный месяц: над реальной частью — бледное контурное продолжение до прогноза по темпу */
     const stack = forecast ? element('span', 'digest-bars__stack') : null;
     if (stack) {
       const ghost = element('span', 'digest-bars__ghost');
@@ -332,7 +338,7 @@ export function renderDigestStability(block, context) {
       : shift < 0 ? `В ${month} — рост негативного влияния стабильности на VOC` : 'Влияние стабильности на VOC без изменений';
   /* J-152: урон по месяцам — серыми столбиками, как на слайде заказчика: высота — модуль урона, число — под столбиком */
   /*
-    План руководства (STABILITY_PLAN) — пунктирной линией-порогом на шкале столбиков; шкала вмещает порог с запасом сверху.
+    План руководства (STABILITY_PLAN) — линией-порогом на шкале столбиков; шкала вмещает порог с запасом сверху.
     Столбик сильнее порога — тоном «ниже плана», и это продублировано числом под ним
   */
   const scale = Math.max(Math.abs(STABILITY_PLAN), ...points.map(({ damage }) => Math.abs(damage ?? 0))) * 1.15;
@@ -352,7 +358,7 @@ export function renderDigestStability(block, context) {
   }
   const content = element('div', 'digest-stability');
   content.append(element('p', 'digest-headline', headline),
-    element('p', 'digest-caption digest-stability__plan', `Пунктир — план: урон не сильнее ${formatImpact(STABILITY_PLAN)}`), bars,
+    element('p', 'digest-caption digest-stability__plan', `Линия — план: урон не сильнее ${formatImpact(STABILITY_PLAN)}`), bars,
     element('p', 'digest-caption', 'Урон группы «Сбои / тех. проблемы» по формуле ДКО, в пунктах VOC'));
   block.setContent(content);
 }
@@ -432,7 +438,7 @@ export function renderDigestPlatforms(block, context) {
   };
   content.append(legendList([
     ...detail.platforms.map((platform) => legendItem(legendText(platform), tones[platform.code], 'line')),
-    ...(band ? [legendItem(`План ${formatVoc(plan.min)}–${formatVoc(plan.max)}`, 'positive', 'band')] : []),
+    ...(band ? [legendItem(`План ${formatVoc(plan.min)}–${formatVoc(plan.max)}`, 'plan', 'band')] : []),
   ], 'digest-platforms__legend'));
   /* Подпись нижней линии месяца — под точкой, чтобы подписи двух линий не сталкивались */
   const rounded = series.map((values) => values.map((value) => (value === null ? null : roundVoc(value))));
@@ -467,17 +473,25 @@ const ROLE_PORTRAITS = {
 
 const rolesCache = new WeakMap();
 /* J-168: месяц ролей — месяц конца периода шапки: своего выбора месяца у страницы нет */
-/* J-174: из фильтров шапки страница ролей учитывает только ОС (iOS / Android у АБМ) */
-const osRowsCache = new WeakMap();
+/*
+  J-174: из фильтров шапки страница ролей учитывает только сегмент (ММБ / СБ / КИБ) и ОС (iOS / Android у АБМ):
+  плитки, линии, проблемы, строка других ролей и прогноз — по выбранным; план — канала, как у карточек сегментов главной
+*/
+const ROLE_FILTERS = ['segment', 'os'];
+const filteredRowsCache = new WeakMap();
+function roleFilters(context) {
+  return ROLE_FILTERS.map((key) => ({ key, selected: context.state.filters?.[key] ?? [], dimension: context.dimensions?.find((item) => item.key === key) }))
+    .filter(({ selected, dimension }) => selected.length && dimension);
+}
+
 function roleRows(context) {
-  const selected = context.state.filters?.os ?? [];
-  const dimension = context.dimensions?.find(({ key }) => key === 'os');
-  if (!selected.length || !dimension) return context.channelRows;
-  const key = selected.join('|');
-  const saved = osRowsCache.get(context.channelRows);
+  const active = roleFilters(context);
+  if (!active.length) return context.channelRows;
+  const key = JSON.stringify(active.map(({ key: name, selected }) => [name, selected]));
+  const saved = filteredRowsCache.get(context.channelRows);
   if (saved?.key === key) return saved.rows;
-  const rows = context.channelRows.filter((row) => dimension.values(row, context.reference).some((value) => selected.includes(value)));
-  osRowsCache.set(context.channelRows, { key, rows });
+  const rows = context.channelRows.filter((row) => active.every(({ dimension, selected }) => dimension.values(row, context.reference).some((value) => selected.includes(value))));
+  filteredRowsCache.set(context.channelRows, { key, rows });
   return rows;
 }
 
@@ -488,7 +502,9 @@ function rolesOf(context) {
   const key = JSON.stringify([context.state.channel, month]);
   const saved = rolesCache.get(rows);
   if (saved?.key === key && saved.reference === context.reference) return saved.roles;
-  const roles = buildRoles({ rows, month, reference: context.reference, channel: context.state.channel });
+  /* Границы выгрузки — по всему каналу: фильтры страницы не делают месяц «незаконченным» */
+  const dataRange = { from: earliestDate(context.channelRows), to: latestDate(context.channelRows) };
+  const roles = buildRoles({ rows, month, reference: context.reference, channel: context.state.channel, dataRange });
   rolesCache.set(rows, { key, reference: context.reference, roles });
   return roles;
 }
@@ -525,8 +541,9 @@ export function renderOtherRoles(block, context) {
 
 export function renderRoles(block, context) {
   const data = rolesOf(context);
-  const os = context.dimensions?.some(({ key }) => key === 'os') ? context.state.filters?.os ?? [] : [];
-  const name = [context.label('channel', context.state.channel), ...(os.length ? [os.join(', ')] : [])].join(' · ');
+  /* Заголовок: «VOC ролей · канал · сегмент · ОС · месяц» — выбранные фильтры страницы по порядку */
+  /* Сегмент и ОС — кодами, как в чипе шапки («КИБ», «iOS»): полное имя сегмента переносило заголовок на две строки */
+  const name = [context.label('channel', context.state.channel), ...roleFilters(context).map(({ selected }) => selected.join(', '))].join(' · ');
   block.setTitle(data ? `VOC ролей · ${name} · ${monthTitle(data.month)}` : `VOC ролей · ${name}`);
   if (!data?.roles.length) return unavailable(block);
   block.setHead({ controls: [segmented({
@@ -639,6 +656,45 @@ function roleTrend(role, data) {
   return wrap;
 }
 
+/* Фразы подсказки — строками не шире подсказки; доступное имя читает каждую фразу целиком */
+const FEEDBACK_HINT = [
+  ['Входят: комментарий клиента или обзвон', 'с установленной причиной снижения'],
+  ['Не входят: недозвон и отказ от ОС', 'без комментария'],
+];
+
+/*
+  Строка под числом — одна (решение пользователя: две строки и три значка — нагромождение): «N оценок ±N · N с ОС» и
+  один знак в конце. Всё, что раньше было отдельными значками, — в его подсказке: прогноз незаконченного месяца, малая
+  выборка (D-25), что такое «с ОС» и доля от 1–3. При малой выборке знак — иконка предупреждения вместо «?»: пометка
+  видна без наведения, значков по-прежнему один. «· N с ОС» со знаком переносится целиком
+*/
+function roleMetaRow(role, data, hasPrevious) {
+  const { feedback } = role;
+  const sample = sampleSufficiency(role.ratings);
+  const few = sample.n > 0 && !sample.sufficient;
+  const forecast = hasPrevious ? forecastLines(role.count, role.previousCount, data.period) : null;
+  const phrases = [
+    ...(few ? [['Мало оценок'], [`Меньше ${formatRatings(sample.minimumRatings)} за период`]] : []),
+    ...(forecast ? [['Период не закончен'], forecast] : []),
+    [feedback.count === null ? 'С ОС — признак не вычислен'
+      : feedback.share === null ? `${formatCount(feedback.count)} с ОС — оценок 1–3 нет`
+        : `${formatCount(feedback.count)} с ОС — ${formatShare(feedback.share)} от оценок 1–3`],
+    ...FEEDBACK_HINT,
+  ];
+  const lines = phrases.flat();
+  const mark = few ? element('span', 'metric__warning') : element('span', 'metric__hint', '?');
+  if (few) mark.append(icon('alert', 'metric__warning-icon'));
+  mark.setAttribute('role', 'img');
+  mark.setAttribute('aria-label', phrases.map((phrase) => phrase.join(' ')).join('. '));
+  mark.setAttribute('tabindex', '0');
+  hoverTooltip(mark, lines);
+  const withFeedback = element('span', 'metric__meta role-card__feedback');
+  if (feedback.count === null) withFeedback.append(emptyValue('признак не вычислен'), ' с ОС');
+  else withFeedback.append(`${formatCount(feedback.count)} с ОС`);
+  withFeedback.append(mark);
+  return metaRowNode(...(hasPrevious ? [countGroupNode(role.count, role.previousCount, data.period)] : [countNode(role.count), roleLead(null, false)]), withFeedback);
+}
+
 /*
   Плитка роли: слева шапка карточки — название роли (шапка одна на все карточки — C-02), под ней крупный портрет и внизу
   VOC с дельтой и оценки; через разделитель справа с самого верха — линия VOC с коридором плана и топ-3 проблем таблицей.
@@ -667,13 +723,8 @@ export const digestRole = (index) => (block, context) => {
   const vocFigure = element('div', 'metric');
   const hasPrevious = role.countDelta !== null;
   vocFigure.append(pairNode(vocText(role.voc), roleLead(role.delta, hasPrevious)),
-    /*
-      Оценки с дельтой — общей парой карточек метрик (J-280): в незаконченном месяце дельта третьим серым, за ней «?» с
-      прогнозом по темпу; без прошлого месяца — прочерк (J-172)
-    */
-    hasPrevious
-      ? metaRowNode(countGroupNode(role.count, role.previousCount, data.period), forecastNode(role.count, role.previousCount, data.period, { focusable: true }))
-      : metaRowNode(countNode(role.count), roleLead(null, false)),
+    /* Оценки с дельтой — общей парой карточек метрик (J-280); без прошлого месяца — прочерк (J-172) */
+    roleMetaRow(role, data, hasPrevious),
     ...(role.raw !== null && roundVoc(role.raw) !== roundVoc(role.voc) ? [metaRowNode(element('span', 'metric__meta', `${vocText(role.raw)} без поправки`))] : []));
   lead.append(vocFigure);
   const side = element('div', 'role-card__side');

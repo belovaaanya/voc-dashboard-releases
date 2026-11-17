@@ -18,6 +18,7 @@ import {
   ANOMALY_EVENT,
   DATA_LOSS_EVENT,
   EVENT_LANES,
+  eventHint,
   INCIDENT_EVENT,
   NEW_SLICE_EVENT,
   NEW_SLICE_MIN_DAILY,
@@ -337,6 +338,11 @@ export function eventText(event, context) {
   J-143: значок «i» у заголовка — окно «Типы событий»: у каждого типа его метки цветом, как в ленте, и коротко —
   что считается событием. Окно — общий popover каркаса: Escape и клик вне закрывают
 */
+export const INCIDENT_VS_DROP = 'Снижение — резкий провал разреза к его же средней за 10 дней, хватает одного дня. '
+  + 'Инцидент — триггер из топ-15 держится ниже плана канала 3 рабочих дня подряд. '
+  + 'Давно низкий триггер — инцидент без снижения: его средняя уже низкая. '
+  + 'Провал на день или выше границы плана — снижение без инцидента.';
+
 function kindsHelp(channel, kinds) {
   const item = element('span', 'insight-help');
   const trigger = element('button', 'insight-help__trigger');
@@ -354,12 +360,19 @@ function kindsHelp(channel, kinds) {
       /* Метка раскатки в ленте — с каналом, как чип */
       term.append(...kind.tags.map(({ label: text, color }) => tag(kind.channelLabel ? label : text, color)));
       term.setAttribute('aria-label', label);
+      /* Неделя 16–22.11: над формулой — что это и зачем, простой фразой */
+      const purpose = element('dd', 'insight-help__purpose', eventHint(kind.value));
       /* Формула типа — строки «ключ — значение» в две колонки */
       const rules = element('dd', 'insight-help__rules');
       for (const [key, value] of KIND_RULES[kind.value]) rules.append(element('span', 'insight-help__key', key), element('span', 'insight-help__value', value));
-      list.append(term, rules);
+      list.append(term, purpose, rules);
     }
     panel.append(list);
+  }
+  /* Неделя 16–22.11: правила разные, поэтому инцидент и крит. снижение редко приходятся на одни дни — окно объясняет */
+  if (kinds.some(({ value }) => value === ANOMALY_EVENT) && kinds.some(({ value }) => value === SUSTAINED_EVENT)) {
+    panel.append(element('h3', 'insight-help__group', 'Почему инцидент и снижение не совпадают'),
+      element('p', 'insight-help__note', INCIDENT_VS_DROP));
   }
   item.append(trigger, panel);
   bindPopover(item, trigger, panel);
@@ -374,7 +387,8 @@ function kindChips(block, context, counts, kinds) {
   /* Две группы — строкой каждая, с подписью: из оценок и внешние события */
   const rows = new Map(KIND_GROUPS.map(({ value, label }) => {
     const row = element('div', 'insight-kinds__group');
-    const caption = element('span', 'insight-kinds__caption', label);
+    /* Неделя 16–22.11: подпись группы — только для screen reader: видимая съедала строку над лентой */
+    const caption = element('span', 'insight-kinds__caption visually-hidden', label);
     /* Имя группы — её видимая подпись: screen reader читает его один раз */
     caption.id = `insight-kinds-${value}`;
     row.setAttribute('role', 'group');
@@ -388,6 +402,11 @@ function kindChips(block, context, counts, kinds) {
     const label = kindLabel(kind, context.state.channel);
     const pressed = chosen.has(value);
     const count = counts.get(value) ?? 0;
+    /*
+      Неделя 16–22.11: тип без событий в ленте не занимает места — при 1440 чипы съедали три строки над лентой. Его
+      и раньше нельзя было выбрать; все типы и их правила — в окне «Типы событий». Выбранный остаётся, чтобы его снять
+    */
+    if (!pressed && count === 0) continue;
     const chip = element('button', 'insight-kind');
     chip.type = 'button';
     chip.dataset.kind = value;
@@ -397,6 +416,8 @@ function kindChips(block, context, counts, kinds) {
     /* Чип — та же иконка типа, что в строке ленты: чип читается как легенда ленты */
     chip.append(statusDot(KIND_ICON[value], 'event-sm'), element('span', 'insight-kind__label', label), element('span', 'insight-kind__count', formatCount(count)));
     chip.setAttribute('aria-label', `${label}, ${formatCount(count)} ${plural(count, ['событие', 'события', 'событий'])}`);
+    /* Неделя 16–22.11: наведение объясняет тип — что это и зачем */
+    chip.title = eventHint(value);
     chip.addEventListener('click', (event) => {
       const next = new Set(chosen);
       if (pressed) next.delete(value);
@@ -413,6 +434,8 @@ function kindChips(block, context, counts, kinds) {
     });
     rows.get(kind.group).append(chip);
   }
+  /* Группа без видимых чипов — без подписи */
+  for (const row of rows.values()) if (!row.querySelector('.insight-kind')) row.remove();
   return group;
 }
 
@@ -432,7 +455,10 @@ function eventRow(block, context, event, index) {
   row.setAttribute('aria-label', text.sentence);
   row.title = text.window;
 
-  /* Тег — тип строки в одну строку, как в макете; длинный тип уходит под дату целиком, а не рвётся */
+  /*
+    Тег — тип строки в одну строку, как в макете; длинный тип уходит под дату целиком, а не рвётся. Неделя 16–22.11:
+    группировка ленты по типу отменена пользователем — у каждого пункта снова свой тег цвета типа
+  */
   const headline = element('span', 'insight-row__headline');
   const type = element('span', 'insight-row__type');
   type.append(tag(text.title, text.color));
@@ -459,6 +485,7 @@ function eventRow(block, context, event, index) {
     detail.append(value);
   }
   const marker = element('span', 'insight-row__marker');
+  /* Иконка типа — 14×14 со свечением тона, как в макете (Figma 5362:5506): `status-dot--event` */
   marker.append(statusDot(KIND_ICON[event.kind] ?? text.color, 'event'));
   row.append(marker, headline);
   row.append(detail);
@@ -652,6 +679,7 @@ export function renderInsights(block, context) {
       return;
     }
     const list = element('div', 'insight-list scroll-area');
+    /* Плоский список от свежей даты (J-50): группировка по типу отменена пользователем, тип — тег пункта */
     found.forEach(({ event, index }) => list.append(eventRow(block, context, event, index)));
     listHost.replaceChildren(list);
   };

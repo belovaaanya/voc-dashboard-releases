@@ -38,16 +38,13 @@ function distributionRow({ mark, count, share }) {
 }
 
 /*
-  Карточка — только в разделе «Для аналитика» (docs/ui-shell.md, «Объект контекста»): на главной блок прячет свою
-  карточку целиком, а не оставляет пустую — сетка шапки переразложится без дыры (shell.css, `.metrics-grid:has`)
+  Карточка — и на главной, и в «Для аналитика» (решение пользователя: вторая строка главной — три равные карточки,
+  конверсия → распределение → вывод; частично отменяет J-231). Сетка шапки — та же: конверсия на две колонки только
+  пока распределение скрыто (shell.css, `.metrics-grid:has`), а оно больше не скрывается
 */
 export function renderDistribution(block, context) {
-  if (block.element) block.element.hidden = !context.analyst;
+  if (block.element) block.element.hidden = false;
   block.setHead();
-  if (!context.analyst) {
-    block.setContent(element('div', 'distribution'));
-    return;
-  }
   if (context.slice.length === 0) {
     block.setState(EMPTY);
     return;
