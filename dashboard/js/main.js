@@ -60,7 +60,7 @@ const BLOCKS = [
   { id: 'summary', title: 'Главный вывод', host: 'metrics', modifier: 'card--summary', render: renderConclusion, ready: conclusionReady, placeholder: conclusionPlaceholder, detach: detachConclusion },
   { id: 'dynamics', title: 'Динамика VOC', host: 'main', modifier: 'card--dynamics card--fill card--wide-head', render: renderDynamics },
   { id: 'antidrivers', title: 'Антидрайверы', host: 'drivers', modifier: 'card--antidrivers', render: renderAntidrivers, heavy: true },
-  { id: 'verbatim-cards', title: 'Топ проблем', host: 'problems', modifier: 'card--verbatim', heavy: true, render: renderVerbatimCards, verbatim: true },
+  { id: 'verbatim-cards', title: 'Топ проблем', host: 'problems', modifier: 'card--verbatim card--column-head', heavy: true, render: renderVerbatimCards, verbatim: true },
   { id: 'insights', title: 'Календарь событий', host: 'rail-main', modifier: 'card--insights card--fill', render: renderInsights, ready: calendarReady },
   /* J-151: таблица прямой речи — на странице «Обратная связь» */
   /* Неделя 16–22.11: таблица прямой речи — внизу «Для аналитика», только в этом режиме; на главной её нет (цитаты — в «Топ проблем») */
@@ -294,10 +294,13 @@ function renderNav(env, context) {
   renderSideNav(hosts.nav, { manifest: source.manifest, source: source.source, dataError: source.dataError, rowsInSlice: context.slice.length,
     page: state.page,
     onNavigate: (page) => {
-      const sameView = viewOf(page) === viewOf(state.page);
+      const samePage = page === state.page;
       setState({ ...state, page });
-      /* Новая страница читается с начала; «Главная» ↔ «Для аналитика» — та же страница, прокрутка остаётся */
-      if (!sameView) globalThis.scrollTo?.({ top: 0 });
+      /*
+        Другая страница меню читается с начала, и «Главная» ↔ «Для аналитика» тоже: страницы разной длины, и с длинной
+        «Для аналитика» прежняя прокрутка оставляла на низу главной. Фильтры и выбор внутри страницы прокрутку не трогают
+      */
+      if (!samePage) globalThis.scrollTo?.({ top: 0 });
     } });
 }
 

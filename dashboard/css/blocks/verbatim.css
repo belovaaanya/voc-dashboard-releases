@@ -22,6 +22,16 @@
   align-items: stretch;
 }
 
+/* Период и шаг «Топ проблем» кончаются у линии ленты: отступ шапки справа (`--head-end`, card--column-head в shell.css) */
+.card--verbatim:has(.verbatim-problems__feed:not([hidden])) {
+  --head-end: calc(var(--rail-width) + var(--gap-section));
+}
+
+/* Лента свёрнута — контролы кончаются у полосы кнопки «Отзывы», как у графика при скрытом календаре */
+.card--verbatim:has(.verbatim-problems--no-feed) {
+  --head-end: calc(var(--control-height) + 2 * var(--space-4));
+}
+
 /* J-136: лента скрыта — таблица забирает её место */
 .verbatim-problems--no-feed {
   grid-template-columns: minmax(0, 1fr);

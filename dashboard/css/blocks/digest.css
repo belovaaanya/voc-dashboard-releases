@@ -272,8 +272,9 @@
   background: linear-gradient(var(--color-negative), transparent);
 }
 
-/* Прогноз незаконченного месяца: над реальным столбиком — бледное пунктирное продолжение, под числом — «≈N» */
+/* Прогноз незаконченного месяца: над реальным столбиком — бледное контурное продолжение, над контуром — «≈N» */
 .digest-bars__stack {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -289,8 +290,13 @@
   border-radius: var(--radius-pill) var(--radius-pill) 0 0;
 }
 
+/* «≈N» — над верхним краем контура, где прогноз и кончается; вне потока, чтобы не сдвигать низ колонки (J-429) */
 .digest-bars__forecast {
-  display: block;
+  position: absolute;
+  bottom: calc(100% + var(--space-1));
+  left: 50%;
+  translate: -50% 0;
+  white-space: nowrap;
   color: var(--color-text-tertiary);
   font: var(--type-axis);
   letter-spacing: var(--tracking-axis);
@@ -899,12 +905,11 @@
 
 
 /*
-  Мини-линия плитки роли по макету пользователя (неделя 16–22.11): без свечения — коридор без размытия, точки 3×3.
+  Мини-линия плитки роли по макету пользователя (неделя 16–22.11): без свечения, коридор — с прогрессивным размытием, как везде, точки 3×3.
   3 px — шагом шкалы до общего --chart-dot (#233): тогда ссылка на него
 */
 .role-card__side {
   --sparkline-dot: calc(var(--space-1) * 0.75);
-  --sparkline-band-filter: none;
   /* Коридор плитки скруглён по макету тёмной темы (Figma 5415:21) — токен --radius-band-tile */
   --sparkline-band-radius: var(--radius-band-tile);
   /*

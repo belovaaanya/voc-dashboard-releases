@@ -276,8 +276,8 @@
 }
 
 /*
-  Кегль числа — от ширины карточки, чтобы справа помещалась дельта (68 px с зазором): до 96 px,
-  на 1440 — ≈90, на 1280 — ≈65 (роль --type-display-fit). Трекинг — в em, число ужимается
+  Кегль числа — от ширины карточки, чтобы справа помещалась дельта 18 px со «?» (запас 112 px): до 96 px,
+  на 1440 — ≈93, на 1280 — ≈71 (роль --type-display-fit). Трекинг — в em, число ужимается
   целиком. Поле — по цифрам, а не под весь диапазон: иначе дельта отходит от числа.
   Градиент — от поля значения (J-17)
 */
@@ -305,13 +305,30 @@
 }
 
 /*
-  Большая карточка (редизайн пользователя, макет 5366:8386): число 96 px Regular (`--type-display`), справа сверху от
-  него — дельта с крупной стрелкой 22 px (`delta--lg`), по верху поля числа (`.metric__pair`)
+  Большая карточка (редизайн пользователя, макет 5366:8386): число до 96 px (`--type-display-fit`, выше), справа сверху
+  от него — дельта с крупной стрелкой 22 px (`delta--lg`), по верху поля числа (`.metric__pair`). Колонка канала уже
+  сегментов не вдвое (shell.css), поэтому на 1280 число ужимается до ≈71 px, чтобы дельта со «?» оставалась справа
 */
-.metric--big .metric__value--big {
-  font: var(--type-display);
-  letter-spacing: var(--tracking-display);
-  padding-inline-end: calc(-1 * var(--tracking-display));
+
+/*
+  Пара «число → дельта» канала и сегментов «Для продакта» (правка 17.11): дельта крупнее (18 px, `--type-delta-lead`),
+  но тише числа, и отходит от него на 12 px, а не прилипает. У сегментов аналитика с мини-трендом — прежние 48 / 14 / 4:
+  тренду нужна ширина строки
+*/
+.metric--big .metric__pair,
+.metric--segment:not(.metric--with-trend) .metric__pair {
+  gap: var(--space-3);
+}
+
+.metric--big .metric__pair .delta--strong,
+.metric--segment:not(.metric--with-trend) .metric__pair .delta--strong {
+  font: var(--type-delta-lead);
+  letter-spacing: var(--tracking-delta-lead);
+}
+
+.metric--segment:not(.metric--with-trend) .metric__pair .delta__arrow {
+  width: var(--icon-size-lg);
+  height: var(--icon-size-lg);
 }
 
 /* ── Малая карточка (design-spec §3.2) ─────────────────────────────── */
@@ -333,6 +350,19 @@
 .metric--segment .metric__pair > .metric__value {
   flex: none;
   white-space: nowrap;
+}
+
+/*
+  Число сегмента «Для продакта» — до 64 px: между значением аналитика (48) и каналом (до 96), иерархия «канал → сегмент»
+  сохранена. Кегль — от ширины карточки (как у канала), поэтому сегмент — контейнер
+*/
+.metric--segment:not(.metric--with-trend) {
+  container-type: inline-size;
+}
+
+.metric--segment:not(.metric--with-trend) .metric__pair > .metric__value {
+  font: var(--type-value-md);
+  letter-spacing: var(--tracking-value-md);
 }
 
 /* ── Вторая строка метрик (V-10a, V-25) ────────────────────────────── */
@@ -768,23 +798,13 @@
   color: var(--color-text-secondary);
 }
 
-/* Оттенок потока — токены темы: одна структура, в тёмной — приглушённый серо-синий, в светлой — лавандовый */
-.conversion__stop--stream { stop-color: var(--funnel-stream); }
-.conversion__stop--core { stop-color: var(--funnel-core); }
-
-.conversion__core {
-  stroke: var(--funnel-core);
-  stroke-width: 3;
-  stroke-linecap: round;
-}
-
-/* Луч хвоста с мягким ореолом потока: в тёмной теме светлый, в светлой — лавандовый темнее потока, без чёрного */
-.conversion__thread {
-  stroke: var(--funnel-beam);
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  filter: drop-shadow(0 0 2px var(--funnel-beam)) drop-shadow(0 0 6px var(--funnel-stream)) drop-shadow(0 0 14px var(--funnel-stream));
-}
+/*
+  Цвет луча — макет «Конверсии опроса» (Figma 5362:4052, 5366:8560): серый, нейтральный в обеих темах, те же токены, что
+  у воронки обзвона (tokens.css): прозрачный у начала луча → светло-серый → серый
+*/
+.conversion__flow-stop { stop-color: var(--funnel-gray-edge); }
+.conversion__flow-stop--mid { stop-color: var(--funnel-gray-mid); }
+.conversion__flow-stop--clear { stop-color: var(--funnel-gray-mid); stop-opacity: 0; }
 
 /* Тонкие вертикальные разделители между ступенями — как в стратегии */
 /* Разделитель ступеней — у подписей и чисел, над потоком он гаснет: прямая линия поперёк потока читалась его краем */
@@ -795,16 +815,12 @@
 
 /*
   Данные MAU и рассылки собираются: композиция узкой карточки приглушена, на месте чисел — серые полосы (ни одного
-  числа: пример приняли бы за данные), поверх полосы луча — надпись. Ядра и нити луча нет: линия перечёркивала надпись
+  числа: пример приняли бы за данные), поверх полосы луча — надпись. Форма луча — по оценкам месяца (MAU и опроса нет —
+  луч начинается у оценок)
 */
 .conversion--pending > .conversion__beam,
 .conversion--pending > .conversion__steps > .conversion__step {
   opacity: var(--disabled-opacity);
-}
-
-.conversion--pending .conversion__core,
-.conversion--pending .conversion__thread {
-  display: none;
 }
 
 /* Строка значения — во всю колонку: от неё полоса считает свою предельную ширину */

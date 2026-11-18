@@ -5,6 +5,7 @@ import { dateRange, selectionDays, toggleDays } from '../state/chart-selection.j
 import { areaPaths, chartDomain, planZoneStops, countAxis, curveSamples, damageAxis, gapPaths, hitColumns, labelOrder, linePaths, placeCards, placeLabels, plotPoints, xLabelIndices } from '../core/chart-geometry.js';
 import { legendItem, legendList } from '../components/legend.js';
 import { segmented } from '../components/segmented.js';
+import { planBandLayers } from '../components/sparkline.js';
 import { periodScaleMemory, scaleTabs } from '../components/scale-tabs.js';
 import { stateText } from '../components/status-panel.js';
 import { statusDot } from '../components/status-dot.js';
@@ -39,6 +40,9 @@ const ZONE_FADE = 16;
 const BAND_FILL_GAP = 8;
 /* Скругление коридора плана — токен --radius-plan-band; запасное значение, пока стили не прочитаны */
 const BAND_RADIUS_FALLBACK = 6;
+/* Прогрессивное размытие коридора — макет графика (Figma `5362:4252`): радиус слоя 10 → по вертикали 5 px, переход с 12 % до 80 % длины */
+const BAND_BLUR = 5;
+const BAND_FADE = [0.12, 0.8];
 const LABEL_OFFSET = POINT_RADIUS + 5;
 const LABEL_GAP = 2;
 const LINE_SAMPLE = 3;
@@ -480,7 +484,14 @@ function appendSeries(group, defs, points, plan, domain, ids, plot) {
   );
   defs.append(band);
   const radius = Math.min(bandRadius(group), (bottom - top) / 2);
-  group.append(svgNode('rect', 'chart-plan-band', { x: 0, y: top, width: plot.width, height: bottom - top, rx: radius, ry: radius, fill: `url(#${ids.planBand})` }));
+  /* Прогрессивное размытие — макет графика (Figma `5362:4252`): слева края мягкие, к последним точкам — чёткие */
+  const blurred = planBandLayers({
+    id: `${ids.planBand}-fade`, rect: { x: 0, y: top, width: plot.width, height: bottom - top, rx: radius, ry: radius }, className: 'chart-plan-band',
+    fill: `url(#${ids.planBand})`, fade: BAND_FADE, deviation: BAND_BLUR,
+    region: { x: -PLOT_BLEED, y: -plot.height, width: plot.width + 2 * PLOT_BLEED, height: plot.height * 3 },
+  });
+  defs.append(...blurred.defs);
+  group.append(...blurred.layers);
 
   appendClip(defs, ids.above, plot, { y: -PLOT_BLEED, height: top + PLOT_BLEED });
   appendClip(defs, ids.below, plot, { y: bottom, height: plot.height - bottom + PLOT_BLEED });

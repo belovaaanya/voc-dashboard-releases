@@ -307,17 +307,20 @@ function barsNode(points, className = '') {
     const item = element('div', 'digest-bars__item');
     const bar = element('span', 'digest-bars__bar');
     bar.style.setProperty('--bar', String(Math.round((size / peak) * 100) / 100));
-    /* Незаконченный месяц: над реальной частью — бледное контурное продолжение до прогноза по темпу */
+    /*
+      Незаконченный месяц: над реальной частью — бледное контурное продолжение до прогноза по темпу, «≈N» — над
+      верхним краем контура (J-429). Подпись вне потока: колонка не выше соседних, низ столбика, число и месяц — на
+      общих линиях с полными месяцами
+    */
     const stack = forecast ? element('span', 'digest-bars__stack') : null;
     if (stack) {
       const ghost = element('span', 'digest-bars__ghost');
       ghost.style.setProperty('--bar', String(Math.round((Math.max(0, forecast - size) / peak) * 100) / 100));
-      stack.append(ghost, bar);
+      stack.append(element('span', 'digest-bars__forecast', forecastText), ghost, bar);
       stack.title = `${forecastText} к концу месяца, если темп сохранится`;
     }
     const value = element('span', 'digest-bars__value');
     value.append(text === null ? emptyValue() : text);
-    if (forecastText) value.append(element('span', 'digest-bars__forecast', forecastText));
     item.append(stack ?? bar, value, element('span', 'digest-bars__month', monthShort(month)));
     bars.append(item);
   }

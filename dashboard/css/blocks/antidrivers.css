@@ -130,7 +130,7 @@
 
 .heatmap__date,
 .heatmap__freq-date {
-  min-width: var(--heatmap-cell-width);
+  min-width: var(--antidriver-cell-width);
   color: var(--color-text-tertiary);
   font: var(--type-axis);
   letter-spacing: var(--tracking-axis);
@@ -255,6 +255,24 @@
   color: var(--color-text-tertiary);
   font: var(--type-axis);
   letter-spacing: var(--tracking-axis);
+}
+
+/*
+  Правка пользователя 17.11: ячейка — скруглённый прямоугольник с плавными углами (superellipse), а не пилюля, на 10 % шире
+  и выше; 18.11 — скругление сильнее. Даты над колонками — той же ширины. Кольцо выбора, наведения и заливки повторяют радиус сами: border-radius
+  и corner-shape скругляют и box-shadow, и фон
+*/
+.antidriver-heatmap .heatmap-cell {
+  width: var(--antidriver-cell-width);
+  min-height: var(--antidriver-cell-height);
+  border-radius: var(--radius-heat-tile);
+}
+
+@supports (corner-shape: superellipse(1.5)) {
+  .antidriver-heatmap .heatmap-cell {
+    border-radius: var(--radius-heat-tile-smooth);
+    corner-shape: var(--heat-tile-corner);
+  }
 }
 
 /*

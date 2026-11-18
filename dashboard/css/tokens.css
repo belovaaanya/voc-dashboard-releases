@@ -110,11 +110,7 @@
   --color-orange: #FF8A3D;
   --color-yellow: #F2C94C;
   --color-purple: #B18CFF;
-  /* «Конверсия опроса»: поток — одним холодным оттенком, не красным и не зелёным (заняты смыслом); ядро и луч — светлые */
-  --funnel-stream: #8C9BC8;
-  --funnel-core: #F4F6FB;
-  --funnel-beam: #FFFFFF;
-  /* Серый луч воронки по макету «Конверсии опроса» (Figma 5366:8608): светлая середина к серому краю; в тёмной — те же ступени светлым по тёмному */
+  /* Серый луч «Конверсии опроса» и воронки обзвона по макету (Figma 5366:8608, 5375:17296): светлая середина к серому краю; в тёмной — те же ступени светлым по тёмному */
   --funnel-gray-mid: rgba(255, 255, 255, 0.07);
   --funnel-gray-edge: rgba(255, 255, 255, 0.2);
   /* Палитра календаря J-20: мятный, жёлтый и оранжевый тегов и точек ленты */
@@ -224,11 +220,19 @@
   --weight-page-title: 400;
   --weight-cause: 300;
   --type-display: var(--weight-numbers) 96px/1 var(--font-numbers);
-  /* Крупное значение карточки канала: до 96 px, пока справа помещается дельта (68 px с зазором); 100cqi — ширина карточки, «4,90» с запасом — 2,03 кегля */
-  --type-display-fit: var(--weight-numbers) clamp(56px, calc((100cqi - 68px) / 2.03), 96px)/1 var(--font-numbers);
+  /*
+    Крупное значение карточки канала: до 96 px, пока справа помещается дельта 18 px со «?» (≈95 px и зазор 12 — запас 112);
+    100cqi — ширина содержимого карточки, «4,90» с запасом — 2,03 кегля. На 1440 — ≈93, на 1280 — ≈71
+  */
+  --type-display-fit: var(--weight-numbers) clamp(64px, calc((100cqi - 112px) / 2.03), 96px)/1 var(--font-numbers);
   --type-value: var(--weight-numbers) 48px/1 var(--font-numbers);
   /* J-165: VOC карточки роли — между значением карточки (48) и итогом дайджеста (96) */
   --type-value-lg: var(--weight-numbers) 72px/1 var(--font-numbers);
+  /*
+    VOC сегментов «Для продакта» (правка 17.11: «увеличить числа метрик»): до 64 px — между значением (48) и каналом (до 96),
+    пока справа помещается дельта 18 px со «?» (запас 108); «4,90» — 2,07 кегля. На 1440 и шире — 64, на 1280 — ≈53
+  */
+  --type-value-md: var(--weight-numbers) clamp(48px, calc((100cqi - 108px) / 2.07), 64px)/1 var(--font-numbers);
   --type-value-sm: var(--weight-numbers) 28px/1.1 var(--font-numbers);
   --type-title: var(--weight-title) 14px/1.4 var(--font-headings);
   /* J-168: заголовок страницы в карточке-шапке (VOC ролей) — крупнее заголовка блока */
@@ -258,6 +262,8 @@
   --type-caption-bold: var(--weight-strong) 12px/1.4 var(--font-sans);
   /* Дельта VOC у крупного числа (правка пользователя 17.11): в тёмной — акцент темы, тоньше; в светлой — SemiBold (ниже) */
   --type-delta-strong: var(--weight-accent) 14px/1.4 var(--font-sans);
+  /* Дельта VOC у числа канала и сегментов «Для продакта» (правка 17.11: крупнее, но тише числа) — то же начертание, 18 px */
+  --type-delta-lead: var(--weight-accent) 18px/1.3 var(--font-sans);
   --type-quote: italic var(--weight-accent) 12px/1.4 var(--font-sans);
   --type-axis: var(--weight-text) 11px/1.2 var(--font-sans);
   /* Значения «Конверсии опроса» — текстом: луч несёт форму, числа не спорят с ним (200 из набора убран) */
@@ -283,6 +289,7 @@
   --tracking-display-fit: -0.083em;
   /* J-?: VOC 72 px по редизайну плотнее: −5 px при 72 (Figma 5362:790) */
   --tracking-value-lg: -0.069em;
+  --tracking-value-md: -0.055em;
   --tracking-value: -0.042em;
   --tracking-value-sm: -0.035em;
   /* J-?: заголовок страницы (24) — заметно плотнее по правке «межбуквенное очень большое» (было −0,01em); значения 28 px сдвинуты вместе с ним — шкала монотонна */
@@ -295,6 +302,7 @@
   --tracking-text-strong: 0.005em;
   --tracking-text-bold: 0.005em;
   --tracking-delta-strong: 0.005em;
+  --tracking-delta-lead: 0em;
   /* 12 px без разрядки читается сжатым */
   --tracking-caption: 0.02em;
   --tracking-caption-strong: 0.02em;
@@ -612,6 +620,15 @@
   --radius-plan-band-key: 2px;
   /* Коридор в плитке роли — 10 по макетам обеих тем (Figma 5415:21, 5416:24) */
   --radius-band-tile: 10px;
+  /*
+    Ячейка карты антидрайверов — скруглённый прямоугольник с плавными углами, не пилюля (правка пользователя 17.11;
+    18.11 — «скругление сильнее»): радиус ~36 % высоты 36. Где браузер знает corner-shape, угол — superellipse(1.5),
+    плавнее дуги; у него дуга короче, поэтому радиус — полвысоты, а угол читается той же величины, что обычный 13.
+    Окно приложения (WebKit) corner-shape не знает и берёт обычный радиус
+  */
+  --radius-heat-tile: 13px;
+  --radius-heat-tile-smooth: 18px;
+  --heat-tile-corner: superellipse(1.5);
   --radius-pill: 999px;
   /* J-167: портрет роли уходит в прозрачность к левому нижнему углу, как на макете заказчика */
   --portrait-fade: linear-gradient(to top right, transparent 8%, #000 62%);
@@ -659,6 +676,9 @@
   /* J-68: стык подписей с плитками и правый край — затуханием; пределы ширины колонки — в antidrivers.js */
   --heatmap-fade: 24px;
   --heatmap-cell-width: 80px;
+  /* Ячейка карты антидрайверов на 10 % шире и выше общей пилюли (правка пользователя 17.11): 80 × 32 → 88 × 36 */
+  --antidriver-cell-width: 88px;
+  --antidriver-cell-height: 36px;
   /* J-71: пустая плитка heatmap (интервал без оценок) */
   --heat-cell-empty: var(--color-surface-sunken);
   /* Липкие подписи строк — тон левой части градиента карточки (J-15): плоский --color-surface читался бы полосой */
@@ -713,6 +733,7 @@
   --weight-cause: 400;
   /* Цвета дельт макета светлее ink — только с 14 px SemiBold (исключение из AA, test/theme.test.js) */
   --type-delta-strong: var(--weight-strong) 14px/1.4 var(--font-sans);
+  --type-delta-lead: var(--weight-strong) 18px/1.3 var(--font-sans);
   --weight-accent-inverse: 400;
   --color-scheme: light;
   /* Горячая пилюля шага «Топ проблем» — только в светлой теме, по её макету */
@@ -769,11 +790,6 @@
   --color-orange: #A64808;
   --color-yellow: #8A6500;
   --color-purple: #6F45D6;
-  --funnel-stream: #9E9BF2;
-  /* Светлая тема: белый хвост на светлой карточке пропадал после «1–3» — ядро и луч лавандовые, луч темнее,
-     с мягким ореолом потока; чёрного нет */
-  --funnel-core: #8A85EC;
-  --funnel-beam: #5F59D6;
   --funnel-gray-mid: #E6E6E9;
   --funnel-gray-edge: #B7B7B8;
   /* J-69, J-71: в светлой теме мятный и жёлтый плотнее, текст мятного и оранжевого — темнее; аварию сдвигает к янтарному */

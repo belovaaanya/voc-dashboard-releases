@@ -15,12 +15,17 @@ import { DELTA_SHAPES, GROWTH, deltaNode } from './metric-card.js';
 
 export const CONVERSION_TITLE = 'Конверсия опроса';
 
-/* Ширина полосы на ступени — доля высоты луча. Неизвестных ступеней в выгрузке нет: их ширина условная,
-   поток лишь показывает, что аудитория шире оценивших. Известные — по корню доли, иначе 2 % сниженных
-   с причиной не видно; не тоньше нити */
-const WIDE = { mau: 1.5, sent: 1.05 };
-const RATED = 0.62;
+/*
+  Луч строится по числам ступеней (просьба пользователя 17.11: «чтобы по реальным данным строился»). Толщина ступени —
+  корень её доли от первой известной ступени (MAU, а без листа MAU — оценки): `TOP * √(n / база)`, не тоньше нити
+  `THREAD`. Корень, а не прямая доля: оценок ≈10 % MAU, сниженных — доли процента, в прямой шкале всё правее MAU
+  было бы нитью; логарифм сплющил бы перепад MAU → оценки, который и есть смысл воронки. Ступени без числа луч не
+  выдумывает: до первой известной ступени луча нет, пропуск внутри — среднее геометрическое соседей
+*/
+const TOP = 1.5;
 const THREAD = 0.03;
+/** Ступени из листа `audience` — в узкой карточке их нет: их доли в подписи шапки. */
+const AUDIENCE_STEPS = new Set(['mau', 'sent']);
 const VIEW = { width: 500, height: 100 };
 /* Запас рамки над и под полосой в единицах VIEW: в нём размытые слои гаснут, а не срезаются краем рамки */
 export const HEADROOM = 160;
@@ -39,15 +44,24 @@ const COLUMNS = [1, 1, 1, 1, 1];
 */
 const COMPACT_COLUMNS = [1.2, 1, 1];
 
-/** Ширина полосы ступени от базы `base` (оценок): по корню доли, не тоньше нити. Её же берёт воронка обзвона. */
+/** Толщина ступени: `TOP * √(n / base)`, не тоньше нити; числа нет — null (луч там не рисуется). */
 export function flowHeight(count, base) {
-  if (!base) return THREAD;
-  return Math.max(THREAD, RATED * Math.sqrt(count / base));
+  if (!Number.isFinite(count) || !base) return null;
+  return Math.max(THREAD, TOP * Math.sqrt(count / base));
 }
 
-function bandHeights(steps) {
-  const rated = steps.find(({ key }) => key === 'rated').count;
-  return steps.map(({ key, count }) => (key in WIDE ? WIDE[key] : flowHeight(count, rated)));
+/* База — первая известная ступень (`base` задаёт узкая карточка: её ступени — от MAU широкой) */
+export function beamHeights(steps, base = steps.find(({ count }) => Number.isFinite(count) && count > 0)?.count) {
+  const heights = steps.map(({ count }) => flowHeight(count, base));
+  /* Пропуск внутри известных — среднее геометрическое соседей; после последней известной — её толщина */
+  const first = heights.findIndex((height) => height !== null);
+  if (first < 0) return heights;
+  for (let index = first + 1; index < heights.length; index += 1) {
+    if (heights[index] !== null) continue;
+    const next = heights.slice(index + 1).find((height) => height !== null);
+    heights[index] = next ? Math.sqrt(heights[index - 1] * next) : heights[index - 1];
+  }
+  return heights;
 }
 
 /* Контур полосы: плавные переходы между центрами колонок, после последней — ровный хвост до края */
@@ -61,13 +75,16 @@ function columnCenters(columns) {
   });
 }
 
-function bandPath(heights, scale, columns) {
+/* Контур: от `startX` ровно до центра первой известной ступени, плавные переходы между центрами, хвост до края */
+function bandPath(heights, columns) {
   const mid = VIEW.height / 2;
   const centers = columnCenters(columns);
-  const points = heights.map((height, index) => [centers[index], (height * VIEW.height * scale) / 2]);
+  const first = heights.findIndex((height) => height !== null);
+  const points = heights.slice(first).map((height, index) => [centers[first + index], (height * VIEW.height) / 2]);
+  const startX = beamStart(first, columns);
   const [firstX, firstH] = points[0];
   const [lastX, lastH] = points.at(-1);
-  let path = `M0 ${mid - firstH} L${firstX} ${mid - firstH}`;
+  let path = `M${startX} ${mid - firstH} L${firstX} ${mid - firstH}`;
   for (let index = 1; index < points.length; index += 1) {
     const [x0, h0] = points[index - 1];
     const [x1, h1] = points[index];
@@ -81,75 +98,94 @@ function bandPath(heights, scale, columns) {
     const cx = (x0 + x1) / 2;
     path += ` C${cx} ${mid + h0} ${cx} ${mid + h1} ${x1} ${mid + h1}`;
   }
-  return `${path} L0 ${mid + firstH} Z`;
+  return `${path} L${startX} ${mid + firstH} Z`;
+}
+
+/* Луч начинается у левого края колонки первой известной ступени: левее данных нет */
+function beamStart(first, columns) {
+  const total = columns.reduce((sum, part) => sum + part, 0);
+  return (columns.slice(0, first).reduce((sum, part) => sum + part, 0) / total) * VIEW.width;
 }
 
 /*
-  Поток — как в стратегии VoC (обе темы одной структурой, различается только оттенок токенов): три слоя размытия
-  крупными радиусами, жёсткого контура нет — форма растворяется в фоне; левый край проявляется, к хвосту поток
-  истончается до светлого ядра вдоль оси, на хвосте — тонкий светящийся луч
+  Вид — макет «Конверсии опроса» (Figma `5362:4052` тёмная, `5366:8560` светлая, «поток · тело»): один контур серого
+  тона, радиальный градиент от прозрачного у начала луча через светло-серый к серому (`--funnel-gray-*`, как у
+  воронки обзвона), без светящейся нити и цветного ядра. Размытие прогрессивное — слой 10 над MAU и опросом, к колонке
+  оценок спадает до 2: размытая и чёткая копии контура под дополняющими масками с плавной кривой, шва нет. `FOCUS` —
+  начало и конец перехода в ширинах колонки от середины колонки оценок. Радиусы — по X и по Y отдельно: рамка луча
+  растянута (`preserveAspectRatio: none`), единица по Y на экране меньше
 */
-const LAYERS = [[1.6, 0.28, 'far'], [1.25, 0.42, 'mid'], [1, 0.7, 'near']];
-const GRADIENT_STOPS = 24;
-const CORE_FROM = 0.75;
-/*
-  Прозрачность потока по длине — гладко, без изломов. Над MAU и опросом данных нет: поток там только проявляется
-  (без вертикального края у левой границы и у начала оценок), в полную силу — к колонке оценок (центр ≈0,34),
-  к хвосту светлеет и истончается
-*/
-const KEYS = [[0, 0], [0.2, 0.35], [0.36, 0.8], [0.55, 0.7], [0.85, 0.6], [1, 0.3]];
-/* Узкая карточка начинается с оценок: поток проявляется у левого края и в полную силу входит к центру их колонки */
-const COMPACT_KEYS = [[0, 0], [0.12, 0.8], [0.55, 0.65], [0.85, 0.6], [1, 0.3]];
-function streamOpacity(offset, keys) {
-  const index = Math.max(1, keys.findIndex(([at]) => at >= offset));
-  const [from, a] = keys[index - 1];
-  const [to, b] = keys[index];
-  const t = to === from ? 1 : (offset - from) / (to - from);
-  return a + (b - a) * t * t * (3 - 2 * t);
+const BLUR = { soft: '5 8', sharp: '1 1.6' };
+const FOCUS = [-0.5, 0.35];
+const MASK_STOPS = 8;
+
+/* Маска перехода: `soft` — видно слева и гаснет к `to`, `crisp` — наоборот; кривая гладкая (smoothstep) */
+function focusMask(id, name, [from, to]) {
+  const ramp = svgNode('linearGradient', null, { id: `${id}-${name}-ramp`, gradientUnits: 'userSpaceOnUse', x1: from, x2: to, y1: 0, y2: 0 });
+  for (let step = 0; step <= MASK_STOPS; step += 1) {
+    const t = step / MASK_STOPS;
+    const eased = t * t * (3 - 2 * t);
+    ramp.append(svgNode('stop', null, { offset: t, 'stop-color': 'white', 'stop-opacity': name === 'soft' ? 1 - eased : eased }));
+  }
+  const region = { x: -VIEW.width, y: -HEADROOM * 2, width: VIEW.width * 3, height: VIEW.height + HEADROOM * 4 };
+  const mask = svgNode('mask', null, { id: `${id}-${name}`, maskUnits: 'userSpaceOnUse', ...region });
+  mask.append(svgNode('rect', null, { ...region, fill: `url(#${id}-${name}-ramp)` }));
+  return [ramp, mask];
 }
-const BLUR = [['near', 6], ['mid', 12], ['far', 22]];
+
+/* Где луч становится чётким: от `FOCUS[0]` до `FOCUS[1]` ширины колонки вокруг середины оценок; нет оценок — середина */
+function focusRange(steps, columns) {
+  const centers = columnCenters(columns);
+  const index = steps.findIndex(({ key }) => key === 'rated');
+  const total = columns.reduce((sum, part) => sum + part, 0);
+  const at = index < 0 ? VIEW.width / 2 : centers[index];
+  const width = ((index < 0 ? 1 : columns[index]) / total) * VIEW.width;
+  return FOCUS.map((share) => Math.max(0, Math.min(VIEW.width, at + share * width)));
+}
 
 /**
- * Луч воронки. Параметры по умолчанию — «Конверсия опроса»; воронка обзвона («Для аналитика») передаёт свои колонки,
- * ширины полосы, ступень начала нити и `id` (две карточки с лучом не делят ссылки градиента и фильтров).
+ * Луч воронки по числам ступеней `steps` (`count`; null — числа нет). `base` — число, от которого толщина (узкая
+ * карточка передаёт MAU широкой); `id` разводит ссылки градиента и фильтров двух карточек с лучом.
  */
-export function beamNode(steps, compact, { heights = bandHeights(steps), columns = compact ? COMPACT_COLUMNS : COLUMNS, keys = compact ? COMPACT_KEYS : KEYS, threadFrom = 'negative', id = 'conversion-beam' } = {}) {
-  const centers = columnCenters(columns);
-  const at = (key) => centers[steps.findIndex((step) => step.key === key)];
-  /* Контент карточки перерисовывается целиком: в пределах `id` ссылки градиента и фильтров не пересекаются */
+export function beamNode(steps, compact, { base, columns = compact ? COMPACT_COLUMNS : COLUMNS, id = 'conversion-beam' } = {}) {
   const svg = svgNode('svg', 'conversion__beam', { viewBox: `0 ${-HEADROOM} ${VIEW.width} ${VIEW.height + 2 * HEADROOM}`, preserveAspectRatio: 'none', 'aria-hidden': 'true', focusable: 'false' });
+  const heights = beamHeights(steps, ...(base ? [base] : []));
+  const first = heights.findIndex((height) => height !== null);
+  /* Ни одного числа — луча нет: рисовать нечего */
+  if (first < 0) return svg;
+  const startX = beamStart(first, columns);
+  const mid = VIEW.height / 2;
   const defs = svgNode('defs');
-  const gradient = svgNode('linearGradient', null, { id: `${id}-flow`, x1: 0, y1: 0, x2: 1, y2: 0 });
-  /* Поток — оттенок `--funnel-stream`; к хвосту светлеет к ядру `--funnel-core`; левый край проявляется из фона */
-  /* Частые точки по сглаженной кривой прозрачности: длинный полупрозрачный градиент на двух-трёх точках
-     давал видимые ступени (banding) на 8-битном цвете */
-  for (let step = 0; step <= GRADIENT_STOPS; step += 1) {
-    const offset = step / GRADIENT_STOPS;
-    gradient.append(svgNode('stop', `conversion__stop conversion__stop--${offset < CORE_FROM ? 'stream' : 'core'}`,
-      { offset, 'stop-opacity': streamOpacity(offset, keys) }));
-  }
+  /* Градиент макета: прозрачный у начала луча → светло-серый к 43 % радиуса → серый; центр — начало луча */
+  const gradient = svgNode('radialGradient', null, {
+    id: `${id}-flow`, cx: 0, cy: 0, r: 1, gradientUnits: 'userSpaceOnUse',
+    gradientTransform: `translate(${startX} ${mid}) scale(${(VIEW.width - startX) * 0.625} ${VIEW.height * 2})`,
+  });
+  gradient.append(svgNode('stop', 'conversion__flow-stop conversion__flow-stop--clear', { offset: 0 }),
+    svgNode('stop', 'conversion__flow-stop conversion__flow-stop--mid', { offset: 0.43 }),
+    svgNode('stop', 'conversion__flow-stop', { offset: 1 }));
   defs.append(gradient);
-  for (const [name, deviation] of BLUR) {
-    const filter = svgNode('filter', null, { id: `${id}-${name}`, x: '-20%', y: '-200%', width: '140%', height: '500%' });
+  for (const [name, deviation] of Object.entries(BLUR)) {
+    const filter = svgNode('filter', null, { id: `${id}-blur-${name}`, x: '-20%', y: '-200%', width: '140%', height: '500%' });
     filter.append(svgNode('feGaussianBlur', null, { stdDeviation: deviation }));
     defs.append(filter);
   }
-  /* Едва заметный шум поверх потока (дизеринг): гасит остаточные ступени градиента на любом экране */
+  const focus = focusRange(steps, columns);
+  defs.append(...focusMask(id, 'soft', focus), ...focusMask(id, 'crisp', focus));
+  /* Едва заметный шум поверх потока (дизеринг): гасит ступени полупрозрачного градиента на 8-битном цвете */
   const grain = svgNode('filter', null, { id: `${id}-grain`, x: 0, y: 0, width: '100%', height: '100%' });
   grain.append(svgNode('feTurbulence', null, { type: 'fractalNoise', baseFrequency: 0.9, numOctaves: 2, stitchTiles: 'stitch', result: 'noise' }),
     svgNode('feColorMatrix', null, { in: 'noise', type: 'matrix', values: '0 0 0 0 0.5  0 0 0 0 0.5  0 0 0 0 0.5  0 0 0 0.06 0' }));
   defs.append(grain);
   svg.append(defs);
-
-  for (const [scale, opacity, blur] of LAYERS) {
-    svg.append(svgNode('path', 'conversion__band', { d: bandPath(heights, scale, columns), fill: `url(#${id}-flow)`, 'fill-opacity': opacity, filter: `url(#${id}-${blur})` }));
+  /* Маска — на группе, фильтр — на контуре внутри: маска режет уже размытый слой, иначе края перехода тоже размылись бы */
+  const d = bandPath(heights, columns);
+  for (const [blur, mask] of [['soft', 'soft'], ['sharp', 'crisp']]) {
+    const group = svgNode('g', null, { mask: `url(#${id}-${mask})` });
+    group.append(svgNode('path', 'conversion__band', { d, fill: `url(#${id}-flow)`, filter: `url(#${id}-blur-${blur})` }));
+    svg.append(group);
   }
   svg.append(svgNode('rect', 'conversion__grain', { x: 0, y: -HEADROOM, width: VIEW.width, height: VIEW.height + 2 * HEADROOM, filter: `url(#${id}-grain)` }));
-  const mid = VIEW.height / 2;
-  /* Светлое ядро вдоль оси — от аудитории к причине, размыто, как сердцевина потока */
-  svg.append(svgNode('line', 'conversion__core', { x1: centers[0], x2: VIEW.width, y1: mid, y2: mid, filter: `url(#${id}-near)`, 'vector-effect': 'non-scaling-stroke' }));
-  /* Нить — от сниженных к причине и дальше до края: тонкий луч хвоста с мягким ореолом потока */
-  svg.append(svgNode('line', 'conversion__thread', { x1: at(threadFrom), x2: VIEW.width, y1: mid, y2: mid, 'vector-effect': 'non-scaling-stroke' }));
   return svg;
 }
 
@@ -221,10 +257,13 @@ export function conversionNote(month, shifted = false) {
 */
 export const PENDING = { title: 'Данные в процессе сбора', detail: 'Подключаем MAU и рассылки опроса' };
 /* Форма луча условная — та же, что у карточки с данными, но не по чьим-то числам: MAU и опрос шире оценок */
-const PENDING_HEIGHTS = { mau: WIDE.mau, sent: WIDE.sent, rated: 0.62, negative: 0.26, feedback: 0.14 };
 
-function pendingNode(compact) {
-  const steps = compact ? SURVEY_STEPS.filter(({ key }) => !(key in WIDE)) : SURVEY_STEPS;
+/*
+  `counts` — ступени из оценок месяца без листа MAU (MAU и опрос — null): луч по ним начинается у оценок, слева пусто;
+  чисел на карточке нет — только форма и надпись
+*/
+function pendingNode(compact, counts) {
+  const steps = (counts ?? SURVEY_STEPS).filter(({ key }) => !compact || !AUDIENCE_STEPS.has(key));
   const layout = element('div', `conversion${compact ? ' conversion--compact' : ''} conversion--pending`);
   layout.style.setProperty('--beam-headroom', BEAM_HEADROOM);
   /* Каркас декоративный: скринридер читает только надпись */
@@ -242,7 +281,7 @@ function pendingNode(compact) {
   note.setAttribute('role', 'status');
   note.title = PENDING.detail;
   note.append(element('span', 'visually-hidden', `. ${PENDING.detail}`));
-  layout.append(beamNode(steps, compact, { heights: steps.map(({ key }) => PENDING_HEIGHTS[key]), id: 'conversion-pending-beam' }), list, note);
+  layout.append(beamNode(steps, compact, { id: 'conversion-pending-beam' }), list, note);
   return layout;
 }
 
@@ -286,16 +325,18 @@ export function renderConversion(block, context) {
     Листа MAU и рассылки ещё нет совсем — приглушённая композиция с надписью, а не пустое состояние: данные
     подключаются. Надпись зависит только от наличия листа: появится MAU — карточка покажет конверсию без правки вёрстки
   */
-  const pending = !context.audience?.length;
-  block.element?.classList.toggle('card--conversion-pending', pending);
-  if (pending) {
-    block.setHead();
-    block.setContent(pendingNode(compact));
-    return;
-  }
   const chosen = conversionMonth(period, rows);
   /* Срез другого месяца берётся тем же селектором с его границами: без селектора считать не по чему */
   const resolved = chosen && (!chosen.shifted || select) ? chosen : null;
+  const pending = !context.audience?.length;
+  block.element?.classList.toggle('card--conversion-pending', pending);
+  if (pending) {
+    /* Форма луча — по оценкам того же месяца, что карточка покажет с MAU; месяца нет — без луча */
+    const ratings = resolved ? (resolved.shifted ? select({ from: resolved.month.from, to: resolved.month.to }).rows : slice) : null;
+    block.setHead();
+    block.setContent(pendingNode(compact, ratings ? surveyConversion(ratings, { mau: null, surveyed: null }) : null));
+    return;
+  }
   /* Полного месяца нет — подпись без месяца: «от MAU за ноябрь» над «нет полного месяца» противоречила бы себе */
   block.setHead({ note: conversionNote(resolved?.month, resolved?.shifted) });
   const blocker = conversionBlocker(context, resolved?.month);
@@ -310,12 +351,12 @@ export function renderConversion(block, context) {
   const all = surveyConversion(ratings, audience, previousMonthBase(context, month, segment));
   /* Узкая карточка — оценки, 1–3 и «с ОС» от MAU: колонок три */
   const narrow = compact;
-  const shown = narrow ? all.filter(({ key }) => !(key in WIDE)) : all;
+  const shown = narrow ? all.filter(({ key }) => !AUDIENCE_STEPS.has(key)) : all;
   const layout = element('div', narrow ? 'conversion conversion--compact' : 'conversion');
   layout.style.setProperty('--beam-headroom', BEAM_HEADROOM);
   const list = element('ol', 'conversion__steps');
   list.setAttribute('role', 'list');
   list.append(...shown.map((step) => stepNode(step)));
-  layout.append(beamNode(shown, narrow), list);
+  layout.append(beamNode(shown, narrow, { base: all[0].count }), list);
   block.setContent(layout);
 }

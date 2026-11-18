@@ -12,12 +12,16 @@ const DOT_RADIUS = 1.5;
   иначе угол вытягивался бы в эллипс. До замера — запасное значение
 */
 const BAND_RADIUS_FALLBACK = 4;
+/* Прогрессивное размытие коридора (planBandLayers): радиус слева в пикселях экрана и переход долями длины — макет плитки роли */
+const BAND_BLUR_PX = 4;
+const BAND_FADE = [0.38, 1];
 
 function roundBands(svg) {
   /* Полосы коридора — прямые дети svg; ровный `crispBand` с границами-линиями остаётся прямоугольным */
-  const rects = () => [...(svg.children ?? [])].filter((node) => {
+  /* Слои прогрессивного размытия лежат в группах масок — ищем во всём svg */
+  const rects = () => [...(svg.querySelectorAll?.('.sparkline__band') ?? [])].filter((node) => {
     const names = (node.getAttribute?.('class') ?? '').split(' ');
-    return names.includes('sparkline__band') && !names.includes('sparkline__band--crisp');
+    return !names.includes('sparkline__band--crisp');
   });
   const apply = () => {
     const width = svg.clientWidth;
@@ -33,6 +37,8 @@ function roundBands(svg) {
       rect.setAttribute('rx', Math.min((radius * VIEWBOX.width) / width, rectWidth / 2));
       rect.setAttribute('ry', Math.min((radius * VIEWBOX.height) / height, rectHeight / 2));
     }
+    /* Радиус прогрессивного размытия — в пикселях экрана: растянутая линия масштабирует единицы по Y */
+    for (const blur of svg.querySelectorAll?.('.plan-band__deviation') ?? []) blur.setAttribute('stdDeviation', `0 ${(BAND_BLUR_PX * VIEWBOX.height) / height}`);
   };
   /* До замера — радиус по типовому размеру: узкая линия 91 × 28 без растяжения, широкая — около 300 × 60 */
   const wide = svg.getAttribute('preserveAspectRatio') === 'none';
@@ -53,6 +59,43 @@ function roundBands(svg) {
   observer.observe(svg);
 }
 let sequence = 0;
+
+/*
+  Прогрессивное размытие коридора плана — по макетам плитки роли (Figma `5415:21`, `5416:24`: размытие слоя 8, до
+  38 % длины полное, к правому краю — ноль) и графика VOC (`5362:4252`: 10, с 12 % до 80 %). Слева, где полоса почти
+  прозрачна, края мягкие; справа, у последних точек, граница плана чёткая. Две копии полосы: размытая под маской,
+  гаснущей вправо, и чёткая под обратной; кривая маски гладкая (smoothstep) — шва нет. Размытие только по вертикали:
+  по горизонтали градиент полосы и так плавный, а в растянутой линии радиус по X расплылся бы.
+  `region` — рамка масок в координатах svg (с запасом под размытие), `fade` — начало и конец перехода долями полосы,
+  `deviation` — радиус по вертикали в единицах svg. Возвращает узлы defs и два слоя полосы. Вариант с тонким контуром
+  поверх полосы пользователь не выбрал (17.11): граница плана читается чётким правым краем и сменой тона линии
+*/
+const BAND_MASK_STOPS = 8;
+export function planBandLayers({ id, rect, className, fill, fade, deviation, region }) {
+  const filter = svgNode('filter', 'plan-band__blur', { id: `${id}-blur`, x: '-5%', y: '-100%', width: '110%', height: '300%' });
+  filter.append(svgNode('feGaussianBlur', 'plan-band__deviation', { stdDeviation: `0 ${deviation}` }));
+  /* Плавная кривая перехода; стопы белые — альфа маски, не цвет */
+  const ramp = (name, rising) => {
+    const gradient = svgNode('linearGradient', null, { id: `${id}-${name}-ramp`, gradientUnits: 'userSpaceOnUse', x1: rect.x + fade[0] * rect.width, x2: rect.x + fade[1] * rect.width, y1: 0, y2: 0 });
+    for (let step = 0; step <= BAND_MASK_STOPS; step += 1) {
+      const t = step / BAND_MASK_STOPS;
+      const eased = t * t * (3 - 2 * t);
+      gradient.append(svgNode('stop', null, { offset: t, 'stop-color': 'white', 'stop-opacity': rising ? eased : 1 - eased }));
+    }
+    const mask = svgNode('mask', null, { id: `${id}-${name}`, maskUnits: 'userSpaceOnUse', ...region });
+    mask.append(svgNode('rect', null, { ...region, fill: `url(#${id}-${name}-ramp)` }));
+    return [gradient, mask];
+  };
+  const layer = (name, extra) => {
+    const group = svgNode('g', `plan-band plan-band--${name}`, { mask: `url(#${id}-${name})` });
+    group.append(svgNode('rect', className, { ...rect, fill, ...extra }));
+    return group;
+  };
+  return {
+    defs: [filter, ...ramp('soft', false), ...ramp('crisp', true)],
+    layers: [layer('soft', { filter: `url(#${id}-blur)` }), layer('crisp')],
+  };
+}
 
 /* Заливка под линией гаснет к низу, как у графика динамики (R-50) */
 function appendFill(svg, points) {
@@ -162,7 +205,16 @@ export function sparkline(values, { tone, domain, wide = false, fill = false, ba
     const defs = svgNode('defs');
     defs.append(gradient);
     svg.append(defs);
-    svg.append(svgNode('rect', `sparkline__band${crispBand ? ' sparkline__band--crisp' : ''}${flatBand ? ' sparkline__band--flat' : ''}`, { x: 0, y: y(band.max), width: VIEWBOX.width, height: Math.max(0.5, y(band.min) - y(band.max)), fill: `url(#${id})` }));
+    const rect = { x: 0, y: y(band.max), width: VIEWBOX.width, height: Math.max(0.5, y(band.min) - y(band.max)) };
+    const className = `sparkline__band${crispBand ? ' sparkline__band--crisp' : ''}${flatBand ? ' sparkline__band--flat' : ''}`;
+    if (crispBand || flatBand) svg.append(svgNode('rect', className, { ...rect, fill: `url(#${id})` }));
+    else {
+      /* Радиус размытия — до замера по типовой высоте; roundBands пересчитает его в пикселях экрана */
+      const blurred = planBandLayers({ id, rect, className, fill: `url(#${id})`, fade: BAND_FADE, deviation: BAND_BLUR_PX * (VIEWBOX.height / 60),
+        region: { x: -VIEWBOX.width, y: -VIEWBOX.height, width: VIEWBOX.width * 3, height: VIEWBOX.height * 3 } });
+      defs.append(...blurred.defs);
+      svg.append(...blurred.layers);
+    }
     if (crispBand) {
       for (const edge of [band.max, band.min]) svg.append(svgNode('line', 'sparkline__band-edge', { x1: 0, x2: VIEWBOX.width, y1: y(edge), y2: y(edge) }));
     }

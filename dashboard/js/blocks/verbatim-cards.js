@@ -1115,12 +1115,25 @@ function problemTable(context, state, { cards, ordered, columns, base }) {
     feedSlot.replaceChildren(item ? feedPanel(item, state, context.label) : element('div'));
   };
   const buttonOf = (key) => [...body.querySelectorAll('.problem-table__name')].find((node) => node.dataset.problemKey === key);
+  /*
+    Выбор переставляет отметку на тех же строках, а не пересобирает таблицу: в WebKit (окно приложения, Safari) замена
+    строк на миг раскладывала таблицу пустой — страница становилась короче, прокрутка прижималась к её низу и не возвращалась
+  */
+  const mark = (key) => {
+    for (const button of body.querySelectorAll('.problem-table__name')) {
+      const selected = button.dataset.problemKey === key;
+      button.setAttribute('aria-pressed', String(selected));
+      button.closest('.problem-table__row')?.classList.toggle('is-selected', selected);
+    }
+  };
   const select = (item) => {
     if (state.selected === item.key) return;
     state.selected = item.key;
     state.feedShown = FEED_PAGE;
     showFeed();
-    paint(item.key);
+    mark(item.key);
+    /* Клик по ячейке строки — фокус на её названии; строка и так под указателем, прокручивать к ней нечего */
+    buttonOf(item.key)?.focus({ preventScroll: true });
   };
   const refilter = () => {
     state.shown = PROBLEM_PAGE;
@@ -1128,21 +1141,24 @@ function problemTable(context, state, { cards, ordered, columns, base }) {
     showFeed();
     paint();
   };
-  const paint = (focusKey = null) => {
-    body.replaceChildren(...visible().map((item) => problemRow(item, {
-      columns, base, selected: item.key === state.selected, onSelect: () => select(item),
-    })));
+  const rowOf = (item) => problemRow(item, { columns, base, selected: item.key === state.selected, onSelect: () => select(item) });
+  const paint = () => {
+    body.replaceChildren(...visible().map(rowOf));
     if (!visible().length) body.append(emptyProblemRow(table));
-    if (focusKey) buttonOf(focusKey)?.focus();
+    paintButtons();
+  };
+  const paintButtons = () => {
     const { unit } = grouping();
     buttons.replaceChildren(...pagingButtons({
       shown: state.shown, total: items().length, page: PROBLEM_PAGE,
       moreClass: 'verbatim-problems__more', collapseClass: 'verbatim-problems__collapse',
       moreLabel: `Показать ещё ${unit}`, collapseLabel: `Скрыть дополнительные ${unit}`,
+      /* Новая порция дописывается к тем же строкам: пересборка в WebKit на миг укорачивала страницу, как и выбор */
       onMore: () => {
         const firstNew = state.shown;
         state.shown += PROBLEM_PAGE;
-        paint();
+        body.append(...items().slice(firstNew, state.shown).map(rowOf));
+        paintButtons();
         return buttonOf(items()[firstNew]?.key);
       },
       /* «Скрыть» убирает строки над кнопкой: кнопка остаётся под указателем, страница не прыгает */
