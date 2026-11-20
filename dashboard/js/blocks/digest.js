@@ -17,7 +17,7 @@ import { ROLE_AGREEMENT_DATE, STABILITY_PLAN, buildDigest, filledFrom, buildPlat
 import { earliestDate, latestDate } from '../core/dates.js';
 import { element } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
-import { MONTHS, formatBucket, formatCount, formatInterval, formatImpact, formatRatings, formatShare, formatVoc, plural } from '../core/format.js';
+import { MONTHS, formatBucket, formatCount, formatInterval, formatImpact, formatRatings, formatShare, formatVoc, monthName, plural } from '../core/format.js';
 import { roundDelta, roundImpact, roundVoc } from '../core/round.js';
 import { MOBILE_CHANNEL } from '../core/dimensions.js';
 import { MINIMUM_RATINGS } from '../core/sufficiency.js';
@@ -642,6 +642,14 @@ const roleDomain = (data) => {
   return domainWithBand(domain, data.plan);
 };
 
+/* Подсказка точки линии роли: шаг, VOC и число оценок (просьба продакта: сколько оценок за точкой) */
+export function rolePointTitle(point, months) {
+  const name = monthName(`${point.month}-01`);
+  const step = months ? `${name[0].toUpperCase()}${name.slice(1)} ${point.month.slice(0, 4)}` : formatInterval({ from: point.from, to: point.to });
+  if (!point.count) return `${step}: нет оценок`;
+  return `${step}: VOC ${vocText(point.voc)}, ${formatRatings(point.count)}`;
+}
+
 /* Линия роли: недели месяца или месяцы полугода с общей для плиток первой точки и общей шкалой; план — в подписи */
 function roleTrend(role, data) {
   const months = roleScale === 'months';
@@ -653,7 +661,8 @@ function roleTrend(role, data) {
   wrap.title = `VOC ${months ? 'по месяцам' : 'по неделям'}${data.plan ? `; полоса — план ${formatVoc(data.plan.min)}–${formatVoc(data.plan.max)}` : ''}`;
   /* Точки роли с малой выборкой за краем общей шкалы прижаты к краю (clampToDomain), подписи — настоящие значения */
   wrap.append(sparkline(clampToDomain(values, domain), { tone: 'neutral', wide: true, fill: true, label: (_value, index) => vocText(values[index]), band, planFill: true,
-    ...(domain ? { domain } : {}), axis: points.map((point) => (months ? monthShort(point.month) : dayMonth(point.from))) }));
+    ...(domain ? { domain } : {}), axis: points.map((point) => (months ? monthShort(point.month) : dayMonth(point.from))),
+    pointTitle: (index) => rolePointTitle(points[index], months) }));
   return wrap;
 }
 

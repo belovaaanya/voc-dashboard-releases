@@ -61,15 +61,21 @@ export const CHANNEL_DIMENSION = 'channel';
 /* Мобильный канал: только у него есть ОС устройства (J-118) */
 export const MOBILE_CHANNEL = 'АБМ';
 
-/* J-85: оценки без сегмента — не сегмент наравне с другими, в списке фильтра они внизу */
+/*
+  Оценки без сегмента — не сегмент: в фильтре «Сегменты» их нет (просьба продакта 20.11: выгрузка пишет то «NA», то
+  «Без сегмента», и выбор такого «сегмента» сбивал). Они остаются в VOC канала. До этого — внизу списка (`J-85`).
+  «NA» без косой черты прежний импорт оставлял как есть — прячется и он, пока данные не перечитаны
+*/
 const NO_SEGMENT = 'Без сегмента';
+const NOT_SEGMENTS = new Set([NO_SEGMENT, 'NA']);
 
 export const DIMENSIONS = [
   {
     key: 'segment',
     title: 'Сегменты',
     allCaption: 'Все сегменты',
-    last: NO_SEGMENT,
+    /* Только список фильтра: срезы и расчёты видят оценку без сегмента как раньше */
+    hidden: NOT_SEGMENTS,
     values: (row) => [row.segment],
   },
   {
@@ -118,11 +124,11 @@ export function availableDimensions(rows, reference) {
     const values = new Set();
     for (const row of rows) {
       for (const value of dimension.values(row, reference)) {
-        if (value) values.add(value);
+        if (value && !dimension.hidden?.has(value)) values.add(value);
       }
     }
     const options = [...values].sort((a, b) => a.localeCompare(b, 'ru'));
-    return { ...dimension, options: dimension.last && values.has(dimension.last) ? [...options.filter((value) => value !== dimension.last), dimension.last] : options };
+    return { ...dimension, options };
   }).filter((dimension) => dimension.options.length > 0);
 }
 

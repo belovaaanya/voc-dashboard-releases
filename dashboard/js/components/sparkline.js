@@ -183,7 +183,11 @@ function appendPlanFill(svg, points, scale, band) {
   (неделя 16–22.11 — коридор плана везде зелёный, раньше `flatBand` давал серую ровную заливку)
 */
 /* `partial` — по точкам: неполный интервал (месяц ещё идёт) — полая точка, как `chart-point--partial` графика динамики */
-export function sparkline(values, { tone, domain, wide = false, fill = false, band: singleBand = null, bands = null, zones = true, label = null, axis = null, glow = false, crispBand = false, flatBand = false, labelBelow = null, halo = false, endRule = false, level = null, planFill = false, dots = null, partial = null }) {
+/*
+  `pointTitle(index)` — подсказка точки широкой линии: прозрачная полоса во всю высоту на долю шага вокруг точки
+  с `title`, в том числе у шага без оценок. Точка 3 px — слишком мелкая цель для наведения
+*/
+export function sparkline(values, { tone, domain, wide = false, fill = false, band: singleBand = null, bands = null, zones = true, label = null, axis = null, glow = false, crispBand = false, flatBand = false, labelBelow = null, halo = false, endRule = false, level = null, planFill = false, dots = null, partial = null, pointTitle = null }) {
   const sameBand = (left, right) => left && right && left.min === right.min && left.max === right.max;
   const known = bands?.filter(Boolean) ?? [];
   const stepped = known.length > 0 && !known.every((item) => sameBand(item, known[0])) ? bands : null;
@@ -260,6 +264,16 @@ export function sparkline(values, { tone, domain, wide = false, fill = false, ba
   };
   const last = points.findLast(({ y }) => y !== null);
   if (endRule && last) plot.append(at(element('span', `sparkline__rule tone--${tone}`), last.x, last.y));
+  if (pointTitle) {
+    points.forEach(({ x }, index) => {
+      const text = pointTitle(index);
+      if (!text) return;
+      const hit = at(element('span', 'sparkline__hit'), x, 0);
+      hit.style.setProperty('--w', `${100 / points.length}%`);
+      hit.title = text;
+      plot.append(hit);
+    });
+  }
   points.forEach(({ x, y }, index) => {
     if (y === null) return;
     plot.append(at(element('span', `sparkline__marker${partial?.[index] ? ' sparkline__marker--partial' : ''}${planTone(values[index], index) || ` tone--${tone}`}`), x, y));

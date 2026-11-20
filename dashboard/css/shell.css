@@ -1578,6 +1578,28 @@ b {
   color: var(--color-text-strong);
 }
 
+.filters__reset-icon {
+  display: none;
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
+}
+
+/* Строка не влезает — кнопка сброса круглой иконкой высоты кнопок строки, как «Свернуть фильтры» (header.js fitReset) */
+.filters--tight .filters__reset {
+  display: inline-grid;
+  place-items: center;
+  width: calc(var(--header-control-height) - 2 * var(--space-1) - 2 * var(--divider-width));
+  padding: 0;
+}
+
+.filters--tight .filters__reset-icon {
+  display: block;
+}
+
+.filters--tight .filters__reset-label {
+  display: none;
+}
+
 
 /* Подчёркивание держится внутри подписи: она режет выступ ради многоточия, а без линии свой период различался бы только цветом (D-26) */
 .card__period--local .filters__control-label {

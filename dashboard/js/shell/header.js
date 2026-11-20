@@ -185,11 +185,46 @@ function cashbackSwitch(state, onChange) {
 
 /* J-128: «Сбросить фильтры» — только когда выбран хотя бы один фильтр среза; канал, период, кэшбек и выбор в блоках не трогает */
 function resetFilters(onFiltersReset) {
-  const reset = element('button', 'filters__reset', 'Сбросить фильтры');
+  const reset = element('button', 'filters__reset');
   reset.type = 'button';
   reset.dataset.action = 'filters-reset';
+  reset.append(icon('reset', 'filters__reset-icon'), element('span', 'filters__reset-label', 'Сбросить фильтры'));
   reset.addEventListener('click', () => onFiltersReset?.());
   return reset;
+}
+
+/*
+  Не влезает строка (развёрнутое меню и раскрытые «Ещё фильтры» на 1440): подписи фильтров уже на минимальной ширине,
+  а «Сбросить фильтры» не сжимается и выезжала за рамку на «С кэшбеком». Тогда кнопка — круглая иконка с подсказкой,
+  как «Свернуть фильтры». Мерим без пометки: так кнопка возвращает подпись, когда место появилось
+*/
+const fitters = new WeakMap();
+
+function fitReset(bar) {
+  const reset = bar.querySelector('.filters__reset');
+  if (!reset) return;
+  const label = 'Сбросить фильтры';
+  const sync = () => {
+    if (!bar.isConnected) return;
+    bar.classList.remove('filters--tight');
+    const inner = bar.getBoundingClientRect().right - parseFloat(getComputedStyle(bar).paddingRight) - parseFloat(getComputedStyle(bar).borderRightWidth);
+    const tight = reset.getBoundingClientRect().right > inner + 0.5;
+    bar.classList.toggle('filters--tight', tight);
+    if (tight) {
+      reset.setAttribute('aria-label', label);
+      reset.title = label;
+    } else {
+      reset.removeAttribute('aria-label');
+      reset.removeAttribute('title');
+    }
+  };
+  fitters.set(bar, sync);
+  if (typeof ResizeObserver === 'undefined') return;
+  const observer = new ResizeObserver(() => {
+    if (!bar.isConnected) observer.disconnect();
+    else sync();
+  });
+  observer.observe(bar);
 }
 
 /* Кнопка раскрывает редкие фильтры в той же строке: у них те же списки и чипы, без вложенного popover */
@@ -217,6 +252,8 @@ function moreFiltersButton(hidden) {
   button.addEventListener('click', () => {
     moreOpen = !moreOpen;
     sync();
+    /* Раскрытие меняет ширину строки: кнопка сброса мерится сразу, не дожидаясь кадра ResizeObserver */
+    fitters.get(button.closest('.filters'))?.();
   });
   sync();
   return button;
@@ -239,7 +276,10 @@ function renderFilters(dimensions, state, label, onFilterChange, reference, onFi
   });
   if (folded.length) bar.append(renderDivider(), moreFiltersButton(folded));
   const shown = keys.filter((key) => dimensions.some((candidate) => candidate.key === key));
-  if (shown.some((key) => state.filters?.[key]?.length)) bar.append(resetFilters(onFiltersReset));
+  if (shown.some((key) => state.filters?.[key]?.length)) {
+    bar.append(resetFilters(onFiltersReset));
+    fitReset(bar);
+  }
   return bar;
 }
 

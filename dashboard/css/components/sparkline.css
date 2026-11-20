@@ -31,6 +31,16 @@
   pointer-events: none;
 }
 
+/* `pointTitle`: зона наведения точки — во всю высоту линии, ширина — доля шага вокруг точки; невидимая */
+.sparkline__hit {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--x);
+  width: var(--w);
+  transform: translateX(-50%);
+}
+
 /* Неполный интервал (`partial`: месяц ещё идёт) — полая точка тона линии, как `chart-point--partial` графика динамики */
 .sparkline__marker.sparkline__marker--partial {
   background: var(--color-surface);
