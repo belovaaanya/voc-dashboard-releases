@@ -1,13 +1,13 @@
 /** J-20: календарный поток отделён от таблицы аномалий и входа LLM. */
 import {
   ANOMALY_TRACKS, BELOW, VOC_METRIC, MIN_EVENT_RATINGS,
-  detectAnomalies, distinctAnomalies, isWorkingDay, measureEvents, sampledSeries, workingDays,
+  detectAnomalies, distinctAnomalies, isWorkdayNotHoliday, measureEvents, sampledSeries, workingDays,
 } from './anomalies.js';
 import { earliestDate, latestDate, shiftDay } from './dates.js';
 import { ignoredCauseKey } from './analytical-causes.js';
 import { breakdown, UNLABELLED } from './breakdown.js';
 import { ANOMALY_EVENT, SUSTAINED_EVENT, collapseSeries, sortEvents } from './calendar.js';
-import { CRITICAL_DROP_MIN_WINDOW_RATINGS, dropVerdicts, hasDropWindow } from './critical-drop.js';
+import { CRITICAL_DROP_MIN_WINDOW_RATINGS, dropVerdictsAcross, hasDropWindow } from './critical-drop.js';
 import { CRITICAL, NEGATIVE, describeAnomaly } from './insights.js';
 import { createLabels } from './labels.js';
 import { planFor, BELOW_PLAN } from './plan.js';
@@ -33,17 +33,27 @@ export const INCIDENT_TOP_TRIGGERS = 15;
 export const INCIDENT_MIN_DAY_RATINGS = 5;
 export const INCIDENT_MIN_RATINGS = CRITICAL_DROP_MIN_WINDOW_RATINGS;
 
-/** Будни сравниваются с рабочими датами, выходные — с календарными; пропуски не расширяют окно. */
+/*
+  Рабочий день календаря — будни без праздников (`isRestDay`), как у «Провала оценок»: праздник с малым потоком не
+  входит в окно рабочих дней и не рвёт серию, а сам оценивается в проходе с календарным окном, как выходной
+*/
+const isCalendarWorkday = isWorkdayNotHoliday;
+
+/**
+ * Рабочие дни сравниваются с рабочими датами, выходные и праздники — с календарными; пропуски не расширяют окно.
+ * Значимость — с поправкой на все разрезы, проверенные в тот же день (`dropVerdictsAcross`).
+ */
 export function calendarAnomalies({ rows, reference, period, channel, filters = {}, dataEnd = latestDate(rows), minimumRatings = MIN_EVENT_RATINGS }) {
   if (!rows.length) return [];
   const historyPeriod = { from: earliestDate(rows), to: period.to };
   const detect = (includeWeekends) => measureEvents({
     anomalies: distinctAnomalies(detectAnomalies({
-      rows, reference, period: historyPeriod, channel, filters, dataEnd, tracks: STATISTICAL_TRACKS, includeWeekends, verdictsOf: dropVerdicts,
-    })).filter(({ date, direction }) => direction === BELOW && isWorkingDay(date) !== includeWeekends),
-    rows, period, reference, minimumRatings,
+      rows, reference, period: historyPeriod, channel, filters, dataEnd, tracks: STATISTICAL_TRACKS, includeWeekends,
+      verdictsOf: dropVerdictsAcross, holidaysAsRest: true,
+    })).filter(({ date, direction }) => direction === BELOW && isCalendarWorkday(date) !== includeWeekends),
+    rows, period, reference, minimumRatings, holidaysAsRest: true,
   }).map((anomaly) => ({ ...describeAnomaly(anomaly), calendar: true, windowKind: includeWeekends ? 'calendar' : 'working' }));
-  const weekdays = collapseSeries(detect(false), period);
+  const weekdays = collapseSeries(detect(false), period, isCalendarWorkday);
   // У выходного другое окно; не соединяем его с серией по рабочим окнам.
   const weekends = detect(true).filter(({ date }) => date >= period.from).map((anomaly) => ({
     ...anomaly, kind: ANOMALY_EVENT, from: anomaly.date, days: [anomaly.date], streak: 1,
@@ -107,15 +117,15 @@ function planDropSeries(run, channel, period) {
 
 /**
  * Оценил ли календарь хоть один разрез хоть в один день периода: окно своё у каждого разреза, поэтому
- * весь срез за него не отвечает. Будни и выходные — каждый в своём окне, как в `calendarAnomalies`.
+ * весь срез за него не отвечает. Рабочие дни и дни отдыха — каждый в своём окне, как в `calendarAnomalies`.
  * `day` сужает проверку до дня, а конец истории остаётся от периода: тот же кэш, что у календаря.
  */
 export function hasEvaluatedSlice({ rows, reference, period, day = null, dataEnd = latestDate(rows) }) {
   if (!rows.length) return false;
   const end = dataEnd < period.to ? dataEnd : period.to;
   return [false, true].some((includeWeekends) => {
-    const { days, series } = sampledSeries({ rows, reference, end, tracks: STATISTICAL_TRACKS, includeWeekends });
-    const inPeriod = days.flatMap((date, index) => (date >= period.from && (day === null || date === day) && isWorkingDay(date) !== includeWeekends ? [index] : []));
+    const { days, series } = sampledSeries({ rows, reference, end, tracks: STATISTICAL_TRACKS, includeWeekends, holidaysAsRest: true });
+    const inPeriod = days.flatMap((date, index) => (date >= period.from && (day === null || date === day) && isCalendarWorkday(date) !== includeWeekends ? [index] : []));
     return series.some((samples) => inPeriod.some((index) => hasDropWindow(samples, index)));
   });
 }
@@ -150,7 +160,8 @@ export function detectIncidents({
   const project = (row) => row.operations ?? [];
   const ranked = topTriggers(allRows, channel, reference);
   const end = dataEnd < period.to ? dataEnd : period.to;
-  const days = workingDays(earliestDate(rows), end);
+  /* Праздник в будни — день отдыха, как у «Крит. снижения»: серию не рвёт и в неё не входит */
+  const days = workingDays(earliestDate(rows), end).filter(isCalendarWorkday);
   const byDay = new Map(days.map((date) => [date, []]));
   for (const row of rows) byDay.get(row.appeal_date)?.push(row);
   const groups = new Map(days.map((date) => [date, new Map(breakdown(byDay.get(date), project).map((group) => [group.key, group]))]));

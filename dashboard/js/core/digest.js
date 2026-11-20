@@ -313,14 +313,61 @@ export const ROLES_PAGE_HIDDEN = ['ЛПР'];
 const ROLE_PROBLEMS = 3;
 
 /*
+  Договорённость 19.11 о подсчёте ролей. Предприниматель, Бухгалтер и Альфа-Босс НИБ — оценки со своей ролью.
+  Фин.эксперт — только сегменты СБ и КИБ: в НИБ оценки с ролью Фин.эксперт (Альфа-Стандарт) и без роли, в АБМ — только
+  без роли. Альфа-Босс АБМ считается в Кубе (МП Альфа-Босс): в выгрузке этих данных нет, плитка без чисел (`external`).
+  `rule` — фразы подсказки у названия роли на странице ролей (у каждой из четырёх: правило видно и у обычной роли) и у
+  чипа фильтра «Роли» (только у роли с особым правилом, `special`: у остальных фильтр и страница считают одинаково).
+  В скобках — код роли выгрузки: так её называют другие дашборды
+*/
+export const ROLE_AGREEMENT_DATE = '19.11';
+const ROLE_CODES = { Предприниматель: 'ENTREPRENEUR', Бухгалтер: 'ACCOUNTANT', 'Альфа-Босс': 'ALFA_BOSS', 'Фин.эксперт': 'ALFA_STANDARD' };
+const FIN_EXPERT_SEGMENTS = ['СБ', 'КИБ'];
+const finExpertSegment = (row) => FIN_EXPERT_SEGMENTS.includes(row.segment);
+const ROLE_RULES = {
+  НИБ: {
+    'Фин.эксперт': {
+      match: (row) => finExpertSegment(row) && (!row.role || row.role === 'Фин.эксперт'),
+      rule: [['Сегменты СБ и КИБ: роль Фин.эксперт', '(Альфа-Стандарт, ALFA_STANDARD)', 'и оценки без роли']],
+    },
+  },
+  АБМ: {
+    'Фин.эксперт': { match: (row) => finExpertSegment(row) && !row.role, rule: [['Сегменты СБ и КИБ: оценки без роли']] },
+    'Альфа-Босс': { match: () => false, external: true, rule: [['Считается в Кубе: МП Альфа-Босс'], ['В выгрузке дашборда этих данных нет']] },
+  },
+};
+
+/**
+ * Правило роли в канале: `match` — попадает ли оценка в плитку, `rule` — фразы подсказки, `special` — правило отличается
+ * от «оценки с этой ролью» (тогда подсказка есть и у чипа фильтра).
+ */
+export function roleRule(channel, role) {
+  const special = ROLE_RULES[channel]?.[role];
+  const code = ROLE_CODES[role];
+  return {
+    match: special?.match ?? ((row) => row.role === role),
+    rule: special?.rule ?? [[`Оценки с ролью ${role}${code ? ` (${code})` : ''}`, 'во всех сегментах']],
+    special: Boolean(special),
+    external: Boolean(special?.external),
+  };
+}
+
+/*
   Оценки месяца у ролей вне четырёх плиток (J-197 их не показывает): всего и первые OTHER_ROLES_SHOWN по числу оценок —
-  тихой строкой внизу страницы, чтобы эти оценки не пропадали из виду. Оценки без роли и скрытых ролей сюда не входят
+  тихой строкой внизу страницы, чтобы эти оценки не пропадали из виду. Оценки без роли и скрытых ролей сюда не входят.
+  С договорённости 19.11 «другая» — оценка с ролью, которую не считает ни одна плитка по правилам канала (`rules`): так
+  сюда попадает и роль из четырёх вне своего правила — ALFA_STANDARD в АБМ, Фин.эксперт НИБ вне СБ и КИБ. Роль, которая
+  считается вне выгрузки (`external`, Альфа-Босс АБМ — в Кубе), сюда не входит: она учтена там
 */
 const OTHER_ROLES_SHOWN = 3;
-const NOT_OTHER_ROLES = [...ROLE_ORDER, ...ROLES_PAGE_HIDDEN];
-function otherRoles(rows) {
+function otherRoles(rows, rules) {
+  const counted = (row) => [...rules.values()].some(({ match }) => match(row));
   const counts = new Map();
-  for (const { role } of rows) if (role && !NOT_OTHER_ROLES.includes(role)) counts.set(role, (counts.get(role) ?? 0) + 1);
+  for (const row of rows) {
+    const { role } = row;
+    if (!role || ROLES_PAGE_HIDDEN.includes(role) || rules.get(role)?.external || counted(row)) continue;
+    counts.set(role, (counts.get(role) ?? 0) + 1);
+  }
   const top = [...counts].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0], 'ru'))
     .map(([role, count]) => ({ role, count }));
   return { total: top.reduce((sum, { count }) => sum + count, 0), roles: top.length, top: top.slice(0, OTHER_ROLES_SHOWN) };
@@ -362,7 +409,8 @@ export function buildRoles({ rows, month, reference, channel, dataRange = null }
   const trendMonths = Array.from({ length: TREND_MONTHS }, (_, index) => shiftMonth(month, index - TREND_MONTHS + 1));
   const byMonth = new Map(trendMonths.map((key) => [key, key === month ? current : key === previousMonth ? previous : inMonth(rows, key)]));
   /* Четыре роли всегда на своих местах сетки: роль без оценок — плитка «Нет оценок за месяц», а не дыра */
-  const roles = rows.some((row) => ROLE_ORDER.includes(row.role)) ? ROLE_ORDER : [];
+  const rules = new Map(ROLE_ORDER.map((role) => [role, roleRule(channel, role)]));
+  const roles = rows.some((row) => [...rules.values()].some(({ match }) => match(row))) ? ROLE_ORDER : [];
   return {
     channel,
     month,
@@ -372,10 +420,11 @@ export function buildRoles({ rows, month, reference, channel, dataRange = null }
     period,
     problemBase,
     months: trendMonths,
-    others: otherRoles(current),
+    others: otherRoles(current, rules),
     plan: planFor(reference?.plan, { channel, from, to }) ?? null,
     roles: roles.map((role) => {
-      const pick = (list) => list.filter((row) => row.role === role);
+      const { match, rule, external } = rules.get(role);
+      const pick = (list) => list.filter(match);
       const now = vocPair(pick(current), reference);
       const was = vocPair(pick(previous), reference);
       const problemsNow = problemCounts(pick(current), reference);
@@ -383,6 +432,9 @@ export function buildRoles({ rows, month, reference, channel, dataRange = null }
       const problemsBefore = problemCounts(basePicked, reference);
       return {
         role,
+        /* Договорённость 19.11: правило подсчёта — в подсказке у названия; `external` — данные роли вне выгрузки */
+        rule,
+        external,
         ...now,
         delta: now.voc === null || was.voc === null ? null : now.voc - was.voc,
         /* J-172: прошлый месяц без оценок — дельты нет, а не «+всё» от нуля */

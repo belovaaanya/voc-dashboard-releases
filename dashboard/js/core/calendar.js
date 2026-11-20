@@ -76,25 +76,28 @@ export function eventType(event) {
 }
 
 /* Номер рабочего дня от общей точки отсчёта: по нему дни одной серии получают одно начало */
-function workingIndexer(dates) {
+function workingIndexer(dates, isWorkday) {
   const sorted = [...dates].sort();
   if (!sorted.length) return () => 0;
-  const days = workingDays(sorted[0], sorted.at(-1));
+  const days = workingDays(sorted[0], sorted.at(-1)).filter(isWorkday);
   const index = new Map(days.map((day, position) => [day, position]));
   return (date) => index.get(date);
 }
 
-function workingDaysBack(date, count) {
+function workingDaysBack(date, count, isWorkday) {
   const days = [];
   for (let day = date; days.length < count; day = shiftDay(day, -1)) {
-    if (isWorkingDay(day)) days.unshift(day);
+    if (isWorkday(day)) days.unshift(day);
   }
   return days;
 }
 
-/** Серия снижений одной строкой (R-44): узнаётся по началу «дата − (streak − 1)», поэтому скрытый день-копия её не рвёт. */
-export function collapseSeries(anomalies, period) {
-  const indexOf = workingIndexer(anomalies.map(({ date }) => date));
+/**
+ * Серия снижений одной строкой (R-44): узнаётся по началу «дата − (streak − 1)», поэтому скрытый день-копия её не рвёт.
+ * `isWorkday` — те же рабочие дни, по которым считалась серия: у календаря праздник не рабочий и серию не рвёт.
+ */
+export function collapseSeries(anomalies, period, isWorkday = isWorkingDay) {
+  const indexOf = workingIndexer(anomalies.map(({ date }) => date), isWorkday);
   const runs = new Map();
   for (const anomaly of anomalies) {
     const start = indexOf(anomaly.date) - anomaly.streak + 1;
@@ -107,7 +110,7 @@ export function collapseSeries(anomalies, period) {
     members.sort((left, right) => left.date.localeCompare(right.date));
     const last = members.at(-1);
     if (last.date < period.from) return [];
-    const days = workingDaysBack(last.date, last.streak);
+    const days = workingDaysBack(last.date, last.streak, isWorkday);
     /* Серия целиком — для карточки над графиком: оценки отмеченных дней, их VOC и падение к средней окна */
     const seriesRatings = members.reduce((sum, { ratings }) => sum + (ratings ?? 0), 0);
     const weighted = (value) => (seriesRatings ? members.reduce((sum, member) => sum + value(member) * (member.ratings ?? 0), 0) / seriesRatings : null);

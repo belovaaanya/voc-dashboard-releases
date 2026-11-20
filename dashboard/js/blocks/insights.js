@@ -3,7 +3,7 @@ import {
   ANOMALY_WINDOW_DAYS,
   MIN_EVENT_RATINGS,
   VOC_METRIC,
-  isWorkingDay,
+  isWorkdayNotHoliday,
 } from '../core/anomalies.js';
 import { DATA_LOSS_ALPHA, DATA_LOSS_MIN_ACTIVE_DAYS, DATA_LOSS_MIN_DAILY, DATA_LOSS_MIN_PERIOD_RATINGS, DATA_LOSS_RATIO, DATA_LOSS_VOLUME_DAYS, DATA_LOSS_WINDOW } from '../core/data-loss.js';
 import { INCIDENT_MIN_DAYS, INCIDENT_MIN_DAY_RATINGS, INCIDENT_MIN_RATINGS, INCIDENT_PLAN_GAP, INCIDENT_TOP_TRIGGERS, PLAN_DROP_GAP, PLAN_DROP_MIN_RATINGS } from '../core/calendar-analysis.js';
@@ -11,7 +11,7 @@ import { latestDate } from '../core/dates.js';
 import { selectionDays } from '../state/chart-selection.js';
 import { EMPTY } from '../shell/block.js';
 import { calendarAnomalies, hasEvaluatedSlice } from '../core/calendar-analysis.js';
-import { CRITICAL_DROP_ALPHA, CRITICAL_DROP_EXACT_RATINGS, CRITICAL_DROP_MIN, CRITICAL_DROP_MIN_WINDOW_RATINGS } from '../core/critical-drop.js';
+import { CRITICAL_DROP_ALPHA, CRITICAL_DROP_EXACT_RATINGS, CRITICAL_DROP_FDR, CRITICAL_DROP_MIN, CRITICAL_DROP_MIN_WINDOW_RATINGS } from '../core/critical-drop.js';
 import { accidentColor } from '../core/incident-events.js';
 import { eventDetail, sameDetailEvent } from '../state/detail-event.js';
 import {
@@ -129,8 +129,8 @@ export const KIND_RULES = {
   [ANOMALY_EVENT]: [
     ['Канал', `день ниже нижней границы плана канала на ≥\u00a0${formatNumber(PLAN_DROP_GAP, 2)} при ≥\u00a0${formatRatings(PLAN_DROP_MIN_RATINGS)} за день — тег «Снижение VOC ниже плана»; дни подряд — одна серия «· N дн»`],
     ['Что', 'VOC сегмента, триггера, продукта или ОС за день'],
-    ['Сравнение', `средняя всех оценок за ${days(ANOMALY_WINDOW_DAYS, WORKING)} до дня (пн–пт, праздники не выделяются); выходной — за ${days(ANOMALY_WINDOW_DAYS, CALENDAR)}`],
-    ['Отсечка', `ниже на ≥\u00a0${formatNumber(CRITICAL_DROP_MIN, 1)} и p\u00a0<\u00a0${percent(CRITICAL_DROP_ALPHA)}; у дня до ${formatRatings(CRITICAL_DROP_EXACT_RATINGS)} — значимо и без его самой низкой оценки`],
+    ['Сравнение', `средняя всех оценок за ${days(ANOMALY_WINDOW_DAYS, WORKING)} до дня (пн–пт без праздников); выходной и праздник — за ${days(ANOMALY_WINDOW_DAYS, CALENDAR)}`],
+    ['Отсечка', `ниже на ≥\u00a0${formatNumber(CRITICAL_DROP_MIN, 1)} и p\u00a0≤\u00a0${percent(CRITICAL_DROP_ALPHA)}; среди снижений дня случайных ≤\u00a0${percent(CRITICAL_DROP_FDR)} (поправка Бенджамини — Хохберга на все разрезы дня); у дня до ${formatRatings(CRITICAL_DROP_EXACT_RATINGS)} — значимо и без его самой низкой оценки`],
     ['Мин. объём', `в окне ≥\u00a0${formatRatings(CRITICAL_DROP_MIN_WINDOW_RATINGS)} и ≥\u00a0${days(ANOMALY_MIN_WINDOW_VALUES, RATED)}; разрез ≥\u00a0${formatRatings(MIN_EVENT_RATINGS)} за период`],
     ['Цвет тега', 'красный — ниже плана, жёлтый — в плане, мятный — выше плана, оранжевый — плана нет'],
   ],
@@ -143,7 +143,7 @@ export const KIND_RULES = {
   ],
   [SUSTAINED_EVENT]: [
     ['Что', 'VOC триггера за рабочий день'],
-    ['Сравнение', 'нижняя граница плана канала этого дня (рабочие — пн–пт, праздники не выделяются)'],
+    ['Сравнение', 'нижняя граница плана канала этого дня (рабочие — пн–пт без праздников; праздник серию не рвёт)'],
     ['Отсечка', `ниже на >\u00a0${formatNumber(INCIDENT_PLAN_GAP, 2)}, ${days(INCIDENT_MIN_DAYS, WORKING)} подряд и дольше`],
     ['Мин. объём', `триггер из топ-${formatCount(INCIDENT_TOP_TRIGGERS)} по оценкам за всю выгрузку канала; день — от ${formatRatings(INCIDENT_MIN_DAY_RATINGS)} триггера, серия — от ${formatRatings(INCIDENT_MIN_RATINGS)}`],
   ],
@@ -512,7 +512,7 @@ export function noAnomaliesText(context) {
   const current = dates.filter((date) => date >= context.period.from && date <= context.period.to);
   if (!current.length) return ['Нет оценок в периоде', 'Для поиска снижений VOC нужны оценки в выбранном периоде.'];
   if (!hasEvaluatedSlice(windowParams(context, history))) return ['Мало истории', `Для сравнения нужны хотя бы два дня и ${formatRatings(CRITICAL_DROP_MIN_WINDOW_RATINGS)} в предыдущем окне.`];
-  return [NO_DROPS, 'Ни в одном разрезе VOC не упал значимо: будни сравниваются с 10 рабочими днями, выходные — с 10 календарными.'];
+  return [NO_DROPS, 'Ни в одном разрезе VOC не упал значимо: рабочие дни сравниваются с 10 рабочими днями, выходные и праздники — с 10 календарными.'];
 }
 
 /* Те же оценки и конец данных, что у `calendarAnomalies`: текст объясняет именно этот вердикт */
@@ -528,7 +528,7 @@ export function noDayEventsText(context) {
   const history = context.rows.length ? historyOf(context) : [];
   if (!history.some(({ appeal_date }) => appeal_date === focus)) return [title, 'За выбранный день нет оценок, релизов, раскаток и аварий.'];
   if (!hasEvaluatedSlice(windowParams(context, history, focus))) return [title, `Релизов, раскаток и аварий нет; для поиска снижений VOC мало истории — в предыдущем окне нужны два дня и ${formatRatings(CRITICAL_DROP_MIN_WINDOW_RATINGS)}.`];
-  return [title, isWorkingDay(focus)
+  return [title, isWorkdayNotHoliday(focus)
     ? 'В этот день VOC не упал значимо к предыдущим 10 рабочим дням, релизов, раскаток и аварий нет.'
     : 'В этот день VOC не упал значимо к предыдущим 10 календарным дням, релизов, раскаток и аварий нет.'];
 }

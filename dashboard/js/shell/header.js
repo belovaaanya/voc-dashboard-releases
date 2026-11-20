@@ -18,6 +18,8 @@ import { appUpdateControl } from './app-update.js';
 import { segmented } from '../components/segmented.js';
 import { triggerChoices } from '../components/trigger-choices.js';
 import { filterPopover } from '../components/filter-popover.js';
+import { ruleHint } from '../components/rule-hint.js';
+import { ROLE_AGREEMENT_DATE, roleRule } from '../core/digest.js';
 
 /* J-26: дирекции скрыты в шапке; полный набор измерений расчётов сохраняется. */
 /* Продукт убран (решение пользователя 14.11): он дублирует триггеры — триггер и так сгруппирован по продуктам в своём списке */
@@ -122,8 +124,24 @@ function filterControl(dimension, state, label, onChange, reference) {
       onChange(dimension.key, []);
     });
     item.append(clear);
+    if (dimension.key === 'role') {
+      const hint = roleFilterHint(state.channel, selected);
+      if (hint) item.append(hint);
+    }
   }
   return item;
+}
+
+/*
+  Договорённость 19.11: у выбранной в фильтре роли, которую страница ролей считает по своему правилу (Фин.эксперт,
+  Альфа-Босс АБМ), — «i» с этим правилом. Сам фильтр выбирает оценки с этой ролью в выгрузке — подсказка говорит и это
+*/
+function roleFilterHint(channel, selected) {
+  const lines = selected.flatMap((role) => {
+    const { rule, special } = roleRule(channel, role);
+    return special ? [[`На странице ролей ${role}:`, ...rule.flat()], [`Фильтр — оценки с ролью ${role} в выгрузке`]] : [];
+  });
+  return lines.length ? ruleHint(`Договорённость от ${ROLE_AGREEMENT_DATE}`, lines) : null;
 }
 
 /* Дайджест считается за календарный месяц: на его странице вместо периода — «Месяц» (неделя 16–22.11) */

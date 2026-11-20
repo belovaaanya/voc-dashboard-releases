@@ -59,6 +59,11 @@ export function isWorkingDay(isoDate) {
   return weekday >= 1 && weekday <= 5;
 }
 
+/** Рабочий день без праздников (`isRestDay`): так делят дни календарь событий и таблица аномалий. */
+export function isWorkdayNotHoliday(isoDate) {
+  return !isRestDay(isoDate);
+}
+
 export function workingDays(from, to) {
   if (from > to) return [];
   return buildTimeSeries([], { from, to }, 'day')
@@ -66,11 +71,14 @@ export function workingDays(from, to) {
     .filter(isWorkingDay);
 }
 
-/** Рабочие дни окна, с которым сравнивается день: те же, что у коридора `D-47`. */
-export function anomalyWindow(date, window = ANOMALY_WINDOW_DAYS) {
+/**
+ * Рабочие дни окна, с которым сравнивается день: те же, что у коридора `D-47`.
+ * `isWorkday` — какой день рабочий: календарь передаёт `isWorkdayNotHoliday`, праздник в окно не входит.
+ */
+export function anomalyWindow(date, window = ANOMALY_WINDOW_DAYS, isWorkday = isWorkingDay) {
   const days = [];
   for (let day = shiftDay(date, -1); days.length < window; day = shiftDay(day, -1)) {
-    if (isWorkingDay(day)) days.unshift(day);
+    if (isWorkday(day)) days.unshift(day);
   }
   return { from: days[0], to: days.at(-1) };
 }
@@ -121,10 +129,11 @@ export function bandVerdicts(
 /**
  * `rows` — оценки канала без обрезки по датам: окно первых дней лежит до периода.
  * `dataEnd` — последний день всей выгрузки: после него нули частотности выдуманы.
- * `verdictsOf` — другое правило по оценкам дней вместо коридора (`D-62`, только календарь).
+ * `verdictsOf` — другое правило по оценкам дней вместо коридора (`D-62`, только календарь): получает ряды всех
+ * разрезов всех `tracks` сразу и возвращает вердикты в том же порядке — поправка на число разрезов дня общая.
  * `holidaysAsRest` — праздник в будний день считается выходным (`isRestDay`): его нет ни в окне, ни среди оцениваемых
- * дней, поэтому он не даёт провала частотности и не расширяет коридор. Только таблица аномалий главного вывода;
- * календарь делит дни на будни и выходные по дню недели и опцию не передаёт.
+ * дней рабочего окна, поэтому он не даёт провала частотности и не расширяет коридор. Таблица аномалий главного
+ * вывода и календарь; в календаре праздник оценивается в проходе с календарным окном, как выходной.
  */
 export function detectAnomalies({
   rows,
@@ -147,32 +156,36 @@ export function detectAnomalies({
 
   const anomalies = [];
   const label = createLabels(reference);
-  for (const track of tracks) {
+  const evaluated = tracks.flatMap((track) => {
     const { groupsByDay, membersByDay, keys: allKeys } = dailyGroups(history, track.project, reference);
     const samplesByDay = verdictsOf ? dailySamples(history, track.project, reference) : null;
+    return evaluatedKeys(track, allKeys, label).map((key) => ({
+      track, key, groupsByDay, membersByDay, samples: samplesByDay?.map((samples) => samples.get(key) ?? null),
+    }));
+  });
+  const joint = verdictsOf ? verdictsOf(evaluated.map(({ samples }) => samples), { window }) : null;
 
-    for (const key of evaluatedKeys(track, allKeys, label)) {
-      const verdicts = verdictsOf
-        ? verdictsOf(samplesByDay.map((samples) => samples.get(key) ?? null), { window })
-        : bandVerdicts(groupsByDay.map((groups) => valueOf(track.metric, groups.get(key))), { window, ...track.range });
+  evaluated.forEach(({ track, key, groupsByDay, membersByDay }, at) => {
+    const verdicts = joint
+      ? joint[at]
+      : bandVerdicts(groupsByDay.map((groups) => valueOf(track.metric, groups.get(key))), { window, ...track.range });
 
-      days.forEach((date, index) => {
-        const verdict = verdicts[index];
-        if (date < period.from || !verdict?.direction) return;
-        anomalies.push({
-          date,
-          channel,
-          metric: track.metric,
-          dimension: track.dimension,
-          key,
-          ...verdict,
-          ratings: track.metric === VOC_METRIC ? groupsByDay[index].get(key).mentions : rowsByDay.get(date).length,
-          ...planOf(reference, { track, channel, key, date }, verdict.value),
-          members: membersByDay.slice(Math.max(0, index - span), index + 1).map((members) => members.get(key) ?? NO_MEMBERS),
-        });
+    days.forEach((date, index) => {
+      const verdict = verdicts[index];
+      if (date < period.from || !verdict?.direction) return;
+      anomalies.push({
+        date,
+        channel,
+        metric: track.metric,
+        dimension: track.dimension,
+        key,
+        ...verdict,
+        ratings: track.metric === VOC_METRIC ? groupsByDay[index].get(key).mentions : rowsByDay.get(date).length,
+        ...planOf(reference, { track, channel, key, date }, verdict.value),
+        members: membersByDay.slice(Math.max(0, index - span), index + 1).map((members) => members.get(key) ?? NO_MEMBERS),
       });
-    }
-  }
+    });
+  });
 
   return markDuplicates(anomalies).sort(compareAnomalies);
 }
@@ -186,8 +199,8 @@ function evaluatedKeys({ dimension }, allKeys, label) {
  * Оценки дней по каждому ключу каждого разреза — ровно то, что получает `verdictsOf`:
  * по ним тексты блока объясняют пустой календарь теми же числами, что и вердикт (`D-62`).
  */
-export function sampledSeries({ rows, reference = null, end, tracks, includeWeekends = false }) {
-  const history = dailyHistory(rows, end, includeWeekends, reference);
+export function sampledSeries({ rows, reference = null, end, tracks, includeWeekends = false, holidaysAsRest = false }) {
+  const history = dailyHistory(rows, end, includeWeekends, reference, holidaysAsRest && !includeWeekends);
   if (history.days === null) return { days: [], series: [] };
   const label = createLabels(reference);
   const series = tracks.flatMap((track) => {

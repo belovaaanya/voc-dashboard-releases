@@ -5,11 +5,18 @@
 
 import { ANOMALY_MIN_WINDOW_VALUES, ANOMALY_WINDOW_DAYS, BELOW } from './anomalies.js';
 import { MARKS } from './metrics.js';
+import { benjaminiHochberg, normalTail } from './significance.js';
 
-/** Падение случайно, если такое или большее встречается чаще одного дня из ста. */
+/** Падение случайно, если такое или большее встречается чаще одного дня из ста: порог для каждого разреза. */
 export const CRITICAL_DROP_ALPHA = 0.01;
-/** Одностороннее нормальное значение для той же вероятности: падение сверяется с ним при любом объёме дня. */
-export const CRITICAL_DROP_Z = 2.326;
+/**
+ * За день проверяются десятки разрезов, поэтому сверх порога разреза — поправка Бенджамини — Хохберга на все
+ * разрезы, проверенные в этот день: среди отмеченных снижений случайных — не больше 5 %. На выгрузке август–октябрь
+ * 1 % (как у «Провала оценок») оставлял одно-два снижения в месяц на канал, 5 % — от двух до пяти; решение пользователя
+ */
+export const CRITICAL_DROP_FDR = 0.05;
+/** Одностороннее нормальное значение для той же вероятности: при одном проверенном разрезе падение сверяется с ним. */
+export const CRITICAL_DROP_Z = 2.32635;
 /** Падение к среднему окна, меньше которого снижение не показывается, каким бы значимым ни было. */
 export const CRITICAL_DROP_MIN = 0.1;
 /** Меньше оценок в окне — распределение окна не на что опереть. */
@@ -92,17 +99,25 @@ function errorOf(day, base, between) {
   return Math.sqrt(base.variance / day.n + base.variance / base.ratings + between);
 }
 
-/* Малый день должен быть значим и без своей самой низкой оценки: одна оценка не делает снижение */
-function isUnlikelyWithoutWorst(day, base) {
+/* Вероятность дня без его самой низкой оценки: одна оценка не делает снижение */
+function tailWithoutWorst(day, base) {
   const lost = MARKS.reduce((total, mark) => total + (TOP_MARK - mark) * day.counts[mark], 0);
   const worst = TOP_MARK - MARKS.find((mark) => day.counts[mark] > 0);
-  return dropTail(base.counts, base.ratings, day.n - 1, lost - worst) < CRITICAL_DROP_ALPHA;
+  return dropTail(base.counts, base.ratings, day.n - 1, lost - worst);
 }
 
-function isCritical(day, base, between, drop) {
-  if (base.ratings < CRITICAL_DROP_MIN_WINDOW_RATINGS || drop < CRITICAL_DROP_MIN - EPSILON) return false;
-  if (drop / errorOf(day, base, between) <= CRITICAL_DROP_Z) return false;
-  return day.n > CRITICAL_DROP_EXACT_RATINGS || isUnlikelyWithoutWorst(day, base);
+/*
+  p дня: нормальное по падению к стандартной ошибке; у малого дня — не меньше точного хвоста без худшей оценки.
+  Падение меньше 0,1 снижением не бывает и получает p = 1, но в число проверенных за день входит: поправка не
+  должна зависеть от того, у скольких разрезов падение крупное. Точный хвост считается, пока нормальное p не
+  выше 5 %: порог поправки выше 5 % не бывает, а заниженное p малого дня само не отмечается, но поднимает порог
+  дня и отмечает другой разрез
+*/
+function pValueOf(day, base, between, drop) {
+  if (drop < CRITICAL_DROP_MIN - EPSILON) return 1;
+  const p = normalTail(drop / errorOf(day, base, between));
+  if (p > CRITICAL_DROP_FDR || day.n > CRITICAL_DROP_EXACT_RATINGS) return p;
+  return Math.max(p, tailWithoutWorst(day, base));
 }
 
 /* Начало идущей сейчас серии отмеченных дней; дни без оценок её не обрывают */
@@ -137,7 +152,7 @@ function ordinaryDays(samples, verdicts, first, index) {
 
 /**
  * Опирается ли день `index` на окно, достаточное для вердикта: те же условия, что в
- * `dropVerdicts` и `isCritical`. Иначе «Мало истории» и вердикт разреза разойдутся.
+ * `dropVerdictsAcross` (`tested`). Иначе «Мало истории» и вердикт разреза разойдутся.
  */
 export function hasDropWindow(samples, index, window = ANOMALY_WINDOW_DAYS) {
   if (!samples[index]) return false;
@@ -149,31 +164,69 @@ export function hasDropWindow(samples, index, window = ANOMALY_WINDOW_DAYS) {
 /**
  * `samples` — `markSample` подряд идущих дней, `null` — оценок нет. Форма вердикта та же, что у
  * `bandVerdicts`, без границ коридора: коридора здесь нет. `mean` — средняя всех оценок окна.
+ * Один ряд — без поправки на другие разрезы; календарь проверяет все разрезы дня вместе (`dropVerdictsAcross`).
  */
-export function dropVerdicts(samples, { window = ANOMALY_WINDOW_DAYS } = {}) {
-  const verdicts = [];
-  samples.forEach((day, index) => {
-    const first = Math.max(0, index - window);
-    const history = samples.slice(first, index).filter(Boolean);
-    if (!day || history.length < ANOMALY_MIN_WINDOW_VALUES) {
-      verdicts.push(null);
-      return;
+export function dropVerdicts(samples, options = {}) {
+  return dropVerdictsAcross([samples], options)[0];
+}
+
+/* Ряд одинаковых оценок по дням — один разрез для поправки: продукт из одного триггера не удваивает число проверок */
+function fingerprint(samples) {
+  return samples.map((day) => (day ? MARKS.map((mark) => day.counts[mark]).join('.') : '')).join(',');
+}
+
+/**
+ * Вердикты всех рядов одного набора дней: день за днём у каждого ряда — p своего падения, затем p ≤ 1 % и поправка
+ * Бенджамини — Хохберга с долей 5 % на все ряды, у которых в этот день есть окно не меньше 30 оценок. Порядок по дням нужен
+ * потому, что идущая серия снижения не входит в обычный разброс следующих дней (`ordinaryDays`): серия — это уже
+ * итоговые, с поправкой, вердикты. Одинаковые ряды считаются один раз и получают общий массив вердиктов.
+ */
+export function dropVerdictsAcross(seriesList, { window = ANOMALY_WINDOW_DAYS } = {}) {
+  const firstOf = new Map();
+  const unique = [];
+  const sourceOf = seriesList.map((samples) => {
+    const print = fingerprint(samples);
+    if (!firstOf.has(print)) {
+      firstOf.set(print, unique.length);
+      unique.push(samples);
     }
-    const base = windowOf(history);
-    const drop = base.mean - day.mean;
-    const ordinary = ordinaryDays(samples, verdicts, first, index);
-    const between = betweenDayVariance(ordinary, base);
-    const direction = isCritical(day, base, between, drop) ? BELOW : null;
-    const previous = verdicts[index - 1];
-    verdicts.push({
-      value: day.mean,
-      mean: base.mean,
-      delta: -drop,
-      deviation: -drop / errorOf(day, base, between),
-      direction,
-      streak: direction ? (previous?.direction === direction ? previous.streak + 1 : 1) : 0,
-      windowValues: history.length,
-    });
+    return firstOf.get(print);
   });
-  return verdicts;
+  const length = unique.reduce((longest, samples) => Math.max(longest, samples.length), 0);
+  const verdicts = unique.map(() => []);
+  for (let index = 0; index < length; index += 1) {
+    const pending = unique.map((samples, at) => {
+      const day = samples[index];
+      const first = Math.max(0, index - window);
+      const history = samples.slice(first, index).filter(Boolean);
+      if (!day || history.length < ANOMALY_MIN_WINDOW_VALUES) return null;
+      const base = windowOf(history);
+      const drop = base.mean - day.mean;
+      const between = betweenDayVariance(ordinaryDays(samples, verdicts[at], first, index), base);
+      const tested = base.ratings >= CRITICAL_DROP_MIN_WINDOW_RATINGS;
+      return { day, base, drop, between, windowValues: history.length, p: tested ? pValueOf(day, base, between, drop) : null };
+    });
+    /* Порог дня — не выше порога разреза: один проверенный разрез даёт прежнее правило p ≤ 1 % */
+    const corrected = benjaminiHochberg(pending.filter((item) => item && item.p !== null).map(({ p }) => p), CRITICAL_DROP_FDR);
+    const threshold = Math.min(CRITICAL_DROP_ALPHA, corrected);
+    pending.forEach((item, at) => {
+      if (!item) {
+        verdicts[at].push(null);
+        return;
+      }
+      const { day, base, drop, between, p } = item;
+      const direction = p !== null && threshold >= 0 && p <= threshold && drop >= CRITICAL_DROP_MIN - EPSILON ? BELOW : null;
+      const previous = verdicts[at][index - 1];
+      verdicts[at].push({
+        value: day.mean,
+        mean: base.mean,
+        delta: -drop,
+        deviation: -drop / errorOf(day, base, between),
+        direction,
+        streak: direction ? (previous?.direction === direction ? previous.streak + 1 : 1) : 0,
+        windowValues: item.windowValues,
+      });
+    });
+  }
+  return sourceOf.map((at) => verdicts[at]);
 }

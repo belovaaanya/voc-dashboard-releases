@@ -54,6 +54,21 @@ const domainProblems = (row, reference) => [...new Set(complaintAnnotations(row,
   .filter((annotation) => textOf(annotation.problem))
   .map((annotation) => pairKey(isPositive(annotation) ? POSITIVE_GROUP : textOf(annotation.domain) ?? NO_DOMAIN, textOf(annotation.problem))))];
 /*
+  J-437: разрез «ФО и тип проблемы» («Для аналитика») — пара (ФО, тип проблемы) из одной метки: какие типы проблем
+  чаще в какой ФО. ФО — итоговая `domain_final`, как у проблематик справочника, иначе `domain`. Метка с типом «позитив» —
+  в группе «Позитив» под своей ФО: похвала не смешивается с жалобами
+*/
+export const NO_PROBLEM_TYPE = 'Без типа';
+const finalDomain = (annotation) => textOf(annotation.domain_final) ?? textOf(annotation.domain) ?? NO_DOMAIN;
+/* Метка без выявленной проблемы в разрез не входит — как и в базу доли (J-133): иначе доля типа шла бы не от своей базы */
+const domainTypes = (row, reference) => {
+  const label = createLabels(reference);
+  return [...new Set(complaintAnnotations(row, reference)
+    .filter((annotation) => identifiedAnnotation(annotation, label))
+    .map((annotation) => (isPositive(annotation) ? pairKey(POSITIVE_GROUP, finalDomain(annotation))
+      : pairKey(finalDomain(annotation), textOf(annotation.problem_type) ?? NO_PROBLEM_TYPE))))];
+};
+/*
   Разметка со справочником проблематик: ключ строки — `problem_id`, название — `problem_final` (обычно оно и есть
   `problem`), группа — итоговая ФО `domain_final`. Свободная формулировка `problem` бывает разной у одной проблематики,
   а `domain` — у одной проблематики разным: группировка по ним дробила проблематику. Оценка входит в проблематику один
@@ -105,18 +120,20 @@ const categoryPairs = (row, reference) => CATEGORY_CUT.values(row, reference)
 const PAIR_CUTS = {
   domainProblem: { group: 'domain', name: 'problem' },
   categoryPair: { group: 'category_group', name: 'category' },
+  domainType: { group: 'domain', name: 'problem_type' },
 };
 
 export const PROBLEM_CUTS = {
   problem: (row, reference) => complaintValues(row, 'problem', reference),
   domain: complaintDomains,
   domainProblem: domainProblems,
+  domainType: domainTypes,
   category: categoryValues,
   categoryPair: categoryPairs,
 };
 
 /* J-27: скрываем служебные категории только в соответствующем разрезе топа. */
-const emptyTopLabels = { problem: 'проблема не определена', domainProblem: 'проблема не определена', category: 'нет категории', categoryPair: 'нет категории' };
+const emptyTopLabels = { problem: 'проблема не определена', domainProblem: 'проблема не определена', domainType: 'проблема не определена', category: 'нет категории', categoryPair: 'нет категории' };
 const normalizedTopLabel = value => normalizeLabel(value, { dashes: 'hyphen' });
 const hiddenTopLabels = new Set(['dlp-блок']);
 
@@ -155,19 +172,23 @@ function hasIdentifiedProblem(row, reference = null) {
   return value;
 }
 
+/* Метка с выявленной проблемой: есть проблема, она и ФО — не «не определена» и не скрыты (DLP-блок, J-32) */
+function identifiedAnnotation(annotation, label) {
+  const problem = textOf(annotation.problem);
+  const unknown = (field, value, rejected) => [value, label(field, value)].some((text) => rejected(normalizedTopLabel(text)) || hiddenTopLabels.has(normalizedTopLabel(text)));
+  if (!problem || unknown('problem', problem, (text) => UNIDENTIFIED_PROBLEMS.has(text))) return false;
+  const domain = textOf(annotation.domain);
+  return !domain || !unknown('domain', domain, (text) => text === UNIDENTIFIED_DOMAIN);
+}
+
 function identifiedProblem(row, reference) {
   const label = createLabels(reference);
-  return complaintAnnotations(row, reference).some((annotation) => {
-    const problem = textOf(annotation.problem);
-    /* Скрытая метка (DLP-блок, J-32) — текст закрыт, проблема по нему не выявлена */
-    const unknown = (field, value, rejected) => [value, label(field, value)].some((text) => rejected(normalizedTopLabel(text)) || hiddenTopLabels.has(normalizedTopLabel(text)));
-    if (!problem || unknown('problem', problem, (text) => UNIDENTIFIED_PROBLEMS.has(text))) return false;
-    const domain = textOf(annotation.domain);
-    return !domain || !unknown('domain', domain, (text) => text === UNIDENTIFIED_DOMAIN);
-  });
+  return complaintAnnotations(row, reference).some((annotation) => identifiedAnnotation(annotation, label));
 }
 
 const CATEGORY_CUTS = new Set(['category', 'categoryPair']);
+/* Пары нашей разметки: у них есть группа «Позитив» (J-123) */
+const LABELLED_PAIRS = new Set(['domainProblem', 'domainType']);
 const shareBase = (rows, items, identified) => rows.filter((row) => isFeedbackCase(row, items) && identified(row));
 
 function groupByCut(rows, valuesOf) {
@@ -583,7 +604,7 @@ export function buildProblemCards(previous, current, period, verbatim, mode = 'f
   /* База накала проблемы — все её комментарии: при зоне острые — жалобы зоны, база та же, что у доли и урона */
   const fullGroups = only ? groupByCut(current, valuesOf) : currentGroups;
   /* J-128: урон за период и за каждый шаг — по всем оценкам этого отрезка среза */
-  const positiveKey = (key) => (cut === 'domainProblem' && pairParts(key).group === POSITIVE_GROUP);
+  const positiveKey = (key) => (LABELLED_PAIRS.has(cut) && pairParts(key).group === POSITIVE_GROUP);
   const base = negativeBase(current, valuesOf, positiveKey);
   const bucketBases = buckets.map(({ from, to }) => negativeBase(current.filter(({ appeal_date: date }) => date >= from && date <= to), valuesOf, positiveKey));
 
@@ -613,7 +634,7 @@ export function buildProblemCards(previous, current, period, verbatim, mode = 'f
       /* Пара — группа и значение отдельно; у ФО и проблематики — ещё под их именами (J-119) */
       ...parts,
       ...(problemId ? { problemId } : {}),
-      ...(cut === 'domainProblem' && parts.group === POSITIVE_GROUP ? { positive: true } : {}),
+      ...(LABELLED_PAIRS.has(cut) && parts.group === POSITIVE_GROUP ? { positive: true } : {}),
       ...(cut === 'domainProblem' ? { domain: parts.group, problem: parts.name } : {}),
       count: rows.length,
       negativeShare: positiveKey(key) ? null : negativeShare(rows, base),

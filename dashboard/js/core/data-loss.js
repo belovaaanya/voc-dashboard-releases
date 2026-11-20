@@ -13,6 +13,7 @@ import { DATA_LOSS_EVENT, DATA_TONE } from './calendar.js';
 import { daysBetween, earliestDate, shiftDay } from './dates.js';
 import { DIMENSIONS } from './dimensions.js';
 import { isRestDay } from './rest-days.js';
+import { benjaminiHochberg as correctedThreshold } from './significance.js';
 
 /*
   Окно — 10 предыдущих дней того же типа (будни или выходные). Дни идущей серии пропажи в окно не входят, пока серия
@@ -98,12 +99,9 @@ export function lossTest(counts, index, scale = 1, skip = null) {
   return { mean, expected, deep: count <= expected * DATA_LOSS_RATIO, p: poissonAtMost(count, expected) };
 }
 
-/** Порог Бенджамини — Хохберга: наибольшее p_(k) ≤ k/m · α среди `m` проверенных; `-1` — значимых нет. */
+/** Порог Бенджамини — Хохберга для α пропажи данных; общий расчёт — `significance.js`. */
 export function benjaminiHochberg(pValues, alpha = DATA_LOSS_ALPHA) {
-  const sorted = [...pValues].sort((left, right) => left - right);
-  let threshold = -1;
-  sorted.forEach((p, rank) => { if (p <= ((rank + 1) / sorted.length) * alpha) threshold = p; });
-  return threshold;
+  return correctedThreshold(pValues, alpha);
 }
 
 /** Отдельный день без поправок (тесты и пояснение): пропажа, если поток регулярный, падение в 3 раза и p < α. */

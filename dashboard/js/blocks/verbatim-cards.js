@@ -37,7 +37,7 @@ let selectedCut = 'domainProblem';
 */
 /* J-150: у ДКО по умолчанию в шаге сразу урон и жалобы — их смотрят вместе, переключаться неудобно */
 /* Режима «Урон и жалобы» больше нет: число жалоб — подписью в каждом шаге; у ДКО по умолчанию — урон */
-const DYNAMICS_DEFAULT = { domainProblem: 'count', categoryPair: 'damage' };
+const DYNAMICS_DEFAULT = { domainProblem: 'count', domainType: 'count', categoryPair: 'damage' };
 let selectedDynamics = DYNAMICS_DEFAULT.domainProblem;
 /*
   Главная облегчена: «Урон», сегменты, ОС с версиями, «Есть ли закономерность?» и режимы динамики «Доля / Урон» —
@@ -85,11 +85,16 @@ function viewState(block, context) {
 export const CUT_OPTIONS = [
   /* Подсказка разреза — что это за классификация и откуда она (CLASSIFICATION_HINTS ядра) */
   { value: 'domainProblem', label: 'Функ. область и проблематика', title: `Функциональная область и проблематика. ${CLASSIFICATION_HINTS.labeling}`, empty: 'с проблематикой' },
+  /* J-437: какие типы проблем чаще в какой ФО — только «Для аналитика» */
+  { value: 'domainType', label: 'Тип проблемы', title: `Функциональная область и тип проблемы. ${CLASSIFICATION_HINTS.labeling}`, empty: 'с типом проблемы', analyst: true },
   { value: 'categoryPair', label: 'ДКО', title: `Группа и категория основного негатива. ${CLASSIFICATION_HINTS.dko}`, empty: 'с категорией негатива' },
 ];
+const cutOptions = (context) => CUT_OPTIONS.filter(({ analyst }) => !analyst || context.analyst);
 const GROUPINGS = {
   domainProblem: { groupHead: 'Функ. область', groupTitle: 'Функциональная область', nameHead: 'Проблематика', none: NO_DOMAIN, all: 'Все функ. области',
     unit: 'проблемы' },
+  domainType: { groupHead: 'Функ. область', groupTitle: 'Функциональная область', nameHead: 'Тип проблемы', none: NO_DOMAIN, all: 'Все функ. области',
+    unit: 'типы проблем' },
   categoryPair: { groupHead: 'Группа негатива', groupTitle: 'Группа категорий основного негатива', nameHead: 'Категория', nameTitle: 'Категория основного негатива', none: NO_CATEGORY_GROUP,
     all: 'Все группы', unit: 'категории' },
 };
@@ -130,7 +135,7 @@ const rerenderInPlace = (block, context) => keepPagePosition(block.element, () =
 function cutTabs(block, context) {
   return segmented({
     label: 'Разрез топа проблем',
-    options: CUT_OPTIONS.map(({ value, label, title }) => ({ value, label, title })),
+    options: cutOptions(context).map(({ value, label, title }) => ({ value, label, title })),
     selected: selectedCut,
     onSelect: (value) => {
       selectedCut = value;
@@ -160,7 +165,7 @@ const DYNAMICS = {
   урон ДКО — своя, принятая формула (J-110), без метки
 */
 export const DAMAGE_BETA = { text: 'бета', tone: 'neutral', title: 'Методика урона по проблематикам пока не согласована — значения предварительные' };
-const damageBeta = () => (selectedCut === 'domainProblem' ? DAMAGE_BETA : null);
+const damageBeta = () => (selectedCut === 'categoryPair' ? null : DAMAGE_BETA);
 
 function dynamicsTabs(block, context) {
   return segmented({
@@ -184,9 +189,9 @@ export const ORDER_LABEL = 'Сначала частые:';
 /* J-348: в «Для аналитика» — ещё «Накалённые» (по доле накалённых жалоб); подпись слева тогда общая — «Сначала:» */
 export const ORDER_LABEL_ANALYST = 'Сначала:';
 export const HEAT_ORDER = 'Накалённые';
-const ORDER_OPTIONS = { domainProblem: ['Проблематики', 'Функ. области'], categoryPair: ['Категории', 'Группы'] };
+const ORDER_OPTIONS = { domainProblem: ['Проблематики', 'Функ. области'], domainType: ['Типы', 'Функ. области'], categoryPair: ['Категории', 'Группы'] };
 /* «Для аналитика»: «Сначала: Частые | По ФО | Накалённые» — коротко, тулбар не переносится */
-const ORDER_OPTIONS_ANALYST = { domainProblem: ['Частые', 'По функ. области'], categoryPair: ['Частые', 'По группам'] };
+const ORDER_OPTIONS_ANALYST = { domainProblem: ['Частые', 'По функ. области'], domainType: ['Частые', 'По функ. области'], categoryPair: ['Частые', 'По группам'] };
 function orderTabs(block, context) {
   const analyst = Boolean(context.analyst);
   const [value, group] = (analyst ? ORDER_OPTIONS_ANALYST : ORDER_OPTIONS)[selectedCut];
@@ -720,7 +725,7 @@ function tableHead(context, columns) {
   parts.append(part('', 1, 'problem-table__part--lead'), part('', 1), part('За период', summarySpan - 2), dynamicsPart);
   head.append(parts);
   /* Шапки названия и группы — с источником классификации: разметка или категория из выгрузки */
-  const hint = selectedCut === 'domainProblem' ? CLASSIFICATION_HINTS.labeling : CLASSIFICATION_HINTS.dko;
+  const hint = selectedCut === 'categoryPair' ? CLASSIFICATION_HINTS.dko : CLASSIFICATION_HINTS.labeling;
   const nameCell = th(nameHead, `${nameTitle ?? nameHead}. ${hint}`);
   nameCell.append(columns.resizer);
   /* Шапка группы — по левому краю, над значениями: значения группы стоят у названий */
@@ -1173,12 +1178,17 @@ function problemTable(context, state, { cards, ordered, columns, base }) {
   return { scroll, buttons, feedSlot, refilter };
 }
 
+const SEARCH = {
+  domainProblem: { label: 'Поиск по проблематике и функ. области', placeholder: 'Поиск по проблематике…' },
+  domainType: { label: 'Поиск по типу проблемы и функ. области', placeholder: 'Поиск по типу проблемы…' },
+  categoryPair: { label: 'Поиск по категории и группе', placeholder: 'Поиск по категории…' },
+};
 /* J-130: поиск — над таблицей: сужает список значений по названию и группе, лента остаётся */
 function problemSearch(onChange) {
   return searchField({
     className: 'verbatim-search problem-search', inputClass: 'verbatim-search__input',
-    label: selectedCut === 'categoryPair' ? 'Поиск по категории и группе' : 'Поиск по проблематике и функ. области',
-    placeholder: selectedCut === 'categoryPair' ? 'Поиск по категории…' : 'Поиск по проблематике…',
+    label: SEARCH[selectedCut].label,
+    placeholder: SEARCH[selectedCut].placeholder,
     value: problemQuery,
     onInput: (value) => {
       problemQuery = value;
@@ -1217,6 +1227,11 @@ function restoreTableScroll(restoreScroll) {
 }
 
 export function renderVerbatimCards(block, context) {
+  /* Разрез только «Для аналитика» на главной не живёт: там его таба нет */
+  if (!cutOptions(context).some(({ value }) => value === selectedCut)) {
+    selectedCut = 'domainProblem';
+    selectedDynamics = DYNAMICS_DEFAULT[selectedCut];
+  }
   const restoreScroll = rememberScroll(block.element, '.problem-table-scroll');
   const state = viewState(block, context);
   block.setHead();

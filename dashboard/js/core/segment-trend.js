@@ -103,6 +103,15 @@ export function sharedTrendDomain(series, minSpan = MIN_TREND_SPAN) {
   return { min: center - minSpan / 2, max: center + minSpan / 2 };
 }
 
+/**
+ * Общая шкала, расширенная до коридора плана: план виден на любой линии, даже если все точки выше или ниже него
+ * (помесячные VOC сглажены и часто целиком над планом). null-шкала остаётся null — sparkline сам включит коридор.
+ */
+export function domainWithBand(domain, band) {
+  if (!domain || !band) return domain;
+  return { min: Math.min(domain.min, band.min), max: Math.max(domain.max, band.max) };
+}
+
 /** Значения внутри шкалы: точка мало-выборочного сегмента за её краем прижимается к краю, а не пропадает. */
 export function clampToDomain(values, domain) {
   if (!domain) return values;

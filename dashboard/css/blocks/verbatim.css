@@ -408,6 +408,39 @@
   white-space: nowrap;
 }
 
+/* Текст экспертизы — кнопка раскрытия строки: вид ячейки, многоточие в одну строку, курсор и светлее при наведении */
+.verbatim-table__expand {
+  display: block;
+  width: 100%;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: var(--type-caption);
+  letter-spacing: var(--tracking-caption);
+  text-align: start;
+  text-overflow: ellipsis;
+  white-space: inherit;
+  cursor: pointer;
+}
+
+.verbatim-table__expand:hover,
+.verbatim-table__expand:focus-visible {
+  color: var(--color-text-strong);
+}
+
+/* Раскрытая строка: все ячейки переносятся, экспертиза — с пунктами на своих строках, как в подсказке */
+.verbatim-table tr.is-expanded td {
+  overflow: visible;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.verbatim-table tr.is-expanded .verbatim-table__text--expertise {
+  white-space: pre-line;
+}
+
 .verbatim-table__empty {
   padding: var(--space-6);
   text-align: center;

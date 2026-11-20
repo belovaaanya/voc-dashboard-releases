@@ -11,9 +11,9 @@ import { segmented } from '../components/segmented.js';
 import { legendItem, legendList } from '../components/legend.js';
 import { sparkline } from '../components/sparkline.js';
 import { chartDomain } from '../core/chart-geometry.js';
-import { clampToDomain, sharedTrendDomain } from '../core/segment-trend.js';
+import { clampToDomain, domainWithBand, sharedTrendDomain } from '../core/segment-trend.js';
 import { colourScale } from '../core/antidrivers.js';
-import { STABILITY_PLAN, buildDigest, filledFrom, buildPlatforms, buildRoles, buildTriggers, defaultMonth, monthsOf } from '../core/digest.js';
+import { ROLE_AGREEMENT_DATE, STABILITY_PLAN, buildDigest, filledFrom, buildPlatforms, buildRoles, buildTriggers, defaultMonth, monthsOf } from '../core/digest.js';
 import { earliestDate, latestDate } from '../core/dates.js';
 import { element } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
@@ -25,6 +25,7 @@ import { DELTA_SHAPES, GROWTH, countDeltaNode, countGroupNode, countNode, foreca
 import { ratingsForecast } from '../core/forecast.js';
 import { valueDelta } from '../components/value-delta.js';
 import { hoverTooltip } from '../components/hover-tooltip.js';
+import { ruleHint } from '../components/rule-hint.js';
 import { monthTitle } from '../components/month-picker.js';
 
 const monthIndex = (month) => Number(month.slice(5, 7)) - 1;
@@ -631,20 +632,15 @@ const roleStart = (data) => filledFrom(...data.roles.map((role) => roleSeries(ro
 
 /*
   Общая шкала Y четырёх плиток (решение пользователя, как мини-тренды сегментов на главной — sharedTrendDomain): размахи
-  ролей сравнимы. Диапазон — по ролям без «Мало оценок» (D-25), если таких нет — по всем; размах не меньше 0,10
+  ролей сравнимы. Диапазон — по ролям без «Мало оценок» (D-25), если таких нет — по всем; размах не меньше 0,10.
+  Шкала включает коридор плана целиком: при шаге «Месяцы» точки сглажены и бывают все выше плана — раньше коридор
+  тогда выпадал за шкалу и не рисовался
 */
 const roleDomain = (data) => {
   const start = roleStart(data);
-  return sharedTrendDomain(data.roles.map((role) => ({ values: roleSeries(role).slice(start).map(({ voc }) => voc), sufficient: role.sufficient })));
+  const domain = sharedTrendDomain(data.roles.map((role) => ({ values: roleSeries(role).slice(start).map(({ voc }) => voc), sufficient: role.sufficient })));
+  return domainWithBand(domain, data.plan);
 };
-
-/* Коридор плана — на общей шкале: его часть за краем шкалы срезана, коридор целиком вне шкалы не рисуется */
-function bandWithin(plan, domain) {
-  if (!plan) return null;
-  if (!domain) return { min: plan.min, max: plan.max };
-  const band = { min: Math.max(plan.min, domain.min), max: Math.min(plan.max, domain.max) };
-  return band.min < band.max ? band : null;
-}
 
 /* Линия роли: недели месяца или месяцы полугода с общей для плиток первой точки и общей шкалой; план — в подписи */
 function roleTrend(role, data) {
@@ -652,7 +648,7 @@ function roleTrend(role, data) {
   const points = roleSeries(role).slice(roleStart(data));
   const values = points.map(({ voc }) => voc);
   const domain = roleDomain(data);
-  const band = bandWithin(data.plan, domain);
+  const band = data.plan ? { min: data.plan.min, max: data.plan.max } : null;
   const wrap = element('div', 'digest-trend digest-trend--fill');
   wrap.title = `VOC ${months ? 'по месяцам' : 'по неделям'}${data.plan ? `; полоса — план ${formatVoc(data.plan.min)}–${formatVoc(data.plan.max)}` : ''}`;
   /* Точки роли с малой выборкой за краем общей шкалы прижаты к краю (clampToDomain), подписи — настоящие значения */
@@ -720,14 +716,18 @@ export const digestRole = (index) => (block, context) => {
   if (!role) return;
   roleTiles.set(index, { block, context });
   block.setTitle(role.role);
-  block.setHead();
+  /* Договорённость 19.11: «i» с правилом подсчёта у названия каждой роли — и у особой, и у обычной */
+  block.setHead({ help: role.rule ? ruleHint(`Договорённость от ${ROLE_AGREEMENT_DATE}`, role.rule) : null });
   const lead = element('div', 'role-card__lead');
   lead.append(roleAvatar(role.role));
   const content = element('div', 'role-card');
   if (!role.count) {
     /* Пустая роль — сразу под портретом: место надписи не зависит от высоты соседней плитки в строке */
     lead.classList.add('role-card__lead--empty');
-    lead.append(statusPanel('role-card__none', { title: 'Нет оценок за месяц', look: 'quiet' }));
+    /* Альфа-Босс АБМ считается в Кубе: чисел нет не потому, что не было оценок */
+    lead.append(statusPanel('role-card__none', role.external
+      ? { title: 'Данные — в Кубе', detail: 'МП Альфа-Босс', look: 'quiet' }
+      : { title: 'Нет оценок за месяц', look: 'quiet' }));
     content.append(lead);
     block.setContent(content);
     return;

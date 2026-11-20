@@ -294,7 +294,28 @@ export function reviewText(item, label, columns = COLUMNS) {
 /* Порог подсказки — в символах: в колонке 160 px при 12 px помещается ~18 знаков */
 const LONG_CELL = 16;
 
-export function tableRow(item, label, columns = COLUMNS) {
+/*
+  Экспертиза — в одну строку (J-319), но текст — кнопка: клик раскрывает строку целиком, и все обрезанные ячейки
+  переносятся. Подсказка у ячейки остаётся; раскрытие помнит блок (`expanded`), чтобы «Показать ещё» его не сбрасывал
+*/
+function expertiseToggle(row, item, text, expanded) {
+  const button = element('button', 'verbatim-table__expand', text);
+  button.type = 'button';
+  const paint = (open) => {
+    row.classList.toggle('is-expanded', open);
+    button.setAttribute('aria-expanded', String(open));
+  };
+  paint(Boolean(expanded?.has(item)));
+  button.addEventListener('click', () => {
+    const open = !row.classList.contains('is-expanded');
+    if (open) expanded?.add(item);
+    else expanded?.delete(item);
+    paint(open);
+  });
+  return button;
+}
+
+export function tableRow(item, label, columns = COLUMNS, { expanded = null } = {}) {
   const row = element('tr');
   for (const column of columns) {
     const cell = row.appendChild(element('td'));
@@ -308,6 +329,7 @@ export function tableRow(item, label, columns = COLUMNS) {
     }
     else if (tagged) cell.append(tag(text, 'neutral'));
     else if (text === NONE) cell.append(emptyValue());
+    else if (column.key === 'expertise') cell.append(expertiseToggle(row, item, text, expanded));
     else cell.textContent = text;
     if (column.key === 'segment' && item.segment) withFullLabel(cell, label('segment', item.segment));
     /* Ячейки в одну строку: длинное значение обрезается многоточием, полное — в подсказке; короткое — без подсказки */
@@ -430,6 +452,8 @@ export function renderVerbatimTable(block, context) {
   const body = element('tbody');
   const paging = element('div', 'verbatim-detail__paging');
   let shown = PAGE_SIZE;
+  /* Раскрытые строки переживают «Показать ещё» и сортировку; новые данные — новые объекты, раскрытие сбрасывается */
+  const expanded = new WeakSet();
   let closeAll = () => {};
 
   function paintHead() {
@@ -453,7 +477,7 @@ export function renderVerbatimTable(block, context) {
 
   function paint() {
     const rowsFound = found();
-    body.replaceChildren(...rowsFound.slice(0, shown).map((item) => tableRow(item, context.label, columns)));
+    body.replaceChildren(...rowsFound.slice(0, shown).map((item) => tableRow(item, context.label, columns, { expanded })));
     status.textContent = tableCounter(shown, rowsFound.length);
     reset.hidden = !Object.values(tableFilters).some((values) => values.length);
     /* Последняя порция прячет кнопку под фокусом: фокус — на счётчик строк, как у антидрайверов */

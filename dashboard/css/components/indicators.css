@@ -359,3 +359,20 @@
   -webkit-mask-image: var(--h-scroll-mask-both);
   mask-image: var(--h-scroll-mask-both);
 }
+
+/*
+  Договорённость 19.11 о подсчёте ролей: «i» с правилом в подсказке — у названия роли и у чипа фильтра «Роли».
+  Цвет и размер — как у «?» карточек (`metric__forecast`): знак справки второстепенный, а не акцент
+*/
+.rule-hint {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-self: center;
+  color: var(--color-neutral);
+  cursor: help;
+}
+
+.rule-hint__icon {
+  width: var(--icon-size);
+  height: var(--icon-size);
+}

@@ -11,11 +11,13 @@
   противоречие интерфейса самому себе, от которого защищает D-22.
 
   J-95: выбран один сегмент — карточка, как и соседние сегменты, считает срез без
-  него и серая (metrics.css): клик по сегменту не меняет число канала.
+  него и серая (metrics.css): клик по сегменту не меняет число канала. Только сегмент со
+  своей плиткой (ММБ, СБ, КИБ): у «Без сегмента» плитки нет, и карточка канала —
+  единственное место, где виден выбранный срез, — считает его.
 */
 
 import { EMPTY } from '../shell/block.js';
-import { CHANNEL_DIMENSION } from '../core/dimensions.js';
+import { CHANNEL_DIMENSION, metricSegments } from '../core/dimensions.js';
 import { appendAll, element } from '../ui/dom.js';
 import { formatVoc } from '../core/format.js';
 import { voc, vocDelta } from '../core/metrics.js';
@@ -55,9 +57,15 @@ function emptyCaption() {
   return row;
 }
 
-/** J-95: один выбранный сегмент не сужает карточку канала; два и больше — срез фильтра, сегмент-кнопки при этом не нажаты. */
-function channelView({ slice, previousSlice, state, select }) {
-  if (state.filters?.segment?.length !== 1) return { rows: slice, previous: previousSlice, state };
+const TILE_SEGMENTS = new Set(metricSegments());
+
+/**
+ * J-95: один выбранный сегмент со своей плиткой не сужает карточку канала; два и больше — срез фильтра, сегмент-кнопки при
+ * этом не нажаты. Сегмент без плитки («Без сегмента») — тоже срез: иначе фильтр стоит, а число нигде его не показывает.
+ */
+export function channelView({ slice, previousSlice, state, select }) {
+  const segment = state.filters?.segment ?? [];
+  if (segment.length !== 1 || !TILE_SEGMENTS.has(segment[0])) return { rows: slice, previous: previousSlice, state };
   const filters = withFilter(state.filters, 'segment', []);
   /* Только читаемые ключи: копия всего состояния сделала бы карточку зависимой от даты и выбора (docs/ui-shell.md) */
   return { ...select({ filters }), state: { channel: state.channel, filters } };

@@ -500,6 +500,12 @@ b {
   display: none;
 }
 
+/* Договорённость 19.11: «i» правила подсчёта роли у заголовка — через зазор, не вплотную к последней букве */
+.card__help .rule-hint {
+  margin-inline-start: var(--space-1);
+  vertical-align: middle;
+}
+
 /*
   Заголовок тянется на высоту слотов и стоит по их центру; перенос растёт вниз.
   Строки выравниваются по длине, слово рвётся только если не помещается целиком
@@ -1511,6 +1517,11 @@ b {
 .filters__clear:focus-visible {
   background: var(--color-border-strong);
   color: var(--color-text-strong);
+}
+
+/* Договорённость 19.11: «i» правила роли — в чипе «Роли» после крестика, поле до края чипа как у кода слева */
+.filters__item--chip .rule-hint {
+  margin-inline-end: var(--space-2);
 }
 
 .filters__clear-icon {
